@@ -1,0 +1,9 @@
+node_modules/
+
+# pi-guardrails local state (machine-specific paths, onboarding timestamps)
+guardrails.json
+
+# symlink into ~/.pi/agent/git/pi-chat, lives in its own repo
+pi-chat.ts
+
+.DS_Store
