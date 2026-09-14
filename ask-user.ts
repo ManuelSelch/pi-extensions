@@ -79,8 +79,10 @@ export default function askUserExtension(pi: ExtensionAPI) {
 		executionMode: "sequential",
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			if (ctx.mode !== "tui") {
-				return makeToolResult([], true, "Interactive UI is only available in TUI mode");
+			// `hasUI` is true in TUI *and* RPC mode. Pi Chat binds a web UI context
+			// in "rpc" mode, so guarding on `mode === "tui"` would wrongly refuse it.
+			if (!ctx.hasUI) {
+				return makeToolResult([], true, "No dialog-capable UI available (non-interactive mode)");
 			}
 
 			const answers: Answer[] = [];
@@ -147,8 +149,8 @@ export default function askUserExtension(pi: ExtensionAPI) {
 	pi.registerCommand("ask-user-demo", {
 		description: "Show a demo ask_user select/input/confirm flow",
 		handler: async (_args, ctx) => {
-			if (ctx.mode !== "tui") {
-				ctx.ui.notify("ask-user-demo requires interactive TUI mode", "error");
+			if (!ctx.hasUI) {
+				ctx.ui.notify("ask-user-demo requires a dialog-capable UI", "error");
 				return;
 			}
 
