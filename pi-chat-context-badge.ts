@@ -27,8 +27,8 @@ function compact(tokens: number): string {
  * drops out rather than claiming an empty context.
  */
 function badgeFor(usage: ContextUsage | undefined, sessionId: string): PiChatBadge | undefined {
-  if (!usage || usage.tokens === null) return undefined;
-  const percent = usage.percent ?? (usage.contextWindow > 0 ? (usage.tokens / usage.contextWindow) * 100 : 0);
+  if (!usage || usage.tokens === null || usage.contextWindow <= 0) return undefined;
+  const percent = usage.percent ?? (usage.tokens / usage.contextWindow) * 100;
   return {
     id: `context-badge.${sessionId}`,
     slot: "session.status",
@@ -39,32 +39,30 @@ function badgeFor(usage: ContextUsage | undefined, sessionId: string): PiChatBad
 
 export default function piChatContextBadge(pi: ExtensionAPI): void {
   const chat = getPiChatExtensionRegistry();
-  /**
-   * The context this extension may ask, kept from the last event rather than
-   * its usage value: asking at snapshot time gives the fill as it is now, not
-   * as it was when the turn ended.
-   */
-  let current: ExtensionContext | undefined;
 
-  const track = (_event: unknown, ctx: ExtensionContext) => {
+  /**
+   * `getContextUsage()` hangs off the event context, which the extension
+   * factory never sees, so the badge can only be registered once an event has
+   * handed one over. Re-registering is free: the owner key replaces the
+   * previous badge rather than adding a second one.
+   *
+   * The context is asked at snapshot time, not here, so the badge shows the
+   * fill as it is now rather than as it was when the turn ended. The session id
+   * is checked because badges are server-wide: without it this session's fill
+   * would show up in every other session's header too.
+   */
+  const show = (_event: unknown, ctx: ExtensionContext) => {
     const sessionId = ctx.sessionManager.getSessionId();
-    if (current) {
-      current = ctx;
-      return;
-    }
-    current = ctx;
-    // Owned per session id: a second session's load must add its own badge
-    // instead of replacing the first one's.
     chat.registerBadge(
-      (snapshot) => (snapshot.sessionId === sessionId ? badgeFor(current?.getContextUsage(), sessionId) : undefined),
+      (snapshot) => (snapshot.sessionId === sessionId ? badgeFor(ctx.getContextUsage(), sessionId) : undefined),
       { owner: `context-badge.${sessionId}` },
     );
   };
 
-  // Enough to keep a live context: the session opening, and every turn or
-  // compaction that can change the fill. Pi Chat rebuilds a snapshot after each
-  // prompt settles, so the badge follows without polling.
-  pi.on("session_start", track);
-  pi.on("agent_settled", track);
-  pi.on("session_compact", track);
+  // The session opening, and every turn or compaction that can change the fill.
+  // Pi Chat rebuilds a snapshot after each prompt settles, so the badge follows
+  // without polling.
+  pi.on("session_start", show);
+  pi.on("agent_settled", show);
+  pi.on("session_compact", show);
 }
