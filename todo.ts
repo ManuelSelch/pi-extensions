@@ -149,17 +149,32 @@ export function replayFromBranch(branch: Iterable<unknown>): TodoState {
 /**
  * The widget lines, or `undefined` to clear it.
  *
- * Only unfinished work is listed: the point is what happens next. The header
- * carries the count, so finishing the last task leaves one line of feedback
- * rather than an empty box, and an empty list removes the widget entirely.
+ * Every task is listed, finished ones included: you are reading along, and a
+ * plan whose completed steps vanish is a plan you cannot check. Ids are shown
+ * so you can say "#3 is wrong" and the model knows which task you mean — they
+ * are the same ids the tool takes. The header carries the count, and an empty
+ * list removes the widget entirely.
+ *
+ * When the list outgrows the widget, completed tasks give up their rows first,
+ * oldest first: they are the ones you are least likely to still be reading, and
+ * what happens next has to stay on screen. `/todos` always shows everything.
  */
 export function widgetLines(state: TodoState): string[] | undefined {
   if (state.todos.length === 0) return undefined;
   const done = state.todos.filter((todo) => todo.status === "done").length;
-  const open = state.todos.filter((todo) => todo.status !== "done");
   const header = `Todos ${done}/${state.todos.length}`;
-  const rows = open.slice(0, WIDGET_MAX_ROWS).map((todo) => `${MARK[todo.status]} ${todo.text}`);
-  const hidden = open.length - rows.length;
+
+  const shown = [...state.todos];
+  while (shown.length > WIDGET_MAX_ROWS) {
+    const oldestDone = shown.findIndex((todo) => todo.status === "done");
+    // Nothing left to drop but open work: truncate from the end instead, so the
+    // tasks that come first stay visible.
+    if (oldestDone === -1) break;
+    shown.splice(oldestDone, 1);
+  }
+
+  const rows = shown.slice(0, WIDGET_MAX_ROWS).map((todo) => `${MARK[todo.status]} #${todo.id} ${todo.text}`);
+  const hidden = state.todos.length - rows.length;
   return [header, ...rows, ...(hidden > 0 ? [`… ${hidden} more`] : [])];
 }
 
