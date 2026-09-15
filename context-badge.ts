@@ -67,6 +67,12 @@ export default function contextBadge(pi: ExtensionAPI): void {
   pi.on("agent_settled", update);
   pi.on("session_compact", update);
 
+  // A model switch moves the window those tokens are measured against, so the
+  // label goes stale the moment it happens rather than at the next turn. Pi has
+  // already applied the model by the time this fires, so the usage read here is
+  // the new one.
+  pi.on("model_select", update);
+
   // A closed session leaves no label behind in a host that outlives it.
   pi.on("session_shutdown", (_event, ctx) => {
     ctx.ui.setStatus(statusKey(ctx.sessionManager.getSessionId()), undefined);
