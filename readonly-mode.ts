@@ -10,8 +10,6 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 // Read-only tools allowed in readonly mode
 const READONLY_TOOLS = ["read", "ls", "grep", "find", "questionnaire"];
 
-// Full tool set for normal mode (edit and write are the write tools)
-const NORMAL_TOOLS = ["read", "ls", "grep", "find", "questionnaire", "bash", "edit", "write"];
 
 // Additional bash commands to block in readonly mode (destructive operations)
 const BLOCKED_BASH_PATTERNS = [
@@ -43,13 +41,32 @@ export default function readonlyModeExtension(pi: ExtensionAPI): void {
 		}
 	}
 
+	// Tools that were active before readonly mode was turned on
+	let toolsBeforeReadonly: string[] | undefined;
+
+	function allToolNames(): string[] {
+		return pi.getAllTools().map((tool) => tool.name);
+	}
+
+	function enableReadonly(): void {
+		toolsBeforeReadonly = pi.getActiveTools();
+		pi.setActiveTools(READONLY_TOOLS);
+	}
+
+	function disableReadonly(): void {
+		// Restore whatever was active before, falling back to every registered tool
+		const restored = toolsBeforeReadonly?.length ? toolsBeforeReadonly : allToolNames();
+		toolsBeforeReadonly = undefined;
+		pi.setActiveTools(restored);
+	}
+
 	function toggleReadonly(ctx: ExtensionContext): void {
 		readonlyEnabled = !readonlyEnabled;
 
 		if (readonlyEnabled) {
-			pi.setActiveTools(READONLY_TOOLS);
+			enableReadonly();
 		} else {
-			pi.setActiveTools(NORMAL_TOOLS);
+			disableReadonly();
 		}
 
 		updateStatus(ctx);
@@ -89,32 +106,10 @@ export default function readonlyModeExtension(pi: ExtensionAPI): void {
 		}
 	});
 
-	// Inject readonly context into system prompt when active
-	pi.on("before_agent_start", async () => {
-		if (readonlyEnabled) {
-			return {
-				message: {
-					customType: "readonly-context",
-					content: `[READONLY MODE ACTIVE]
-You are in readonly mode. File modifications are disabled.
-
-Available tools: read, ls, grep, find, questionnaire
-Blocked tools: edit, write (file modifications)
-Blocked bash: rm, mv, cp, mkdir, rmdir, touch, redirects (>, >>), git commit/push/merge
-
-Analyze code, explore the project, and provide recommendations.
-Do NOT attempt to make any changes to files.
-Ask clarifying questions using the questionnaire tool when needed.`,
-					display: false,
-				},
-			};
-		}
-	});
-
 	// Initialize on session start
 	pi.on("session_start", async (_event, ctx) => {
 		if (readonlyEnabled) {
-			pi.setActiveTools(READONLY_TOOLS);
+			enableReadonly();
 		}
 		updateStatus(ctx);
 	});
