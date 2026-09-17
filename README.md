@@ -9,6 +9,7 @@ directly, so there is no build step.
 | `claude-auth.ts` | `/claude-login` — refreshes the Claude Code OAuth token doppelclaude depends on; also refreshes proactively before a doppelclaude turn. |
 | `codex-accounts.ts` | `/codex-accounts`, `/codex-account-add`, `/codex-account-remove` — registers extra `openai-codex-<id>` providers so several ChatGPT subscriptions can be logged in at once (`~/.pi/agent/codex-accounts.json`). |
 | `manual-updates.ts` | `/update` — runs `pi update --all` and restarts the current session. |
+| `model-filter.ts` | `/models-filter`, `/models-add`, `/models-remove` — edits the `enabledModels` filter in `settings.json`, including models whose provider is not logged in yet. |
 | `minimal-tui.ts` | No command. Suppresses the startup package banner and hides footer token/cost stats. |
 | `pdf.ts` | `/pdf <file.pdf>` — converts to `.txt` via `pdftotext`. |
 | `readonly-mode.ts` | `/readonly` — blocks `write`/`edit` and destructive bash. |
