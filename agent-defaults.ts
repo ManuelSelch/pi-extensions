@@ -44,16 +44,54 @@ function update(mutate: (settings: Settings) => void): void {
 	writeSettings(settings);
 }
 
+type CatalogueModel = ReturnType<ExtensionContext["modelRegistry"]["getAll"]>[number];
+
+function modelRef(model: CatalogueModel): string {
+	return `${model.provider}/${model.id}`;
+}
+
+/** Strips the optional ":<thinking level>" suffix accepted by enabledModels patterns. */
+function patternBase(pattern: string): string {
+	const colon = pattern.lastIndexOf(":");
+	return colon === -1 ? pattern : pattern.slice(0, colon);
+}
+
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesPattern(reference: string, pattern: string): boolean {
+	const base = patternBase(pattern).toLowerCase();
+	const target = reference.toLowerCase();
+	if (!base.includes("*")) return base === target;
+
+	const regex = new RegExp(`^${base.split("*").map(escapeRegex).join(".*")}$`);
+	return regex.test(target);
+}
+
+function enabledModelPatterns(settings: Settings): string[] {
+	return Array.isArray(settings.enabledModels)
+		? settings.enabledModels.filter((entry): entry is string => typeof entry === "string")
+		: [];
+}
+
+function isEnabled(ref: string, patterns: string[]): boolean {
+	return patterns.length === 0 || patterns.some((pattern) => matchesPattern(ref, pattern));
+}
+
 /** Canonical "provider/modelId" references of every model in the registry. */
-function modelRefs(ctx: ExtensionContext): string[] {
+function modelRefs(ctx: ExtensionContext, settings = readSettings()): string[] {
+	const patterns = enabledModelPatterns(settings);
 	return ctx.modelRegistry
 		.getAll()
-		.map((model) => `${model.provider}/${model.id}`)
+		.map(modelRef)
+		.filter((ref) => isEnabled(ref, patterns))
 		.sort();
 }
 
 function providers(ctx: ExtensionContext): string[] {
-	return [...new Set(ctx.modelRegistry.getAll().map((model) => model.provider))].sort();
+	const refs = modelRefs(ctx);
+	return [...new Set(refs.map((ref) => ref.slice(0, ref.indexOf("/"))))].sort();
 }
 
 async function editProvider(ctx: ExtensionContext): Promise<void> {
@@ -71,9 +109,14 @@ async function editProvider(ctx: ExtensionContext): Promise<void> {
 
 async function editModel(ctx: ExtensionContext): Promise<void> {
 	const settings = readSettings();
+	const refs = modelRefs(ctx, settings);
+	if (refs.length === 0) {
+		ctx.ui.notify("No models match enabledModels. Adjust Enabled models first.", "warning");
+		return;
+	}
 	const choice = await ctx.ui.select(
 		`Default model (current: ${settings.defaultModel ?? "unset"})`,
-		modelRefs(ctx),
+		refs,
 	);
 	if (!choice) return;
 
@@ -114,7 +157,7 @@ async function editThinkingLevel(ctx: ExtensionContext): Promise<void> {
 async function editEnabledModels(ctx: ExtensionContext): Promise<void> {
 	const DONE = "✓ Save and close";
 	const CLEAR = "✗ Clear list (allow all models)";
-	const refs = modelRefs(ctx);
+	const refs = ctx.modelRegistry.getAll().map(modelRef).sort();
 
 	const selected = new Set(readSettings().enabledModels ?? []);
 	// Keep patterns that no longer resolve to a known model so we never drop them silently.
