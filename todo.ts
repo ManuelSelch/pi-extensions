@@ -36,6 +36,7 @@ function stringEnum<const T extends readonly string[]>(values: T, description: s
 }
 
 export const TOOL_NAME = "todo";
+export const TODO_SNAPSHOT_ENTRY = "todo-state";
 const WIDGET_KEY = "todos";
 /** Long lists are for `/todos`; the widget stays a glance, not a screen. */
 const WIDGET_MAX_ROWS = 8;
@@ -72,6 +73,16 @@ function normalizeTodo(todo: unknown): Todo {
     ...(description ? { description } : {}),
     status: value.status === "doing" || value.status === "done" ? value.status : "pending",
   };
+}
+
+function normalizeState(data: unknown): TodoState | undefined {
+  const value = data as Partial<TodoState> | undefined;
+  if (!Array.isArray(value?.todos) || typeof value.nextId !== "number") return undefined;
+  return { todos: value.todos.map(normalizeTodo), nextId: value.nextId };
+}
+
+export function todoSnapshot(state: TodoState): TodoState {
+  return { todos: state.todos.map(normalizeTodo), nextId: state.nextId };
 }
 
 function formatTodoLine(todo: Todo): string {
@@ -174,16 +185,31 @@ export function summary(state: TodoState): string {
 export function replayFromBranch(branch: Iterable<unknown>): TodoState {
   let state = EMPTY;
   for (const entry of branch) {
-    const item = entry as { type?: string; message?: { role?: string; toolName?: string; details?: unknown } };
+    const item = entry as {
+      type?: string;
+      customType?: string;
+      data?: unknown;
+      message?: { role?: string; toolName?: string; details?: unknown };
+    };
+
+    if (item.type === "custom" && item.customType === TODO_SNAPSHOT_ENTRY) {
+      const snapshot = normalizeState(item.data);
+      if (snapshot) state = snapshot;
+      continue;
+    }
+
     if (item.type !== "message") continue;
     const message = item.message;
     if (message?.role !== "toolResult" || message.toolName !== TOOL_NAME) continue;
-    const details = message.details as Partial<TodoState> | undefined;
+    const snapshot = normalizeState(message.details);
     // Defensive: an older or truncated entry must not take the list down.
-    if (!Array.isArray(details?.todos) || typeof details.nextId !== "number") continue;
-    state = { todos: details.todos.map(normalizeTodo), nextId: details.nextId };
+    if (snapshot) state = snapshot;
   }
   return state;
+}
+
+export function getTodoStateFromBranch(branch: Iterable<unknown>): TodoState {
+  return replayFromBranch(branch);
 }
 
 /**
