@@ -9,6 +9,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getTodoStateFromBranch, summary as todoSummary, TODO_SNAPSHOT_ENTRY, todoSnapshot, type TodoState } from "./todo.ts";
 
 const EXT_ID = "agentic-flow";
 
@@ -26,11 +27,19 @@ export function requireTarget(command: FlowCommand, args: string): string {
 	return target;
 }
 
-export function buildImplementPrompt(target: string): string {
+export function carriedTodosSection(state: TodoState): string {
+	if (state.todos.length === 0) return "";
+	return `
+
+Carried todo state from previous session:
+${todoSummary(state)}`;
+}
+
+export function buildImplementPrompt(target: string, carriedTodos: TodoState = { todos: [], nextId: 1 }): string {
 	return `Implement this target in a fresh clean session.
 
 Target:
-${target}
+${target}${carriedTodosSection(carriedTodos)}
 
 Workflow:
 1. Inspect the current repository state and relevant files first.
@@ -46,11 +55,11 @@ Rules:
 - If the working tree already contains unrelated user changes, preserve them and avoid overwriting them.`;
 }
 
-export function buildReviewPrompt(target: string): string {
+export function buildReviewPrompt(target: string, carriedTodos: TodoState = { todos: [], nextId: 1 }): string {
 	return `Review this implementation target in a fresh clean session.
 
 Target:
-${target}
+${target}${carriedTodosSection(carriedTodos)}
 
 Review checklist:
 1. Behavior: does the implementation satisfy the requested change?
@@ -91,10 +100,14 @@ export default function agenticFlowExtension(pi: ExtensionAPI): void {
 			await ctx.waitForIdle();
 
 			const parentSession = ctx.sessionManager.getSessionFile();
-			const prompt = buildImplementPrompt(target);
+			const todos = todoSnapshot(getTodoStateFromBranch(ctx.sessionManager.getBranch()));
+			const prompt = buildImplementPrompt(target, todos);
 
 			const result = await ctx.newSession({
 				parentSession,
+				setup: async (session) => {
+					if (todos.todos.length > 0) session.appendCustomEntry(TODO_SNAPSHOT_ENTRY, todos);
+				},
 				withSession: async (newCtx) => {
 					await newCtx.sendUserMessage(prompt);
 				},
@@ -120,10 +133,14 @@ export default function agenticFlowExtension(pi: ExtensionAPI): void {
 			await ctx.waitForIdle();
 
 			const parentSession = ctx.sessionManager.getSessionFile();
-			const prompt = buildReviewPrompt(target);
+			const todos = todoSnapshot(getTodoStateFromBranch(ctx.sessionManager.getBranch()));
+			const prompt = buildReviewPrompt(target, todos);
 
 			const result = await ctx.newSession({
 				parentSession,
+				setup: async (session) => {
+					if (todos.todos.length > 0) session.appendCustomEntry(TODO_SNAPSHOT_ENTRY, todos);
+				},
 				withSession: async (newCtx) => {
 					await newCtx.sendUserMessage(prompt);
 				},
