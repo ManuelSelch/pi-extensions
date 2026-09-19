@@ -45,6 +45,7 @@ export type TodoStatus = "pending" | "doing" | "done";
 export interface Todo {
   id: number;
   text: string;
+  description?: string;
   status: TodoStatus;
 }
 
@@ -57,12 +58,36 @@ export const EMPTY: TodoState = { todos: [], nextId: 1 };
 
 const MARK: Record<TodoStatus, string> = { pending: "○", doing: "◐", done: "✓" };
 
+function cleanDescription(description: string | undefined): string | undefined {
+  const trimmed = description?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeTodo(todo: unknown): Todo {
+  const value = todo as Partial<Todo>;
+  const description = cleanDescription(value.description);
+  return {
+    id: typeof value.id === "number" ? value.id : 0,
+    text: typeof value.text === "string" ? value.text : "",
+    ...(description ? { description } : {}),
+    status: value.status === "doing" || value.status === "done" ? value.status : "pending",
+  };
+}
+
+function formatTodoLine(todo: Todo): string {
+  const line = `${MARK[todo.status]} #${todo.id} ${todo.text}`;
+  return todo.description ? `${line}\n  ${todo.description.replace(/\n/g, "\n  ")}` : line;
+}
+
 const TodoParams = Type.Object({
   action: stringEnum(
     ["add", "update", "list", "clear"],
     "add a task, update its status, list everything, or clear the list",
   ),
-  text: Type.Optional(Type.String({ description: "Task text (add). Short and imperative." })),
+  text: Type.Optional(Type.String({ description: "Task text (add/update). Short and imperative." })),
+  description: Type.Optional(
+    Type.String({ description: "Longer task details, acceptance criteria, context, or review notes." }),
+  ),
   id: Type.Optional(Type.Number({ description: "Task id (update)" })),
   status: Type.Optional(stringEnum(["pending", "doing", "done"], "New status (update)")),
 });
@@ -70,6 +95,7 @@ const TodoParams = Type.Object({
 export interface TodoParamsValue {
   action: "add" | "update" | "list" | "clear";
   text?: string;
+  description?: string;
   id?: number;
   status?: TodoStatus;
 }
@@ -89,7 +115,8 @@ export function applyAction(state: TodoState, params: TodoParamsValue): Applied 
   if (params.action === "add") {
     const text = params.text?.trim();
     if (!text) return { state, message: "add needs text.", failed: true };
-    const todo: Todo = { id: state.nextId, text, status: "pending" };
+    const description = cleanDescription(params.description);
+    const todo: Todo = { id: state.nextId, text, ...(description ? { description } : {}), status: "pending" };
     return {
       state: { todos: [...state.todos, todo], nextId: state.nextId + 1 },
       message: `Added #${todo.id}: ${todo.text}`,
@@ -98,16 +125,29 @@ export function applyAction(state: TodoState, params: TodoParamsValue): Applied 
 
   if (params.action === "update") {
     if (params.id === undefined) return { state, message: "update needs an id.", failed: true };
-    if (!params.status) return { state, message: "update needs a status.", failed: true };
+    const nextText = params.text?.trim();
+    const hasDescription = params.description !== undefined;
+    const nextDescription = hasDescription ? cleanDescription(params.description) : undefined;
+    if (!params.status && !nextText && !hasDescription) {
+      return { state, message: "update needs a status, text, or description.", failed: true };
+    }
     const target = state.todos.find((todo) => todo.id === params.id);
     if (!target) return { state, message: `No task #${params.id}.`, failed: true };
-    const status = params.status;
+    const updated: Todo = {
+      ...target,
+      ...(nextText ? { text: nextText } : {}),
+      ...(params.status ? { status: params.status } : {}),
+    };
+    if (hasDescription) {
+      if (nextDescription) updated.description = nextDescription;
+      else delete updated.description;
+    }
     return {
       state: {
         ...state,
-        todos: state.todos.map((todo) => (todo.id === target.id ? { ...todo, status } : todo)),
+        todos: state.todos.map((todo) => (todo.id === target.id ? updated : todo)),
       },
-      message: `#${target.id} is ${status}: ${target.text}`,
+      message: `Updated #${updated.id}: ${updated.text}`,
     };
   }
 
@@ -123,7 +163,7 @@ export function applyAction(state: TodoState, params: TodoParamsValue): Applied 
 /** One line per task, which is also what the model reads back. */
 export function summary(state: TodoState): string {
   if (state.todos.length === 0) return "No tasks.";
-  return state.todos.map((todo) => `${MARK[todo.status]} #${todo.id} ${todo.text}`).join("\n");
+  return state.todos.map(formatTodoLine).join("\n");
 }
 
 /**
@@ -141,7 +181,7 @@ export function replayFromBranch(branch: Iterable<unknown>): TodoState {
     const details = message.details as Partial<TodoState> | undefined;
     // Defensive: an older or truncated entry must not take the list down.
     if (!Array.isArray(details?.todos) || typeof details.nextId !== "number") continue;
-    state = { todos: details.todos.map((todo) => ({ ...todo })), nextId: details.nextId };
+    state = { todos: details.todos.map(normalizeTodo), nextId: details.nextId };
   }
   return state;
 }
@@ -182,7 +222,10 @@ export function widgetLines(state: TodoState): string[] | undefined {
 export function todosMarkdown(state: TodoState): string {
   if (state.todos.length === 0) return "**Todos**\n\nNothing on the list.";
   const done = state.todos.filter((todo) => todo.status === "done").length;
-  const rows = state.todos.map((todo) => `- ${MARK[todo.status]} **#${todo.id}** ${todo.text}`);
+  const rows = state.todos.flatMap((todo) => {
+    const row = `- ${MARK[todo.status]} **#${todo.id}** ${todo.text}`;
+    return todo.description ? [row, `  ${todo.description.replace(/\n/g, "\n  ")}`] : [row];
+  });
   return [`**Todos** — ${done}/${state.todos.length} done`, "", ...rows].join("\n");
 }
 
