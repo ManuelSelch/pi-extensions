@@ -108,7 +108,7 @@ async function editProvider(ctx: ExtensionContext): Promise<void> {
 	ctx.ui.notify(`defaultProvider set to ${choice}`, "info");
 }
 
-async function editModel(ctx: ExtensionContext): Promise<void> {
+async function editModel(ctx: ExtensionContext, pi: ExtensionAPI): Promise<void> {
 	const settings = readSettings();
 	const refs = modelRefs(ctx, settings);
 	if (refs.length === 0) {
@@ -137,7 +137,7 @@ async function editModel(ctx: ExtensionContext): Promise<void> {
 	}
 }
 
-async function editThinkingLevel(ctx: ExtensionContext): Promise<void> {
+async function editThinkingLevel(ctx: ExtensionContext, pi: ExtensionAPI): Promise<void> {
 	const current = readSettings().defaultThinkingLevel;
 	const choice = (await ctx.ui.select(
 		`Default thinking level (current: ${current ?? "unset"})`,
@@ -218,10 +218,7 @@ function showCurrent(ctx: ExtensionContext): void {
 	);
 }
 
-let pi!: ExtensionAPI;
-
-export default function agentDefaultsExtension(api: ExtensionAPI): void {
-	pi = api;
+export default function agentDefaultsExtension(pi: ExtensionAPI): void {
 
 	pi.registerCommand("defaults", {
 		description: "Edit global defaults: provider, model, thinking level, enabled models",
@@ -234,8 +231,8 @@ export default function agentDefaultsExtension(api: ExtensionAPI): void {
 			const actions: Record<string, (ctx: ExtensionContext) => void | Promise<void>> = {
 				"Show current defaults": showCurrent,
 				"Default provider": editProvider,
-				"Default model": editModel,
-				"Default thinking level": editThinkingLevel,
+				"Default model": (ctx) => editModel(ctx, pi),
+				"Default thinking level": (ctx) => editThinkingLevel(ctx, pi),
 				"Enabled models": editEnabledModels,
 			};
 
