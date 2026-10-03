@@ -79,14 +79,15 @@ function isEnabled(ref: string, patterns: string[]): boolean {
 	return patterns.length === 0 || patterns.some((pattern) => matchesPattern(ref, pattern));
 }
 
+/** Returns catalogue references visible under the configured enabledModels patterns. */
+export function visibleModelRefs(references: readonly string[], patterns: readonly string[]): string[] {
+	return [...references].filter((ref) => isEnabled(ref, [...patterns]));
+}
+
 /** Canonical "provider/modelId" references of every model in the registry. */
 function modelRefs(ctx: ExtensionContext, settings = readSettings()): string[] {
 	const patterns = enabledModelPatterns(settings);
-	return ctx.modelRegistry
-		.getAll()
-		.map(modelRef)
-		.filter((ref) => isEnabled(ref, patterns))
-		.sort();
+	return visibleModelRefs(ctx.modelRegistry.getAll().map(modelRef), patterns).sort();
 }
 
 function providers(ctx: ExtensionContext): string[] {
@@ -158,17 +159,22 @@ async function editEnabledModels(ctx: ExtensionContext): Promise<void> {
 	const DONE = "✓ Save and close";
 	const CLEAR = "✗ Clear list (allow all models)";
 	const refs = ctx.modelRegistry.getAll().map(modelRef).sort();
-
-	const selected = new Set(readSettings().enabledModels ?? []);
-	// Keep patterns that no longer resolve to a known model so we never drop them silently.
-	const unknown = [...selected].filter((ref) => !refs.includes(ref));
+	const selected = new Set(enabledModelPatterns(readSettings()));
+	let showEnabledOnly = false;
 
 	for (;;) {
-		const options = [
-			DONE,
-			CLEAR,
-			...[...refs, ...unknown].map((ref) => `${selected.has(ref) ? "[x]" : "[ ]"} ${ref}`),
-		];
+		// Keep configured patterns that do not name a catalogue entry (including globs)
+		// visible, so opening and saving this picker cannot silently rewrite them.
+		const unknown = [...selected].filter((pattern) => !refs.includes(pattern));
+		const catalogueRefs = showEnabledOnly
+			? visibleModelRefs(refs, [...selected]).sort()
+			: refs;
+		const modelOptions = [...catalogueRefs, ...unknown].map((ref) => ({
+			label: `${selected.has(ref) ? "[x]" : "[ ]"} ${ref}`,
+			ref,
+		}));
+		const toggle = `${showEnabledOnly ? "☑" : "☐"} Show enabled models only`;
+		const options = [DONE, CLEAR, toggle, ...modelOptions.map((option) => option.label)];
 		const choice = await ctx.ui.select(`enabledModels (${selected.size} selected)`, options);
 		if (choice === undefined) return;
 		if (choice === DONE) break;
@@ -176,9 +182,15 @@ async function editEnabledModels(ctx: ExtensionContext): Promise<void> {
 			selected.clear();
 			continue;
 		}
-		const ref = choice.slice(4);
-		if (selected.has(ref)) selected.delete(ref);
-		else selected.add(ref);
+		if (choice === toggle) {
+			showEnabledOnly = !showEnabledOnly;
+			continue;
+		}
+
+		const model = modelOptions.find((option) => option.label === choice);
+		if (!model) continue;
+		if (selected.has(model.ref)) selected.delete(model.ref);
+		else selected.add(model.ref);
 	}
 
 	const list = [...selected];
