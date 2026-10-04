@@ -110,6 +110,18 @@ async function readGitStatus(
 	}
 }
 
+export function formatRepositoryLabel(repoName: string, branch: string, worktreeName?: string): string {
+	if (!worktreeName) return repoName;
+
+	// Worktree directories are commonly named after the branch with slashes
+	// replaced by hyphens (for example fix-exit-worktree for fix/exit-worktree).
+	// Showing both would repeat the same identity in the widget.
+	const branchDirectoryName = branch.replaceAll("/", "-");
+	return worktreeName === branch || worktreeName === branchDirectoryName
+		? repoName
+		: `${repoName}/${worktreeName}`;
+}
+
 function renderStatus(
 	ctx: ExtensionContext,
 	repoName: string,
@@ -117,7 +129,7 @@ function renderStatus(
 	worktreeName?: string,
 ): string {
 	const theme = ctx.ui.theme;
-	const label = worktreeName ? `${repoName}/${worktreeName}` : repoName;
+	const label = formatRepositoryLabel(repoName, status.branch, worktreeName);
 	const repo = theme.fg("accent", label);
 	const details = formatGitStatus(status);
 	if (status.changed === 0) return `${repo}  ${theme.fg("success", details)}`;

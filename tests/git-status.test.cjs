@@ -24,7 +24,7 @@ function load() {
   return module.exports;
 }
 
-const { parseGitStatus, formatGitStatus } = load();
+const { parseGitStatus, formatGitStatus, formatRepositoryLabel } = load();
 
 test('parses branch and staged, modified, and untracked files', () => {
   const status = parseGitStatus([
@@ -66,4 +66,9 @@ test('formats changed files without zero-valued categories', () => {
     formatGitStatus({ branch: 'feature', ahead: 0, behind: 0, changed: 3, staged: 1, modified: 1, untracked: 1 }),
     'feature  3 changed  +1 staged  ~1 modified  ?1 untracked',
   );
+});
+
+test('does not repeat a worktree directory that identifies its branch', () => {
+  assert.equal(formatRepositoryLabel('worktree', 'fix/exit-worktree', 'fix-exit-worktree'), 'worktree');
+  assert.equal(formatRepositoryLabel('worktree', 'fix/exit-worktree', 'review-copy'), 'worktree/review-copy');
 });
