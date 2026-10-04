@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { basename } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -78,26 +78,47 @@ export function formatGitStatus(status: GitStatus): string {
 	return parts.join("  ");
 }
 
-async function readGitStatus(cwd: string): Promise<{ repoName: string; status: GitStatus } | undefined> {
+async function readGitStatus(
+	cwd: string,
+): Promise<{ repoName: string; worktreeName?: string; status: GitStatus } | undefined> {
 	try {
 		const rootResult = await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd });
 		const repoRoot = rootResult.stdout.trim();
 		if (!repoRoot) return undefined;
+
+		// In a linked worktree, --show-toplevel is the worktree directory while
+		// --git-common-dir points back to the main repository's .git directory.
+		const commonDirResult = await execFileAsync("git", ["rev-parse", "--git-common-dir"], {
+			cwd: repoRoot,
+		});
+		const commonRoot = dirname(resolve(repoRoot, commonDirResult.stdout.trim()));
+		const repoName = basename(commonRoot);
+		const worktreeName = commonRoot === resolve(repoRoot) ? undefined : basename(repoRoot);
 
 		const statusResult = await execFileAsync(
 			"git",
 			["status", "--porcelain=v1", "--branch", "--untracked-files=normal"],
 			{ cwd: repoRoot },
 		);
-		return { repoName: basename(repoRoot), status: parseGitStatus(statusResult.stdout) };
+		return {
+			repoName,
+			worktreeName,
+			status: parseGitStatus(statusResult.stdout),
+		};
 	} catch {
 		return undefined;
 	}
 }
 
-function renderStatus(ctx: ExtensionContext, repoName: string, status: GitStatus): string {
+function renderStatus(
+	ctx: ExtensionContext,
+	repoName: string,
+	status: GitStatus,
+	worktreeName?: string,
+): string {
 	const theme = ctx.ui.theme;
-	const repo = theme.fg("accent", repoName);
+	const label = worktreeName ? `${repoName}/${worktreeName}` : repoName;
+	const repo = theme.fg("accent", label);
 	const details = formatGitStatus(status);
 	if (status.changed === 0) return `${repo}  ${theme.fg("success", details)}`;
 	return `${repo}  ${theme.fg("warning", details)}`;
@@ -120,7 +141,7 @@ export default function gitStatusExtension(pi: ExtensionAPI): void {
 				if (!result) {
 					ctx.ui.setWidget("git-status", undefined);
 				} else {
-					ctx.ui.setWidget("git-status", [renderStatus(ctx, result.repoName, result.status)]);
+					ctx.ui.setWidget("git-status", [renderStatus(ctx, result.repoName, result.status, result.worktreeName)]);
 				}
 			} while (refreshRequested);
 		})();
