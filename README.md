@@ -13,7 +13,7 @@ directly, so there is no build step.
 | `minimal-tui.ts` | No command. Suppresses the startup package banner and hides footer token/cost stats. |
 | `pdf.ts` | `/pdf <file.pdf>` — converts to `.txt` via `pdftotext`. |
 | `readonly-mode.ts` | `/readonly` — blocks `write`/`edit` and destructive bash. |
-| `session-cleanup.ts` | `/session-cleanup-now`, `/session-cleanup-dry` — trashes old *unnamed* sessions (`PI_SESSION_CLEANUP_DAYS`, default 3). |
+| `session-cleanup.ts` | `/session-cleanup-now`, `/session-cleanup-dry` — trashes every old session except the active session (`PI_SESSION_CLEANUP_DAYS`, default 3). |
 | `thinking-toggle.ts` | `/thinking-toggle` — switches between `minimal` and `high`. |
 
 ## Development

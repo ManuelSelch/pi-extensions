@@ -1,14 +1,13 @@
 /**
  * Session Cleanup Extension
  *
- * Deletes OLD session files without a manual name (including auto-titled
- * sessions). Never touches manually named sessions or the active session.
+ * Deletes every OLD session file except the active session.
  *
  * Deletion goes through the `trash` CLI first (recoverable) and only falls
  * back to a hard `unlink` if `trash` is not installed.
  *
  * Commands:
- *   /session-cleanup-now   -> delete old unnamed sessions
+ *   /session-cleanup-now   -> delete old sessions
  *   /session-cleanup-dry   -> show what would be deleted
  *
  * Age threshold: PI_SESSION_CLEANUP_DAYS (positive integer, default 3).
@@ -18,7 +17,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import { readFile, stat, unlink } from "node:fs/promises";
+import { stat, unlink } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 
 const EXT_ID = "session-cleanup";
@@ -37,35 +36,11 @@ function getMaxAgeDays(): number {
 
 interface CleanupStats {
   deleted: number;
-  kept: number; // recent (within cutoff), unnamed
-  protected: number; // manually named and/or current session — never deleted
-  candidates: number; // unnamed + old (what a real run would delete)
+  kept: number; // recent (within cutoff)
+  protected: number; // current session — never deleted
+  candidates: number; // old sessions (what a real run would delete)
   errors: number;
   dryRun: boolean;
-}
-
-/**
- * SessionInfo.name omits the name's source. Read the latest session_info
- * entry, just like pi-chat: only autoTitle === true denotes an automatic name.
- * Read failures propagate so cleanup reports an error rather than deleting.
- */
-async function hasManualName(path: string): Promise<boolean> {
-  let manual = false;
-  const content = await readFile(path, "utf8");
-  for (const line of content.split("\n")) {
-    let entry: unknown;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (!entry || typeof entry !== "object") continue;
-    const value = entry as Record<string, unknown>;
-    if (value.type !== "session_info") continue;
-    const name = typeof value.name === "string" ? value.name.trim() : "";
-    manual = name.length > 0 && value.autoTitle !== true;
-  }
-  return manual;
 }
 
 /**
@@ -109,17 +84,12 @@ async function cleanupSessions(
         stats.protected++;
         continue;
       }
-      // 2) Protect manual names; auto-titles are eligible for cleanup.
-      if (await hasManualName(path)) {
-        stats.protected++;
-        continue;
-      }
-      // 3) Keep recent sessions.
+      // 2) Keep recent sessions.
       if (session.modified.getTime() >= cutoff) {
         stats.kept++;
         continue;
       }
-      // 4) Old + unnamed -> candidate.
+      // 3) Every old inactive session is a candidate.
       stats.candidates++;
       if (!dryRun) {
         await stat(path); // ensure it still exists
@@ -137,11 +107,11 @@ async function cleanupSessions(
 export default function sessionCleanupExtension(pi: ExtensionAPI): void {
   pi.registerCommand("session-cleanup-now", {
     description:
-      "Delete OLD unnamed/auto-titled session files (never manually named or current). Age via PI_SESSION_CLEANUP_DAYS (default 3).",
+      "Delete every OLD session file except the current session. Age via PI_SESSION_CLEANUP_DAYS (default 3).",
     handler: async (_args, ctx) => {
       const stats = await cleanupSessions(false, ctx.sessionManager.getSessionFile());
       ctx.ui.notify(
-        `[${EXT_ID}] deleted ${stats.deleted} unnamed/auto-titled · kept ${stats.kept} recent · protected ${stats.protected} manual/current · errors ${stats.errors} (older than ${getMaxAgeDays()}d)`,
+        `[${EXT_ID}] deleted ${stats.deleted} old sessions · kept ${stats.kept} recent · protected ${stats.protected} current · errors ${stats.errors} (older than ${getMaxAgeDays()}d)`,
         stats.errors ? "warning" : "info",
       );
     },
@@ -149,11 +119,11 @@ export default function sessionCleanupExtension(pi: ExtensionAPI): void {
 
   pi.registerCommand("session-cleanup-dry", {
     description:
-      "Dry run: show how many OLD unnamed/auto-titled sessions would be deleted (manual names + current are protected).",
+      "Dry run: show how many OLD sessions would be deleted (only the current session is protected).",
     handler: async (_args, ctx) => {
       const stats = await cleanupSessions(true, ctx.sessionManager.getSessionFile());
       ctx.ui.notify(
-        `[${EXT_ID}] dry-run: would delete ${stats.candidates} unnamed/auto-titled · protected ${stats.protected} manual/current · kept ${stats.kept} recent · errors ${stats.errors} (older than ${getMaxAgeDays()}d)`,
+        `[${EXT_ID}] dry-run: would delete ${stats.candidates} old sessions · protected ${stats.protected} current · kept ${stats.kept} recent · errors ${stats.errors} (older than ${getMaxAgeDays()}d)`,
         stats.errors ? "warning" : "info",
       );
     },

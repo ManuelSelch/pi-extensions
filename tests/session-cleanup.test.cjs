@@ -41,22 +41,21 @@ const info = (name, autoTitle) => ({ type: 'session_info', name, ...(autoTitle =
 test('old auto-titled sessions are candidates', async () => {
   assert.match(await dryRun([info('Automatic', true)]), /would delete 1/);
 });
-test('manual names stay protected, including legacy entries', async () => {
-  for (const flag of [undefined, false]) assert.match(await dryRun([info('Manual', flag)]), /protected 1/);
+test('manually named sessions are candidates, including legacy entries', async () => {
+  for (const flag of [undefined, false]) assert.match(await dryRun([info('Manual', flag)]), /would delete 1/);
 });
-test('latest session_info wins', async () => {
-  assert.match(await dryRun([info('Auto', true), info('Manual')]), /protected 1/);
+test('all named sessions are eligible regardless of the latest session_info', async () => {
+  assert.match(await dryRun([info('Auto', true), info('Manual')]), /would delete 1/);
   assert.match(await dryRun([info('Manual'), info('Auto', true)]), /would delete 1/);
-  assert.match(await dryRun([info('Manual'), info('  ')]), /would delete 1/);
 });
 test('unnamed sessions and unrelated entries are eligible', async () => {
   assert.match(await dryRun([{ type: 'session', id: 'test' }, 'not json']), /would delete 1/);
 });
-test('current auto-titled session stays protected', async () => {
-  assert.match(await dryRun([info('Auto', true)], { current: true }), /protected 1/);
+test('current named session stays protected', async () => {
+  assert.match(await dryRun([info('Manual')], { current: true }), /protected 1/);
 });
-test('unreadable session is an error, never a candidate', async () => {
+test('dry run does not need to read candidate files', async () => {
   const result = await dryRun([], { missing: true });
-  assert.match(result, /would delete 0/);
-  assert.match(result, /errors 1/);
+  assert.match(result, /would delete 1/);
+  assert.match(result, /errors 0/);
 });
