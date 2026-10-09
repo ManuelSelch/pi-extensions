@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
-import { createLocalBashOperations, SettingsManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const execFileAsync = promisify(execFile);
 const REFRESH_TOOLS = new Set(["write", "edit", "bash"]);
@@ -171,24 +171,5 @@ export default function gitStatusExtension(pi: ExtensionAPI): void {
 
 	pi.on("tool_execution_end", async (event, ctx) => {
 		if (REFRESH_TOOLS.has(event.toolName)) await refresh(ctx);
-	});
-
-	// User !/!! commands do not emit tool_execution_end. Wrap Pi's local
-	// operations to refresh after execution while retaining streaming and aborts.
-	pi.on("user_bash", (event, ctx) => {
-		const operations = createLocalBashOperations({
-			shellPath: SettingsManager.create(event.cwd).getShellPath(),
-		});
-		return {
-			operations: {
-				async exec(command, cwd, options) {
-					try {
-						return await operations.exec(command, cwd, options);
-					} finally {
-						await refresh(ctx);
-					}
-				},
-			},
-		};
 	});
 }
