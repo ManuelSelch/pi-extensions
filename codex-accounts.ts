@@ -8,9 +8,9 @@
  * carry their own ChatGPT OAuth flow, so every account gets its own auth.json
  * entry and pi refreshes each of them independently.
  *
- *   /codex-accounts            list configured accounts and their auth status
- *   /codex-account-add [id]    add an account, then `/login openai-codex-<id>`
- *   /codex-account-remove <id> drop an account (its stored credential stays)
+ *   /codex-account list              list configured accounts and their auth status
+ *   /codex-account add [id] [label]  add an account, then `/login openai-codex-<id>`
+ *   /codex-account remove <id>       drop an account (its stored credential stays)
  *
  * Accounts live in ~/.pi/agent/codex-accounts.json. Models are cloned from the
  * built-in openai-codex catalogue and cached in codex-accounts.models.json, so
@@ -495,110 +495,145 @@ export default function codexAccountsExtension(pi: ExtensionAPI): void {
 		syncProviders();
 	});
 
-	pi.registerCommand("codex-accounts", {
-		description: "List extra ChatGPT/Codex accounts and their login status",
-		handler: async (_args, ctx) => {
-			const accounts = readAccounts();
-			if (accounts.length === 0) {
+	const SUBCOMMANDS = [
+		{ value: "list", description: "List configured accounts and login status" },
+		{ value: "add", description: "Add an account as its own provider" },
+		{ value: "remove", description: "Remove an account provider" },
+	];
+	const USAGE = "Usage: /codex-account list | add [id] [label] | remove <id>";
+
+	pi.registerCommand("codex-account", {
+		description: "Manage extra ChatGPT/Codex accounts (list, add, remove)",
+		getArgumentCompletions: (prefix) => {
+			const [action, typed, ...rest] = prefix.trimStart().split(/\s+/);
+			if (rest.length > 0) return null;
+
+			if (typed === undefined) {
+				const matches = SUBCOMMANDS.filter((sub) => sub.value.startsWith(action ?? ""));
+				return matches.length > 0
+					? matches.map((sub) => ({
+							value: `${sub.value} `,
+							label: sub.value,
+							description: sub.description,
+						}))
+					: null;
+			}
+
+			if (action !== "remove") return null;
+			const matches = readAccounts().filter((account) => account.id.startsWith(typed));
+			return matches.length > 0
+				? matches.map((account) => ({
+						value: `remove ${account.id}`,
+						label: account.id,
+						description: account.label,
+					}))
+				: null;
+		},
+		handler: async (args, ctx) => {
+			const [action, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+
+			if (action === "list" || action === undefined) {
+				const accounts = readAccounts();
+				if (accounts.length === 0) {
+					ctx.ui.notify(
+						`No extra Codex accounts configured. Add one with /codex-account add (config: ${CONFIG_FILE}).`,
+						"info",
+					);
+					return;
+				}
+
+				const lines = accounts.map((account) => {
+					const id = providerId(account);
+					const status = ctx.modelRegistry.getProviderAuthStatus(id);
+					const state = status.configured
+						? `logged in${status.source ? ` (${status.source})` : ""}`
+						: `not logged in — run /login ${id}`;
+					return `  ${account.label}: ${id} — ${state}`;
+				});
+				ctx.ui.notify([`Codex accounts (${CONFIG_FILE}):`, ...lines].join("\n"), "info");
+				return;
+			}
+
+			if (action === "add") {
+				const [argId, ...argLabel] = rest;
+				const id = (argId ?? (await ctx.ui.input("Account id (a-z, digits, dashes)", "work")))?.trim();
+				if (!id) return;
+				if (!ID_PATTERN.test(id)) {
+					ctx.ui.notify(`Invalid account id "${id}". Use lowercase letters, digits, and dashes.`, "error");
+					return;
+				}
+
+				const accounts = readAccounts();
+				if (accounts.some((account) => account.id === id)) {
+					ctx.ui.notify(`Account "${id}" already exists.`, "error");
+					return;
+				}
+
+				const label =
+					(argLabel.length > 0 ? argLabel.join(" ") : await ctx.ui.input("Display label", id))?.trim() ||
+					id;
+				const account: AccountConfig = { id, label };
+
+				try {
+					writeAccounts([...accounts, account]);
+				} catch (error) {
+					ctx.ui.notify(
+						`Could not write ${CONFIG_FILE}: ${error instanceof Error ? error.message : String(error)}`,
+						"error",
+					);
+					return;
+				}
+
+				if (models.length === 0) models = catalogueModels(ctx);
+				if (registerAccount(pi, account, models) === 0) {
+					ctx.ui.notify(
+						`Added ${label}, but no built-in ${BASE_PROVIDER} models were found to clone. Restart pi and try /codex-account list.`,
+						"warning",
+					);
+					return;
+				}
+				registered.add(providerId(account));
+				ctx.ui.notify(`Added ${label}. Run /login ${providerId(account)} to sign in.`, "info");
+				return;
+			}
+
+			if (action === "remove") {
+				const accounts = readAccounts();
+				if (accounts.length === 0) {
+					ctx.ui.notify("No extra Codex accounts configured.", "info");
+					return;
+				}
+
+				const [argId] = rest;
+				const id = argId || (await ctx.ui.select("Remove which account?", accounts.map((a) => a.id)));
+				if (!id) return;
+
+				const account = accounts.find((candidate) => candidate.id === id);
+				if (!account) {
+					ctx.ui.notify(`Unknown account "${id}".`, "error");
+					return;
+				}
+
+				try {
+					writeAccounts(accounts.filter((candidate) => candidate.id !== id));
+				} catch (error) {
+					ctx.ui.notify(
+						`Could not write ${CONFIG_FILE}: ${error instanceof Error ? error.message : String(error)}`,
+						"error",
+					);
+					return;
+				}
+
+				pi.unregisterProvider(providerId(account));
+				registered.delete(providerId(account));
 				ctx.ui.notify(
-					`No extra Codex accounts configured. Add one with /codex-account-add (config: ${CONFIG_FILE}).`,
+					`Removed ${account.label}. Its credential is still in auth.json under "${providerId(account)}".`,
 					"info",
 				);
 				return;
 			}
 
-			const lines = accounts.map((account) => {
-				const id = providerId(account);
-				const status = ctx.modelRegistry.getProviderAuthStatus(id);
-				const state = status.configured
-					? `logged in${status.source ? ` (${status.source})` : ""}`
-					: `not logged in — run /login ${id}`;
-				return `  ${account.label}: ${id} — ${state}`;
-			});
-			ctx.ui.notify([`Codex accounts (${CONFIG_FILE}):`, ...lines].join("\n"), "info");
-		},
-	});
-
-	pi.registerCommand("codex-account-add", {
-		description: "Add an extra ChatGPT/Codex account as its own provider",
-		handler: async (args, ctx) => {
-			const [argId, ...argLabel] = args.trim().split(/\s+/).filter(Boolean);
-			const id = (argId ?? (await ctx.ui.input("Account id (a-z, digits, dashes)", "work")))?.trim();
-			if (!id) return;
-			if (!ID_PATTERN.test(id)) {
-				ctx.ui.notify(`Invalid account id "${id}". Use lowercase letters, digits, and dashes.`, "error");
-				return;
-			}
-
-			const accounts = readAccounts();
-			if (accounts.some((account) => account.id === id)) {
-				ctx.ui.notify(`Account "${id}" already exists.`, "error");
-				return;
-			}
-
-			const label =
-				(argLabel.length > 0 ? argLabel.join(" ") : await ctx.ui.input("Display label", id))?.trim() ||
-				id;
-			const account: AccountConfig = { id, label };
-
-			try {
-				writeAccounts([...accounts, account]);
-			} catch (error) {
-				ctx.ui.notify(
-					`Could not write ${CONFIG_FILE}: ${error instanceof Error ? error.message : String(error)}`,
-					"error",
-				);
-				return;
-			}
-
-			if (models.length === 0) models = catalogueModels(ctx);
-			if (registerAccount(pi, account, models) === 0) {
-				ctx.ui.notify(
-					`Added ${label}, but no built-in ${BASE_PROVIDER} models were found to clone. Restart pi and try /codex-accounts.`,
-					"warning",
-				);
-				return;
-			}
-			registered.add(providerId(account));
-			ctx.ui.notify(`Added ${label}. Run /login ${providerId(account)} to sign in.`, "info");
-		},
-	});
-
-	pi.registerCommand("codex-account-remove", {
-		description: "Remove an extra ChatGPT/Codex account provider",
-		handler: async (args, ctx) => {
-			const accounts = readAccounts();
-			if (accounts.length === 0) {
-				ctx.ui.notify("No extra Codex accounts configured.", "info");
-				return;
-			}
-
-			const id =
-				args.trim() || (await ctx.ui.select("Remove which account?", accounts.map((a) => a.id)));
-			if (!id) return;
-
-			const account = accounts.find((candidate) => candidate.id === id);
-			if (!account) {
-				ctx.ui.notify(`Unknown account "${id}".`, "error");
-				return;
-			}
-
-			try {
-				writeAccounts(accounts.filter((candidate) => candidate.id !== id));
-			} catch (error) {
-				ctx.ui.notify(
-					`Could not write ${CONFIG_FILE}: ${error instanceof Error ? error.message : String(error)}`,
-					"error",
-				);
-				return;
-			}
-
-			pi.unregisterProvider(providerId(account));
-			registered.delete(providerId(account));
-			ctx.ui.notify(
-				`Removed ${account.label}. Its credential is still in auth.json under "${providerId(account)}".`,
-				"info",
-			);
+			ctx.ui.notify(USAGE, "warning");
 		},
 	});
 }
