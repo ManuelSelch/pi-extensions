@@ -24,6 +24,13 @@ interface Settings {
 	[key: string]: unknown;
 }
 
+export function defaultModelRef(settings: Settings): string {
+	if (!settings.defaultModel) return "unset";
+	return settings.defaultProvider
+		? `${settings.defaultProvider}/${settings.defaultModel}`
+		: settings.defaultModel;
+}
+
 function readSettings(): Settings {
 	try {
 		const parsed = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
@@ -119,7 +126,7 @@ async function editModel(ctx: ExtensionContext, pi: ExtensionAPI): Promise<void>
 		return;
 	}
 	const choice = await ctx.ui.select(
-		`Default model (current: ${settings.defaultModel ?? "unset"})`,
+		`Default model (current: ${defaultModelRef(settings)})`,
 		refs,
 	);
 	if (!choice) return;
@@ -144,7 +151,7 @@ async function editModel(ctx: ExtensionContext, pi: ExtensionAPI): Promise<void>
 			}
 		}
 	});
-	ctx.ui.notify(`defaultModel set to ${modelId} (provider ${provider})`, "info");
+	ctx.ui.notify(`Default model: ${choice}`, "info");
 
 	const model = ctx.modelRegistry.find(provider, modelId);
 	if (model && (await ctx.ui.confirm("Apply now?", "Also switch the current session to this model?"))) {
@@ -226,7 +233,7 @@ function showCurrent(ctx: ExtensionContext): void {
 	ctx.ui.notify(
 		[
 			`defaultProvider: ${settings.defaultProvider ?? "unset"}`,
-			`defaultModel: ${settings.defaultModel ?? "unset"}`,
+			`defaultModel: ${defaultModelRef(settings)}`,
 			`defaultThinkingLevel: ${settings.defaultThinkingLevel ?? "unset"}`,
 			`enabledModels: ${enabled?.length ? enabled.join(", ") : "unset (all models)"}`,
 		].join("\n"),

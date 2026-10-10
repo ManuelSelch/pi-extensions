@@ -20,7 +20,12 @@ function load() {
   return module.exports;
 }
 
-const { visibleModelRefs: filterModelRefs } = load();
+const { visibleModelRefs: filterModelRefs, defaultModelRef } = load();
+
+test('default references retain the OpenRouter model namespace', () => {
+  assert.equal(defaultModelRef({ defaultProvider: 'openrouter', defaultModel: 'openai/gpt-6.1-sol' }), 'openrouter/openai/gpt-6.1-sol');
+  assert.equal(defaultModelRef({ defaultProvider: 'openai', defaultModel: 'gpt-6.1-sol' }), 'openai/gpt-6.1-sol');
+});
 const visibleModelRefs = (references, patterns) => Array.from(filterModelRefs(references, patterns));
 const catalogue = ['openai/gpt-5', 'anthropic/claude-sonnet', 'local/llama'];
 
