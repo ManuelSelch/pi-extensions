@@ -84,10 +84,13 @@ export function visibleModelRefs(references: readonly string[], patterns: readon
 	return [...references].filter((ref) => isEnabled(ref, [...patterns]));
 }
 
-/** Canonical "provider/modelId" references of every model in the registry. */
+/**
+ * Canonical "provider/modelId" references, limited to models whose provider has working
+ * credentials (the same set the /scoped-models built-in command sees).
+ */
 function modelRefs(ctx: ExtensionContext, settings = readSettings()): string[] {
 	const patterns = enabledModelPatterns(settings);
-	return visibleModelRefs(ctx.modelRegistry.getAll().map(modelRef), patterns).sort();
+	return visibleModelRefs(ctx.modelRegistry.getAvailable().map(modelRef), patterns).sort();
 }
 
 function providers(ctx: ExtensionContext): string[] {
@@ -158,7 +161,7 @@ async function editThinkingLevel(ctx: ExtensionContext, pi: ExtensionAPI): Promi
 async function editEnabledModels(ctx: ExtensionContext): Promise<void> {
 	const DONE = "✓ Save and close";
 	const CLEAR = "✗ Clear list (allow all models)";
-	const refs = ctx.modelRegistry.getAll().map(modelRef).sort();
+	const refs = ctx.modelRegistry.getAvailable().map(modelRef).sort();
 	const selected = new Set(enabledModelPatterns(readSettings()));
 	let showEnabledOnly = false;
 
