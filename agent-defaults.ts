@@ -130,6 +130,19 @@ async function editModel(ctx: ExtensionContext, pi: ExtensionAPI): Promise<void>
 	update((next) => {
 		next.defaultProvider = provider;
 		next.defaultModel = modelId;
+
+		// Move the chosen model to the front of enabledModels so pi starts with it
+		// instead of whatever happened to be first in the list.
+		if (next.enabledModels && next.enabledModels.length > 0) {
+			const list = next.enabledModels.filter((entry): entry is string => typeof entry === "string");
+			const matchIndex = list.findIndex((p) => patternBase(p).toLowerCase() === choice.toLowerCase());
+			if (matchIndex !== -1) {
+				const [matched] = list.splice(matchIndex, 1);
+				next.enabledModels = [matched, ...list];
+			} else {
+				next.enabledModels = [choice, ...list];
+			}
+		}
 	});
 	ctx.ui.notify(`defaultModel set to ${modelId} (provider ${provider})`, "info");
 
