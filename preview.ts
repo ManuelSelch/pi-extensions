@@ -167,18 +167,20 @@ export default function previewExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("preview-start", {
-    description: 'Start or reuse a preview: /preview-start {"name":"Frontend","cwd":".","command":"npm run dev","url":"http://localhost:5173"}',
+    description: "Start a previously registered preview: /preview-start <id>",
     handler: async (args, ctx) => {
-      try {
-        const config = JSON.parse(args) as { name: string; cwd: string; command: string; url: string };
-        if (!config.name || !config.cwd || !config.command || !config.url) throw new Error("name, cwd, command, and url are required");
-        const existing = [...previews.values()].find((p) => p.name === config.name && p.cwd === resolve(config.cwd));
-        const preview = registerPreview(config, ctx);
-        const verb = existing && (existing.status === "starting" || existing.status === "running") ? "Already managed" : "Preview starting";
-        ctx.ui.notify(`${verb}: ${preview.id} ${preview.url}`, "info");
-      } catch (error) {
-        ctx.ui.notify(`Usage: /preview-start {"name":"Frontend","cwd":".","command":"npm run dev","url":"http://localhost:5173"} (${String(error)})`, "error");
+      const id = args.trim();
+      const preview = byId(id);
+      if (!preview) {
+        ctx.ui.notify(id ? `No registered preview with ID ${id}` : "Specify a registered preview ID: /preview-start <id>", "error");
+        return;
       }
+      if (preview.status === "starting" || preview.status === "running") {
+        ctx.ui.notify(`${preview.name} is already ${preview.status} (${preview.id})`, "info");
+        return;
+      }
+      start(preview, ctx);
+      ctx.ui.notify(`Starting ${preview.name} at ${preview.url} (${preview.id})`, "info");
     },
   });
 
