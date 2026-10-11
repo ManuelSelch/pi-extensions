@@ -167,12 +167,11 @@ export default function previewExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("preview-start", {
-    description: "Start a previously registered preview: /preview-start <id>",
-    handler: async (args, ctx) => {
-      const id = args.trim();
-      const preview = byId(id);
+    description: "Start the preview registered for this session: /preview-start",
+    handler: async (_args, ctx) => {
+      const preview = [...previews.values()][0];
       if (!preview) {
-        ctx.ui.notify(id ? `No registered preview with ID ${id}` : "Specify a registered preview ID: /preview-start <id>", "error");
+        ctx.ui.notify("No preview is registered for this session. Start one with the preview_start tool first.", "error");
         return;
       }
       if (preview.status === "starting" || preview.status === "running") {
