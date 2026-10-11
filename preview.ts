@@ -21,16 +21,17 @@ type Preview = {
 };
 // One managed preview belongs to this extension/session.
 let preview: Preview | undefined;
-const WIDGET = "managed-preview";
+const WIDGET = "Preview";
+
+export function previewWidgetLines(current: Pick<Preview, "name" | "url" | "status"> | undefined): string[] | undefined {
+  if (!current || (current.status !== "starting" && current.status !== "running")) return undefined;
+  const name = current.name.replace(/[\\\[\]]/g, "\\$&").replace(/[\r\n]+/g, " ");
+  return [`[${name}](${current.url})`];
+}
 
 function paint(ctx: ExtensionContext) {
   if (!ctx.hasUI) return;
-  const active = preview && (preview.status === "starting" || preview.status === "running");
-  ctx.ui.setWidget(WIDGET, active && preview ? [
-    `${preview.name} · ${preview.status === "running" ? "Running" : "Starting"} · ${new URL(preview.url).port || "default port"}`,
-    `Open ↗ ${preview.url} · /preview stop`,
-    `Directory: ${preview.cwd}`,
-  ] : undefined, { placement: "aboveEditor" });
+  ctx.ui.setWidget(WIDGET, previewWidgetLines(preview), { placement: "aboveEditor" });
 }
 
 function start(ctx: ExtensionContext): void {
