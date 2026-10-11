@@ -11,17 +11,41 @@ const StartParams = Type.Object({
 });
 const StopParams = Type.Object({ action: Type.Literal("stop") });
 
-type Preview = {
-  name: string;
-  cwd: string;
-  command: string;
-  url: string;
+type PreviewConfig = { name: string; cwd: string; command: string; url: string };
+type SavedPreview = PreviewConfig & { active: boolean };
+type Preview = PreviewConfig & {
   status: "starting" | "running" | "stopped" | "failed";
   child?: ChildProcess;
 };
-// One managed preview belongs to this extension/session.
-let preview: Preview | undefined;
 const WIDGET = "Preview";
+export const PREVIEW_STATE_ENTRY = "preview-state";
+
+function isActive(current: Preview): boolean {
+  return current.status === "starting" || current.status === "running";
+}
+
+/** Only JSON configuration is stored, never process handles or UI contexts. */
+function snapshot(current: Preview): SavedPreview {
+  const { name, cwd, command, url } = current;
+  return { name, cwd, command, url, active: isActive(current) };
+}
+
+export function replayPreview(branch: Iterable<unknown>): SavedPreview | undefined {
+  let saved: SavedPreview | undefined;
+  for (const entry of branch) {
+    const item = entry as { type?: string; customType?: string; data?: unknown } | null;
+    if (item?.type !== "custom" || item.customType !== PREVIEW_STATE_ENTRY) continue;
+    const data = item.data as Partial<SavedPreview> | null;
+    if (!data || typeof data.active !== "boolean") continue;
+    if (![data.name, data.cwd, data.command, data.url].every((value) => typeof value === "string" && value.trim())) continue;
+    try {
+      const url = new URL(data.url!);
+      if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+    } catch { continue; }
+    saved = { name: data.name!, cwd: data.cwd!, command: data.command!, url: data.url!, active: data.active };
+  }
+  return saved;
+}
 
 export function previewWidgetLines(current: Pick<Preview, "name" | "url" | "status"> | undefined): string[] | undefined {
   if (!current || (current.status !== "starting" && current.status !== "running")) return undefined;
@@ -29,35 +53,34 @@ export function previewWidgetLines(current: Pick<Preview, "name" | "url" | "stat
   return [`[${name}](${current.url})`];
 }
 
-function paint(ctx: ExtensionContext) {
+function paint(ctx: ExtensionContext, current?: Preview) {
   if (!ctx.hasUI) return;
-  ctx.ui.setWidget(WIDGET, previewWidgetLines(preview), { placement: "aboveEditor" });
+  ctx.ui.setWidget(WIDGET, previewWidgetLines(current), { placement: "aboveEditor" });
 }
 
-function start(ctx: ExtensionContext): void {
-  if (!preview) return;
-  preview.status = "starting";
-  const child = spawn(preview.command, {
-    cwd: preview.cwd,
+function start(current: Preview, ctx: ExtensionContext): void {
+  current.status = "starting";
+  const child = spawn(current.command, {
+    cwd: current.cwd,
     shell: true,
     stdio: "ignore",
     detached: process.platform !== "win32",
   });
-  preview.child = child;
+  current.child = child;
   child.once("error", () => {
-    if (preview?.child !== child) return;
-    preview.status = "failed";
-    preview.child = undefined;
-    paint(ctx);
+    if (current.child !== child) return;
+    current.status = "failed";
+    current.child = undefined;
+    paint(ctx, current);
   });
   child.once("exit", (code) => {
-    if (preview?.child !== child) return;
-    preview.child = undefined;
-    preview.status = code === 0 ? "stopped" : "failed";
-    paint(ctx);
+    if (current.child !== child) return;
+    current.child = undefined;
+    current.status = code === 0 ? "stopped" : "failed";
+    paint(ctx, current);
   });
-  void waitReady(preview, child, ctx);
-  paint(ctx);
+  void waitReady(current, child, ctx);
+  paint(ctx, current);
 }
 
 async function waitReady(current: Preview, child: ChildProcess, ctx: ExtensionContext) {
@@ -65,64 +88,75 @@ async function waitReady(current: Preview, child: ChildProcess, ctx: ExtensionCo
   while (Date.now() < deadline && current.child === child) {
     try {
       const response = await fetch(current.url, { signal: AbortSignal.timeout(1200) });
+      // A pending probe may resolve after shutdown or session replacement.
+      if (current.child !== child) return;
       if (response.ok || response.status < 500) {
         current.status = "running";
-        paint(ctx);
+        paint(ctx, current);
         return;
       }
     } catch { /* Server not ready yet. */ }
+    if (current.child !== child) return;
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
   if (current.child === child && current.status === "starting") {
     current.status = "running";
-    paint(ctx);
+    paint(ctx, current);
   }
 }
 
-async function stop(): Promise<void> {
-  if (!preview) return;
-  const child = preview.child;
-  if (!child) { preview.status = "stopped"; return; }
-  preview.child = undefined;
-  if (child.pid) {
+async function stop(current: Preview): Promise<void> {
+  const child = current.child;
+  current.child = undefined;
+  current.status = "stopped";
+  if (!child?.pid) return;
+  const pid = child.pid;
+  await new Promise<void>((done) => {
+    // Install the exit listener before sending SIGTERM to avoid missing exit.
+    const finish = () => {
+      clearTimeout(timer);
+      child.removeListener("exit", finish);
+      done();
+    };
+    const timer = setTimeout(() => {
+      try {
+        if (process.platform !== "win32") process.kill(-pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch { /* Already exited. */ }
+      finish();
+    }, 2500);
+    child.once("exit", finish);
     try {
-      if (process.platform !== "win32") process.kill(-child.pid, "SIGTERM");
+      if (process.platform !== "win32") process.kill(-pid, "SIGTERM");
       else child.kill("SIGTERM");
-    } catch { /* Already exited. */ }
-    await new Promise<void>((done) => {
-      const timer = setTimeout(() => {
-        try {
-          if (process.platform !== "win32") process.kill(-child.pid!, "SIGKILL");
-          else child.kill("SIGKILL");
-        } catch { /* Already exited. */ }
-        done();
-      }, 2500);
-      child.once("exit", () => { clearTimeout(timer); done(); });
-    });
-  }
-  preview.status = "stopped";
-}
-
-function registerPreview(args: { name: string; cwd: string; command: string; url: string }, ctx: ExtensionContext): Preview {
-  const cwd = resolve(args.cwd);
-  if (preview && (preview.status === "starting" || preview.status === "running")) return preview;
-  preview = { ...args, cwd, status: "stopped" };
-  start(ctx);
-  return preview;
+    } catch { finish(); }
+  });
 }
 
 export default function previewExtension(pi: ExtensionAPI) {
+  // One preview per session, with no state shared between extension runtimes.
+  const previews = new Map<string, Preview>();
+  const id = (ctx: ExtensionContext) => ctx.sessionManager.getSessionId();
+  const save = (current: Preview) => pi.appendEntry(PREVIEW_STATE_ENTRY, snapshot(current));
+
   pi.registerTool({
     name: "preview_start",
     label: "Start preview",
-    description: "Start or reuse this session's managed preview. Repeated calls won't launch a duplicate while it is starting or running.",
+    description: "Start or reuse this session's managed preview. Active previews restart after reload; explicitly stopped previews stay stopped.",
     parameters: StartParams,
     async execute(_id, raw, _signal, _update, ctx) {
-      const wasRunning = preview && (preview.status === "starting" || preview.status === "running");
-      const managed = registerPreview(raw as { name: string; cwd: string; command: string; url: string }, ctx);
+      let current = previews.get(id(ctx));
+      const wasRunning = current && isActive(current);
+      if (!wasRunning) {
+        const args = raw as PreviewConfig;
+        current = { ...args, cwd: resolve(ctx.cwd, args.cwd), status: "stopped" };
+        previews.set(id(ctx), current);
+        start(current, ctx);
+        save(current);
+      }
       return {
-        content: [{ type: "text", text: `${wasRunning ? "Already running" : "Preview starting"}: ${managed.url}` }],
-        details: { url: managed.url },
+        content: [{ type: "text", text: `${wasRunning ? "Already running" : "Preview starting"}: ${current!.url}` }],
+        details: { url: current!.url },
       };
     },
   });
@@ -130,13 +164,16 @@ export default function previewExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "preview_manage",
     label: "Stop preview",
-    description: "Stop this session's managed preview.",
+    description: "Stop this session's managed preview. It stays stopped across reloads until started again.",
     parameters: StopParams,
     async execute(_id, _raw, _signal, _update, ctx) {
-      if (!preview) return { content: [{ type: "text", text: "No preview is registered." }], details: {}, isError: true };
-      await stop();
-      paint(ctx);
-      return { content: [{ type: "text", text: `${preview.name} stopped` }], details: { status: preview.status } };
+      const current = previews.get(id(ctx));
+      if (!current) return { content: [{ type: "text", text: "No preview is registered." }], details: {}, isError: true };
+      const stopping = stop(current);
+      save(current);
+      await stopping;
+      paint(ctx, current);
+      return { content: [{ type: "text", text: `${current.name} stopped` }], details: { status: current.status } };
     },
   });
 
@@ -146,30 +183,55 @@ export default function previewExtension(pi: ExtensionAPI) {
       .filter((action) => action.startsWith(prefix.trim()))
       .map((value) => ({ value, label: value })),
     handler: async (args, ctx) => {
+      const current = previews.get(id(ctx));
       const action = args.trim();
-      if (!preview) {
+      if (!current) {
         ctx.ui.notify("No preview is registered for this session. Start one with the preview_start tool first.", "error");
         return;
       }
       if (action === "start") {
-        if (preview.status === "starting" || preview.status === "running") {
-          ctx.ui.notify(`${preview.name} is already ${preview.status}`, "info");
+        if (isActive(current)) {
+          ctx.ui.notify(`${current.name} is already ${current.status}`, "info");
           return;
         }
-        start(ctx);
-        ctx.ui.notify(`Starting ${preview.name} at ${preview.url}`, "info");
+        start(current, ctx);
+        save(current);
+        ctx.ui.notify(`Starting ${current.name} at ${current.url}`, "info");
       } else if (action === "stop") {
-        await stop();
-        paint(ctx);
-        ctx.ui.notify(`Stopped ${preview.name}`, "info");
+        const stopping = stop(current);
+        save(current);
+        await stopping;
+        paint(ctx, current);
+        ctx.ui.notify(`Stopped ${current.name}`, "info");
       } else {
         ctx.ui.notify("Usage: /preview start | stop", "error");
       }
     },
   });
 
+  const restore = async (_event: unknown, ctx: ExtensionContext) => {
+    const saved = replayPreview(ctx.sessionManager.getBranch());
+    const previous = previews.get(id(ctx));
+    if (previous) await stop(previous);
+    previews.delete(id(ctx));
+    if (!saved) { paint(ctx); return; }
+    const { active, ...config } = saved;
+    const current: Preview = { ...config, status: "stopped" };
+    previews.set(id(ctx), current);
+    if (active) start(current, ctx);
+    else paint(ctx, current);
+  };
+  pi.on("session_start", restore);
+  pi.on("session_tree", restore);
+
   pi.on("session_shutdown", async (_event, ctx) => {
-    await stop();
+    const current = previews.get(id(ctx));
+    if (!current) { paint(ctx); return; }
+    // Preserve intent BEFORE stopping for lifecycle cleanup. A reload or later
+    // resume restarts active previews, but never ones explicitly stopped.
+    save(current);
+    await stop(current);
+    previews.delete(id(ctx));
     paint(ctx);
   });
 }
