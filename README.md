@@ -12,9 +12,16 @@ directly, so there is no build step.
 | `model-filter.ts` | `/models-filter`, `/models-add`, `/models-remove` — edits the `enabledModels` filter in `settings.json`, including models whose provider is not logged in yet. |
 | `minimal-tui.ts` | No command. Suppresses the startup package banner and hides footer token/cost stats. |
 | `pdf.ts` | `/pdf <file.pdf>` — converts to `.txt` via `pdftotext`. |
+| `pi-open.ts` | `/open <app>` — opens the current directory using an app configured in `~/.pi/agent/pi-open.json`. |
 | `readonly-mode.ts` | `/readonly` — blocks `write`/`edit` and destructive bash. |
 | `session-cleanup.ts` | `/session-cleanup-now`, `/session-cleanup-dry` — trashes every old session except the active session (`PI_SESSION_CLEANUP_DAYS`, default 3). |
 | `thinking-toggle.ts` | `/thinking-toggle` — switches between `minimal` and `high`. |
+
+## Open the current directory in an app
+
+The `pi-open.ts` extension registers `/open <app>`. It reads the supported app list from `~/.pi/agent/pi-open.json`; app names and launch commands are not built into the extension. Copy [`pi-open.example.json`](pi-open.example.json) to that location and customize it. The JSON `apps` object maps completion/command names to an executable and an `args` array. Use `{cwd}` wherever the current Pi working directory should appear; it is substituted as one argv element, and the process also starts with that directory as its cwd. No shell is used.
+
+The example entries target macOS: Finder and Apple Terminal use the `open` utility; VS Code uses the `code` CLI, which must be installed and available on `PATH`. Add or remove apps in the JSON file; restart Pi (or reload extensions) to ensure completion reflects changes.
 
 ## Development
 

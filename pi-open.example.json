@@ -1,0 +1,16 @@
+{
+  "apps": {
+    "finder": {
+      "command": "open",
+      "args": ["{cwd}"]
+    },
+    "terminal": {
+      "command": "open",
+      "args": ["-a", "Terminal", "{cwd}"]
+    },
+    "code": {
+      "command": "code",
+      "args": ["{cwd}"]
+    }
+  }
+}
