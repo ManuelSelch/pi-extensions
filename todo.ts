@@ -177,6 +177,15 @@ export function summary(state: TodoState): string {
   return state.todos.map(formatTodoLine).join("\n");
 }
 
+/** Compact model-facing reminder after a successful add/update. */
+function openTodoSummary(state: TodoState): string {
+  const open = state.todos.filter((todo) => todo.status !== "done");
+  if (open.length === 0) return "No open todos.";
+  return ["Open todos:", ...open.map((todo) =>
+    `#${todo.id} [${todo.status}] ${todo.text.replace(/\s+/g, " ").trim()}`,
+  )].join("\n");
+}
+
 /**
  * Rebuilds the list by walking the current branch: the last `todo` result on it
  * wins. A branch only contains its own writes, so `/tree` and `/fork` get the
@@ -333,8 +342,11 @@ export default function todoExtension(pi: ExtensionAPI): void {
       const result = applyAction(sessions.get(ctx), params as TodoParamsValue);
       sessions.set(ctx, result.state);
       paint(ctx, result.state);
+      const text = !result.failed && (params.action === "add" || params.action === "update")
+        ? openTodoSummary(result.state)
+        : result.message;
       return {
-        content: [{ type: "text", text: result.message }],
+        content: [{ type: "text", text }],
         // Every result carries the whole list: this is the record the next
         // session replays from, so a partial one would lose tasks.
         details: { todos: result.state.todos, nextId: result.state.nextId },
