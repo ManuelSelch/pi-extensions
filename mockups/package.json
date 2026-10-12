@@ -1,0 +1,11 @@
+{
+  "name": "pi-extensions-mockups",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "vite": "7.3.7"
+  }
+}

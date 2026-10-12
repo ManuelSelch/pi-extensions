@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Worktree-aware Git status — Mockup</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="intro">
+        <p class="eyebrow">PI EXTENSION · CONCEPT MOCKUP</p>
+        <h1>Worktree-aware status</h1>
+        <p class="lede">A quick glance at what still needs merging—and what still needs pushing.</p>
+      </header>
+
+      <section class="widget-preview" aria-label="Git status footer widget concept">
+        <div class="widget-line">
+          <span class="repo">bluebird</span><span class="status-label">current</span><span class="status success">feature/search  clean</span>
+        </div>
+        <div class="widget-line worktree-line">
+          <span class="repo">primary main</span><span class="status ahead">↑2 to push</span>
+        </div>
+        <div class="widget-line worktree-line">
+          <span class="repo">worktree</span><span class="status warning">feature/search +3 unmerged</span>
+        </div>
+        <div class="widget-line worktree-line">
+          <span class="repo">worktree</span><span class="status warning">fix/login +1 unmerged</span>
+        </div>
+        <div class="widget-line worktree-line">
+          <span class="repo">worktree</span><span class="status merged">fix/empty-state merged</span>
+        </div>
+      </section>
+
+      <aside class="note"><strong>Mock data</strong> · Styled as the existing compact Pi status widget. Branch names and counts are illustrative, not live Git status.</aside>
+      <p class="review-prompt">Does this make the next action obvious without adding too much noise?</p>
+    </main>
+  </body>
+</html>
