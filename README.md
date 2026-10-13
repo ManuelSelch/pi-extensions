@@ -13,6 +13,7 @@ directly, so there is no build step.
 | `minimal-tui.ts` | No command. Suppresses the startup package banner and hides footer token/cost stats. |
 | `pdf.ts` | `/pdf <file.pdf>` — converts to `.txt` via `pdftotext`. |
 | `pi-open.ts` | `/open <app>` — opens the current directory using an app configured in `~/.pi/agent/pi-open.json`. |
+| `pipeline.ts` | `/pipeline` and `pipeline_configure` / `pipeline_run` / `pipeline_status` — approved local test commands, manual runs, logs and persisted outcomes. See [pipeline usage](docs/pipeline/README.md). |
 | `readonly-mode.ts` | `/readonly` — blocks `write`/`edit` and destructive bash. |
 | `session-cleanup.ts` | `/session-cleanup-now`, `/session-cleanup-dry` — trashes every old session except the active session (`PI_SESSION_CLEANUP_DAYS`, default 3). |
 | `thinking-toggle.ts` | `/thinking-toggle` — switches between `minimal` and `high`. |

@@ -1,0 +1,308 @@
+import { createHash, randomUUID } from "node:crypto";
+import { execFile, spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
+import { once } from "node:events";
+import { promisify } from "node:util";
+import { lstat, mkdir, open, readFile, readdir, readlink, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+
+const exec = promisify(execFile);
+export type Confirm = (description: string) => Promise<boolean>;
+export interface Suite {
+	command: string[];
+	cwd: string;
+	timeoutSeconds: number;
+	staleAfterMinutes: number;
+	auto: "manual" | "after-agent";
+}
+export interface Config { version: 1; suites: Record<string, Suite> }
+export interface RunResult {
+	suite: string;
+	outcome: "running" | "passed" | "failed" | "cancelled" | "timed-out";
+	startedAt: string;
+	finishedAt?: string;
+	durationMs: number;
+	exitCode: number | null;
+	signal?: string | null;
+	logPath: string;
+	output: string;
+	sourceFingerprint: string;
+	configFingerprint: string;
+	changedDuringRun: boolean;
+	pid: number;
+}
+export interface RunOptions { confirm?: Confirm; signal?: AbortSignal }
+const MAX_OUTPUT = 16384;
+const GENERATED = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", ".DS_Store", "__pycache__", ".venv"]);
+const sourcePath = (file: string) => file !== ".pi/pipeline.json" && !file.split(/[\\/]/).some(part => GENERATED.has(part));
+export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
+const inside = (root: string, path: string) => {
+	const rel = relative(root, path);
+	return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+};
+function object(value: unknown): Record<string, unknown> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected an object");
+	return value as Record<string, unknown>;
+}
+function keys(value: Record<string, unknown>, allowed: string[]) {
+	for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new Error(`Unknown field: ${key}`);
+}
+export function validateConfig(input: unknown): Config {
+	const value = object(input);
+	keys(value, ["version", "suites"]);
+	if (value.version !== 1) throw new Error("Pipeline version must be 1");
+	const suites: Record<string, Suite> = Object.create(null);
+	for (const [name, inputSuite] of Object.entries(object(value.suites)).sort(([a], [b]) => a.localeCompare(b))) {
+		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error(`Invalid suite name: ${name}`);
+		const suite = object(inputSuite);
+		keys(suite, ["command", "cwd", "timeoutSeconds", "staleAfterMinutes", "auto"]);
+		if (!Array.isArray(suite.command) || !suite.command.length || suite.command.some(arg => typeof arg !== "string" || arg.includes("\0")) || !suite.command[0].trim()) {
+			throw new Error(`${name}: command must be a nonempty executable/argument array`);
+		}
+		const cwd = suite.cwd ?? ".";
+		if (typeof cwd !== "string" || !cwd || cwd.includes("\0") || isAbsolute(cwd) || !inside("/project", resolve("/project", cwd))) throw new Error(`${name}: cwd must remain inside the project`);
+		const timeoutSeconds = suite.timeoutSeconds ?? 300;
+		const staleAfterMinutes = suite.staleAfterMinutes ?? 30;
+		for (const [key, number] of Object.entries({ timeoutSeconds, staleAfterMinutes })) {
+			if (typeof number !== "number" || !Number.isFinite(number) || number <= 0 || number > (key === "timeoutSeconds" ? 86400 : 525600)) throw new Error(`${name}: invalid ${key}`);
+		}
+		const auto = suite.auto ?? "manual";
+		if (auto !== "manual" && auto !== "after-agent") throw new Error(`${name}: invalid auto mode`);
+		suites[name] = { command: [...suite.command], cwd, timeoutSeconds: timeoutSeconds as number, staleAfterMinutes: staleAfterMinutes as number, auto };
+	}
+	return { version: 1, suites };
+}
+export async function projectRoot(cwd: string): Promise<string> {
+	try {
+		const result = await exec("git", ["rev-parse", "--show-toplevel"], { cwd });
+		return realpath(result.stdout.trim());
+	} catch { return realpath(cwd); }
+}
+async function optionalText(file: string): Promise<string | undefined> {
+	try { return await readFile(file, "utf8"); }
+	catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+}
+async function atomicJSON(file: string, value: unknown): Promise<void> {
+	const tmp = `${file}.${randomUUID()}.tmp`;
+	try { await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 }); await rename(tmp, file); }
+	finally { await rm(tmp, { force: true }); }
+}
+
+export async function sourceFingerprint(root: string): Promise<string> {
+	let files: string[];
+	try {
+		const result = await exec("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root, maxBuffer: 16 * 1024 * 1024 });
+		files = result.stdout.split("\0").filter(Boolean);
+	} catch (error) {
+		// Only fall back outside git; errors/oversized output in a repository must not hide changes.
+		let inRepository = false;
+		try { await exec("git", ["rev-parse", "--show-toplevel"], { cwd: root }); inRepository = true; }
+		catch { /* Non-git projects use the recursive scan below. */ }
+		if (inRepository) throw error;
+		files = [];
+		async function walk(dir: string) {
+			for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
+				const file = dir ? `${dir}/${entry.name}` : entry.name;
+				if (!sourcePath(file)) continue;
+				if (entry.isDirectory()) await walk(file); else files.push(file);
+			}
+		}
+		await walk("");
+	}
+	const hash = createHash("sha256");
+	for (const file of [...new Set(files)].filter(sourcePath).sort()) {
+		hash.update(JSON.stringify(file));
+		const path = join(root, file);
+		try {
+			const info = await lstat(path);
+			hash.update(String(info.mode));
+			if (info.isSymbolicLink()) hash.update(await readlink(path));
+			else if (info.isFile()) { hash.update(await readFile(path)); }
+			else hash.update("non-file");
+		} catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; hash.update("missing"); }
+		hash.update("\0");
+	}
+	return hash.digest("hex");
+}
+
+export class Pipeline {
+	readonly configPath: string;
+	readonly storage: string;
+	constructor(readonly root: string, cacheRoot = join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "pipeline")) {
+		this.configPath = join(root, ".pi", "pipeline.json");
+		this.storage = join(cacheRoot, digest(root));
+	}
+	async config(): Promise<Config | undefined> {
+		const text = await optionalText(this.configPath);
+		return text === undefined ? undefined : validateConfig(JSON.parse(text));
+	}
+	async suiteCwd(suite: Suite): Promise<string> {
+		const cwd = await realpath(resolve(this.root, suite.cwd));
+		if (!inside(this.root, cwd)) throw new Error("Suite working directory is outside the project");
+		if (!(await stat(cwd)).isDirectory()) throw new Error("Suite cwd is not a directory");
+		return cwd;
+	}
+	async acquire(): Promise<() => Promise<void>> {
+		await mkdir(this.storage, { recursive: true, mode: 0o700 });
+		const lock = join(this.storage, "lock");
+		try { await mkdir(lock); }
+		catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`Pipeline busy (run or configuration review). If Pi crashed, verify no run remains before removing ${lock}`);
+			throw error;
+		}
+		try { await writeFile(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, root: this.root, startedAt: new Date().toISOString() })); }
+		catch (error) { await rm(lock, { recursive: true, force: true }); throw error; }
+		return () => rm(lock, { recursive: true, force: true });
+	}
+	async isApproved(config?: Config): Promise<boolean> {
+		const current = config ?? await this.config();
+		if (!current) return false;
+		const text = await optionalText(join(this.storage, "approval.json"));
+		return text !== undefined && JSON.parse(text).fingerprint === digest(JSON.stringify(current));
+	}
+	private async approve(config: Config) {
+		await atomicJSON(join(this.storage, "approval.json"), { fingerprint: digest(JSON.stringify(config)), approvedAt: new Date().toISOString() });
+	}
+	async configure(input: unknown, confirm?: Confirm): Promise<boolean> {
+		const proposal = validateConfig(input);
+		for (const suite of Object.values(proposal.suites)) await this.suiteCwd(suite);
+		if (!confirm) throw new Error("User approval required: no interactive confirmation channel");
+		const release = await this.acquire();
+		try {
+			const before = await optionalText(this.configPath);
+			if (!await confirm(`Project: ${this.root}\nBefore: ${before ?? "(none)"}\nAfter: ${JSON.stringify(proposal, null, 2)}\nAutomatic settings are saved only; scheduling is not implemented yet. Saving does not run tests.`)) return false;
+			if (await optionalText(this.configPath) !== before) throw new Error("Configuration changed during review; request fresh approval");
+			await mkdir(join(this.root, ".pi"), { recursive: true });
+			if (!inside(this.root, await realpath(join(this.root, ".pi")))) throw new Error("Configuration directory is outside the project");
+			await atomicJSON(this.configPath, proposal);
+			await this.approve(proposal);
+			return true;
+		} finally { await release(); }
+	}
+	private async results(): Promise<Record<string, RunResult>> {
+		const text = await optionalText(join(this.storage, "results.json"));
+		return Object.assign(Object.create(null), text ? JSON.parse(text) : {});
+	}
+	async status() {
+		const config = await this.config();
+		if (!config) return { configured: false, suites: {} };
+		const results = await this.results();
+		const fingerprint = await sourceFingerprint(this.root);
+		const configFingerprint = digest(JSON.stringify(config));
+		const suites: Record<string, (RunResult | { outcome: "never" }) & { stale: boolean }> = Object.create(null);
+		for (const [name, suite] of Object.entries(config.suites)) {
+			const result = results[name];
+			suites[name] = result ? { ...result, stale: result.changedDuringRun || result.sourceFingerprint !== fingerprint || result.configFingerprint !== configFingerprint || Date.now() - Date.parse(result.finishedAt ?? result.startedAt) > suite.staleAfterMinutes * 60000 } : { outcome: "never", stale: false };
+		}
+		return { configured: true, root: this.root, config, suites };
+	}
+	async logs(name: string): Promise<{ logPath: string; output: string }> {
+		const result = (await this.results())[name];
+		if (!result) throw new Error(`No run for suite: ${name}`);
+		const file = await open(result.logPath, "r");
+		try {
+			const size = (await file.stat()).size;
+			const buffer = Buffer.alloc(Math.min(size, MAX_OUTPUT));
+			await file.read(buffer, 0, buffer.length, Math.max(0, size - buffer.length));
+			return { logPath: result.logPath, output: buffer.toString("utf8") };
+		} finally { await file.close(); }
+	}
+	async run(selection = "all", options: RunOptions = {}): Promise<RunResult[]> {
+		if (options.signal?.aborted) throw new Error("Pipeline cancelled before execution");
+		const release = await this.acquire();
+		try {
+			const config = await this.config();
+			if (!config) throw new Error("No pipeline configuration");
+			const names = selection === "all" ? Object.keys(config.suites) : [selection];
+			if (!names.length || names.some(name => !Object.hasOwn(config.suites, name))) throw new Error(`Unknown or empty suite selection: ${selection}`);
+			await this.ensureApproved(config, options.confirm ? async text => {
+				if (options.signal?.aborted) return false;
+				return await options.confirm!(text) && !options.signal?.aborted;
+			} : undefined);
+			const results = await this.results();
+			const completed: RunResult[] = [];
+			for (const name of names) {
+				if (options.signal?.aborted) break;
+				if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
+				const suite = config.suites[name];
+				const cwd = await this.suiteCwd(suite);
+				const fingerprint = await sourceFingerprint(this.root);
+				if (options.signal?.aborted) break;
+				const result: RunResult = {
+					suite: name, outcome: "running", startedAt: new Date().toISOString(), durationMs: 0, exitCode: null,
+					logPath: join(this.storage, `${name}-${randomUUID()}.log`), output: "", sourceFingerprint: fingerprint,
+					configFingerprint: digest(JSON.stringify(config)), changedDuringRun: false, pid: process.pid,
+				};
+				results[name] = result;
+				await atomicJSON(join(this.storage, "results.json"), results);
+				try {
+					if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
+					await this.execute(suite, cwd, result, options.signal);
+				}
+				catch (error) { result.outcome = "failed"; result.output = (result.output + String(error)).slice(-MAX_OUTPUT); }
+				result.finishedAt = new Date().toISOString();
+				result.durationMs = Date.parse(result.finishedAt) - Date.parse(result.startedAt);
+				try { result.changedDuringRun = fingerprint !== await sourceFingerprint(this.root); }
+				catch { result.changedDuringRun = true; }
+				await atomicJSON(join(this.storage, "results.json"), results);
+				completed.push(result);
+			}
+			if (options.signal?.aborted && !completed.some(result => result.outcome === "cancelled")) throw new Error("Pipeline cancelled before remaining suites could execute; completed results are available in pipeline_status");
+			return completed;
+		} finally { await release(); }
+	}
+	private async execute(suite: Suite, cwd: string, result: RunResult, signal?: AbortSignal): Promise<void> {
+		const log = createWriteStream(result.logPath, { mode: 0o600 });
+		await once(log, "open");
+		const child = spawn(suite.command[0], suite.command.slice(1), { cwd, shell: false, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
+		let reason: "cancelled" | "timed-out" | undefined;
+		let escalation: ReturnType<typeof setTimeout> | undefined;
+		const kill = (sig: NodeJS.Signals) => {
+			if (!child.pid) return;
+			try { if (process.platform === "win32") execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], () => {}); else process.kill(-child.pid, sig); }
+			catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
+		};
+		const stop = (why: "cancelled" | "timed-out") => {
+			if (reason) return;
+			reason = why; kill("SIGTERM");
+			escalation = setTimeout(() => kill("SIGKILL"), 250);
+		};
+		const abort = () => stop("cancelled");
+		let logError: Error | undefined;
+		const onLogError = (error: Error) => { logError = error; stop("cancelled"); };
+		log.on("error", onLogError);
+		for (const stream of [child.stdout, child.stderr]) {
+			stream.pipe(log, { end: false });
+			stream.on("data", (chunk: Buffer) => { result.output = (result.output + chunk.toString("utf8")).slice(-MAX_OUTPUT); });
+		}
+		const timer = setTimeout(() => stop("timed-out"), suite.timeoutSeconds * 1000);
+		signal?.addEventListener("abort", abort, { once: true });
+		if (signal?.aborted) abort();
+		try {
+			await new Promise<void>((done) => {
+				child.on("error", error => { result.output = (result.output + String(error)).slice(-MAX_OUTPUT); log.write(`${error}\n`); });
+				child.on("close", (code, sig) => {
+					result.exitCode = code; result.signal = sig;
+					result.outcome = reason ?? (code === 0 ? "passed" : "failed");
+					done();
+				});
+			});
+			if (!log.destroyed) { const finished = once(log, "finish"); log.end(); await finished; }
+			if (logError) throw logError;
+		} finally {
+			clearTimeout(timer); if (escalation) clearTimeout(escalation);
+			signal?.removeEventListener("abort", abort);
+			kill("SIGKILL"); // also stop descendants after their parent exits
+			log.destroy();
+		}
+	}
+	async ensureApproved(config: Config, confirm?: Confirm): Promise<void> {
+		if (await this.isApproved(config)) return;
+		if (!confirm) throw new Error("User approval required: no interactive confirmation channel");
+		const before = await optionalText(this.configPath);
+		if (!await confirm(`Approve pipeline execution for ${this.root}?\n${JSON.stringify(config, null, 2)}`)) throw new Error("Pipeline execution approval rejected");
+		if (await optionalText(this.configPath) !== before || JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed during review; request fresh approval");
+		await this.approve(config);
+	}
+}
