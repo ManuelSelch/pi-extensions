@@ -25,13 +25,13 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
 	if (!status?.configured || !Object.keys(status.suites).length || width <= 0) return [];
 	const lines: string[] = [];
-	let line = theme.fg("muted", "Tests");
+	let line = "";
 	for (const [name, result] of Object.entries(status.suites)) {
 		const text = suiteText(name, result, theme, now);
-		const separator = visibleWidth(line) === 5 ? "  " : "  ·  ";
+		const separator = line ? "  ·  " : "";
 		if (visibleWidth(`${line}${separator}${text}`) <= width) line += separator + text;
 		else {
-			lines.push(truncateToWidth(line, width));
+			if (line) lines.push(truncateToWidth(line, width));
 			line = truncateToWidth(text, width);
 		}
 	}

@@ -16,7 +16,7 @@ test('widget hides completely for absent or empty configuration', () => {
 test('compact line shows age, outcomes and stale previous pass rather than green current code', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: result('passed'), integration: result('failed', 12), e2e: { outcome: 'never', stale: false } } };
-  assert.equal(renderWidget(status, plain, 120, now).join('\n'), 'Tests  ✓ unit 3m ago  ·  ✗ integration 12m ago  ·  ○ e2e never');
+  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '✓ unit 3m ago  ·  ✗ integration 12m ago  ·  ○ e2e never');
   status.suites.unit.stale = true;
   const colors = [];
   const theme = { fg: (color, text) => { colors.push([color, text]); return text; } };
@@ -57,6 +57,7 @@ test('narrow widths and wide characters never overflow terminal columns', () => 
   for (const width of [1, 5, 12, 30, 80, 200]) {
     const lines = renderWidget(status, theme, width, now);
     assert.ok(lines.every(line => visibleWidth(line) <= width));
+    assert.ok(lines.every(line => visibleWidth(line) > 0));
   }
 });
 

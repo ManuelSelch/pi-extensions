@@ -41,8 +41,8 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "ma
 ## Widget and automatic execution
 
 ```text
-Tests  ✓ unit 3m ago  ·  ✗ integration 12m ago  ·  ○ e2e never
-Tests  ⚠ unit stale (✓ 3m ago)  ·  ⟳ integration running 24s
+✓ unit 3m ago  ·  ✗ integration 12m ago  ·  ○ e2e never
+⚠ unit stale (✓ 3m ago)  ·  ⟳ integration running 24s
 ```
 
 - No config (or no suites) means no widget and no setup reminder. Invalid/unreadable configuration hides the widget; `/pipeline status` exposes the error.
