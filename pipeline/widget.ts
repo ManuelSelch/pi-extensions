@@ -11,7 +11,7 @@ function age(timestamp: string, now: number): string {
 }
 function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, now: number): string {
 	if (result.outcome === "never") return theme.fg("muted", `○ ${name} never`);
-	if (result.outcome === "running") return theme.fg("accent", `⟳ ${name} running ${age(result.startedAt, now)}`);
+	if (result.outcome === "running") return theme.fg("accent", `▶ ${name} running ${age(result.startedAt, now)}`);
 	const symbols = { passed: "✓", failed: "✗", cancelled: "■", "timed-out": "⌛" };
 	const symbol = symbols[result.outcome];
 	const timestamp = result.finishedAt ?? result.startedAt;

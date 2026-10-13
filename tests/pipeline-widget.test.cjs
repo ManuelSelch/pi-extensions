@@ -45,7 +45,7 @@ test('running, cancelled and timeout stay distinct; elapsed time and theme are e
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: { outcome: 'running', stale: false, startedAt: new Date(now - 24000).toISOString() }, integration: result('cancelled'), e2e: result('timed-out') } };
   const text = renderWidget(status, plain, 180, now).join('\n');
-  assert.match(text, /⟳ unit running 24s/); assert.match(text, /integration cancelled/); assert.match(text, /e2e timed out/);
+  assert.match(text, /▶ unit running 24s/); assert.match(text, /integration cancelled/); assert.match(text, /e2e timed out/);
   assert.match(renderWidget(status, plain, 180, now + 1000).join('\n'), /running 25s/);
 });
 
