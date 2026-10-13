@@ -1,10 +1,10 @@
 # Local pipeline extension
 
-Slices 1–2 provide configuration with native Pi confirmation, a manual runner, persisted results and three agent tools. No widget or automatic scheduling yet.
+Provides native-confirmed configuration, manual execution, persisted results, a compact test-status widget and opt-in after-agent scheduling.
 
 ## Usage
 
-Reload Pi after installing `pipeline.ts`. Ask the agent to inspect your test scripts and call `pipeline_configure`. The tool takes a **complete replacement configuration**: include every suite you want to retain; omitted suites are removed. Nothing is written until you confirm the before/after popup, and saving never executes tests.
+Reload Pi after installing `pipeline.ts`. Ask the agent to inspect your test scripts and call `pipeline_configure`. The tool takes a **complete replacement configuration**: include every suite you want to retain; omitted suites are removed. Nothing is written until you confirm the before/after popup. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
 
 ```json
 {
@@ -12,7 +12,8 @@ Reload Pi after installing `pipeline.ts`. Ask the agent to inspect your test scr
   "suites": {
     "unit": {
       "command": ["npm", "run", "test:unit"],
-      "timeoutSeconds": 120
+      "timeoutSeconds": 120,
+      "auto": "after-agent"
     },
     "integration": {
       "command": ["npm", "run", "test:integration"],
@@ -33,9 +34,27 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 - `/pipeline` or `/pipeline status`: show details.
 - `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
 - `/pipeline logs unit`: show the last 16 KiB and full log path.
-- `/pipeline cancel`: cancel the run owned by the current Pi session.
+- `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
-Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "manual"`. `after-agent` can be saved but is **not scheduled until slice 4**. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
+Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
+
+## Widget and automatic execution
+
+```text
+Tests  ✓ unit 3m ago  ·  ✗ integration 12m ago  ·  ○ e2e never
+Tests  ⚠ unit stale (✓ 3m ago)  ·  ⟳ integration running 24s
+```
+
+- No config (or no suites) means no widget and no setup reminder. Invalid/unreadable configuration hides the widget; `/pipeline status` exposes the error.
+- The widget shows test state only, never approval messages. Previous stale passes are warning-colored, not green current-code results. Cancelled and timed-out runs remain distinct.
+- Native TUI rendering fits terminal columns and wraps whole suite entries on narrow screens. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
+- While a UI session is open, poll source/config/shared results every 5 seconds (1 second while a suite is running), with immediate refreshes after file tools and persisted run-state changes. No recursive file watchers.
+- Automation is opt-in per suite. It begins only after an `agent_settled` event, not on startup or reload. Wait for at least **2 seconds of quiet code** and a **60-second per-suite cooldown** after the previous result. Polls keep detecting edits while idle after that settled turn.
+- Never rerun an unchanged tested snapshot just because its age expired or it failed/cancelled/timed out. Use a manual run to retry unchanged code. Source/config changes or changes detected during a run make it eligible after cooldown.
+- Background runs **only refresh the widget**: no notifications, model messages or confirmation popups. Unapproved external commands stay paused until a manual run/configuration approval through the native popup. Busy worktree locks are retried quietly with a 5-second backoff.
+- A new agent turn cancels this session's automatic run and disarms scheduling until that turn settles. Manual runs are not cancelled on new turns. `/pipeline cancel` also disarms scheduling until the next settled turn.
+- Automatic selection, approval, source snapshots and persisted results are rechecked under the worktree lock, preventing duplicate execution across sessions. Source changes since the quiet snapshot defer execution.
+- Shutdown/reload/session replacement cancels work, waits for cleanup and removes all polling/scheduling timers; late async reads cannot resurrect the widget. Non-UI/print sessions have no widget or automatic scheduler; approved manual tools remain usable.
 
 ## Approval and safety
 
@@ -51,7 +70,7 @@ State lives under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/<hash-of-canonic
 
 Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Any source change makes all completed suites stale. Changes detected between the start and end of a run also keep it stale, even if another run is fresh.
 
-In git projects, source fingerprints use tracked and non-ignored untracked file contents, paths, symlink targets and file modes; deleted tracked files count. Outside git, source files are scanned recursively. Conventional generated directories (`node_modules`, `dist`, `build`, `coverage`, `.next`, `__pycache__`, `.venv`) plus git metadata and `.DS_Store` are excluded. Pipeline config is fingerprinted separately. Changes reverted between fingerprint samples cannot be detected; ignored source and files behind symlinks are not scanned.
+In git projects, source fingerprints use tracked and non-ignored untracked file contents, paths, symlink targets and file modes; deleted tracked files count. Outside git, source files are scanned recursively. Conventional generated directories (`node_modules`, `dist`, `build`, `coverage`, `.next`, `__pycache__`, `.venv`, `test-results`, `playwright-report`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.turbo`) plus git metadata, `.DS_Store` and the pipeline cache directory (even if placed inside the project) are excluded. Pipeline config is fingerprinted separately. Changes reverted between fingerprint samples cannot be detected; ignored source and files behind symlinks are not scanned.
 
 Shutdown/reload aborts this session's active runs and waits for cleanup. On macOS/Linux, cancellation and timeout terminate the process group and escalate to SIGKILL; Windows uses `taskkill /T /F` (not yet tested on Windows). Processes that deliberately escape the group/tree cannot be contained.
 
@@ -60,10 +79,10 @@ An abrupt crash can leave a lock and a last result marked running. Inspect the l
 ## Verification
 
 ```sh
-node --test tests/pipeline.test.cjs
+node --test tests/pipeline*.test.cjs
 npm test
 npm run typecheck
 pi --no-extensions -e ./pipeline.ts --help
 ```
 
-See [requirements and remaining slices](REQUIREMENTS.md).
+See [requirements and implementation slices](REQUIREMENTS.md).

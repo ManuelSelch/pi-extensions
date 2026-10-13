@@ -32,9 +32,42 @@ export interface RunResult {
 	changedDuringRun: boolean;
 	pid: number;
 }
-export interface RunOptions { confirm?: Confirm; signal?: AbortSignal }
+export type SuiteStatus = (RunResult | { outcome: "never" }) & { stale: boolean };
+export interface PipelineStatus {
+	configured: boolean;
+	root?: string;
+	config?: Config;
+	sourceFingerprint?: string;
+	configFingerprint?: string;
+	suites: Record<string, SuiteStatus>;
+}
+export interface RunOptions {
+	confirm?: Confirm;
+	signal?: AbortSignal;
+	onChange?: () => void;
+	automatic?: boolean;
+	cooldownMs?: number;
+	expectedSourceFingerprint?: string;
+	expectedConfigFingerprint?: string;
+}
+export const AUTO_COOLDOWN_MS = 60000;
+/** Skip unchanged snapshots regardless of outcome or age, so failures never create a retry loop. */
+export function automaticSuites(status: PipelineStatus | undefined, now = Date.now(), cooldownMs = AUTO_COOLDOWN_MS): string[] {
+	if (!status?.configured || !status.config || !status.sourceFingerprint || !status.configFingerprint) return [];
+	return Object.entries(status.config.suites).filter(([name, suite]) => {
+		if (suite.auto !== "after-agent") return false;
+		const result = status.suites[name];
+		if (!result || result.outcome === "never") return true;
+		if (result.outcome === "running") return false;
+		if (now - Date.parse(result.finishedAt ?? result.startedAt) < cooldownMs) return false;
+		return result.changedDuringRun || result.sourceFingerprint !== status.sourceFingerprint || result.configFingerprint !== status.configFingerprint;
+	}).map(([name]) => name);
+}
 const MAX_OUTPUT = 16384;
-const GENERATED = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", ".DS_Store", "__pycache__", ".venv"]);
+const GENERATED = new Set([
+	".git", "node_modules", "dist", "build", "coverage", ".next", ".DS_Store", "__pycache__", ".venv",
+	"test-results", "playwright-report", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".turbo",
+]);
 const sourcePath = (file: string) => file !== ".pi/pipeline.json" && !file.split(/[\\/]/).some(part => GENERATED.has(part));
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const inside = (root: string, path: string) => {
@@ -89,7 +122,8 @@ async function atomicJSON(file: string, value: unknown): Promise<void> {
 	finally { await rm(tmp, { force: true }); }
 }
 
-export async function sourceFingerprint(root: string): Promise<string> {
+export async function sourceFingerprint(root: string, excludedDirectories: string[] = []): Promise<string> {
+	const include = (file: string) => sourcePath(file) && !excludedDirectories.some(dir => inside(resolve(dir), join(root, file)));
 	let files: string[];
 	try {
 		const result = await exec("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root, maxBuffer: 16 * 1024 * 1024 });
@@ -104,14 +138,14 @@ export async function sourceFingerprint(root: string): Promise<string> {
 		async function walk(dir: string) {
 			for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
 				const file = dir ? `${dir}/${entry.name}` : entry.name;
-				if (!sourcePath(file)) continue;
+				if (!include(file)) continue;
 				if (entry.isDirectory()) await walk(file); else files.push(file);
 			}
 		}
 		await walk("");
 	}
 	const hash = createHash("sha256");
-	for (const file of [...new Set(files)].filter(sourcePath).sort()) {
+	for (const file of [...new Set(files)].filter(include).sort()) {
 		hash.update(JSON.stringify(file));
 		const path = join(root, file);
 		try {
@@ -129,7 +163,7 @@ export async function sourceFingerprint(root: string): Promise<string> {
 export class Pipeline {
 	readonly configPath: string;
 	readonly storage: string;
-	constructor(readonly root: string, cacheRoot = join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "pipeline")) {
+	constructor(readonly root: string, private readonly cacheRoot = join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "pipeline")) {
 		this.configPath = join(root, ".pi", "pipeline.json");
 		this.storage = join(cacheRoot, digest(root));
 	}
@@ -171,7 +205,7 @@ export class Pipeline {
 		const release = await this.acquire();
 		try {
 			const before = await optionalText(this.configPath);
-			if (!await confirm(`Project: ${this.root}\nBefore: ${before ?? "(none)"}\nAfter: ${JSON.stringify(proposal, null, 2)}\nAutomatic settings are saved only; scheduling is not implemented yet. Saving does not run tests.`)) return false;
+			if (!await confirm(`Project: ${this.root}\nBefore: ${before ?? "(none)"}\nAfter: ${JSON.stringify(proposal, null, 2)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown. Saving does not immediately run tests.`)) return false;
 			if (await optionalText(this.configPath) !== before) throw new Error("Configuration changed during review; request fresh approval");
 			await mkdir(join(this.root, ".pi"), { recursive: true });
 			if (!inside(this.root, await realpath(join(this.root, ".pi")))) throw new Error("Configuration directory is outside the project");
@@ -184,18 +218,18 @@ export class Pipeline {
 		const text = await optionalText(join(this.storage, "results.json"));
 		return Object.assign(Object.create(null), text ? JSON.parse(text) : {});
 	}
-	async status() {
+	async status(): Promise<PipelineStatus> {
 		const config = await this.config();
 		if (!config) return { configured: false, suites: {} };
 		const results = await this.results();
-		const fingerprint = await sourceFingerprint(this.root);
+		const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
 		const configFingerprint = digest(JSON.stringify(config));
-		const suites: Record<string, (RunResult | { outcome: "never" }) & { stale: boolean }> = Object.create(null);
+		const suites: Record<string, SuiteStatus> = Object.create(null);
 		for (const [name, suite] of Object.entries(config.suites)) {
 			const result = results[name];
 			suites[name] = result ? { ...result, stale: result.changedDuringRun || result.sourceFingerprint !== fingerprint || result.configFingerprint !== configFingerprint || Date.now() - Date.parse(result.finishedAt ?? result.startedAt) > suite.staleAfterMinutes * 60000 } : { outcome: "never", stale: false };
 		}
-		return { configured: true, root: this.root, config, suites };
+		return { configured: true, root: this.root, config, suites, sourceFingerprint: fingerprint, configFingerprint };
 	}
 	async logs(name: string): Promise<{ logPath: string; output: string }> {
 		const result = (await this.results())[name];
@@ -213,10 +247,19 @@ export class Pipeline {
 		const release = await this.acquire();
 		try {
 			const config = await this.config();
-			if (!config) throw new Error("No pipeline configuration");
-			const names = selection === "all" ? Object.keys(config.suites) : [selection];
+			if (!config) { if (options.automatic) return []; throw new Error("No pipeline configuration"); }
+			let automaticStatus: PipelineStatus | undefined;
+			if (options.automatic) {
+				if (!await this.isApproved(config)) return []; // Never prompt or grant approval in background work.
+				automaticStatus = await this.status();
+				if (automaticStatus.configFingerprint !== digest(JSON.stringify(config))) return [];
+				if (options.expectedConfigFingerprint && automaticStatus.configFingerprint !== options.expectedConfigFingerprint) return [];
+				if (options.expectedSourceFingerprint && automaticStatus.sourceFingerprint !== options.expectedSourceFingerprint) return [];
+			}
+			const names = options.automatic ? automaticSuites(automaticStatus, Date.now(), options.cooldownMs) : selection === "all" ? Object.keys(config.suites) : [selection];
+			if (options.automatic && !names.length) return [];
 			if (!names.length || names.some(name => !Object.hasOwn(config.suites, name))) throw new Error(`Unknown or empty suite selection: ${selection}`);
-			await this.ensureApproved(config, options.confirm ? async text => {
+			if (!options.automatic) await this.ensureApproved(config, options.confirm ? async text => {
 				if (options.signal?.aborted) return false;
 				return await options.confirm!(text) && !options.signal?.aborted;
 			} : undefined);
@@ -227,7 +270,8 @@ export class Pipeline {
 				if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
 				const suite = config.suites[name];
 				const cwd = await this.suiteCwd(suite);
-				const fingerprint = await sourceFingerprint(this.root);
+				const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
+				if (options.automatic && fingerprint !== automaticStatus?.sourceFingerprint) break; // Edits resumed; wait for another quiet snapshot.
 				if (options.signal?.aborted) break;
 				const result: RunResult = {
 					suite: name, outcome: "running", startedAt: new Date().toISOString(), durationMs: 0, exitCode: null,
@@ -236,6 +280,7 @@ export class Pipeline {
 				};
 				results[name] = result;
 				await atomicJSON(join(this.storage, "results.json"), results);
+				options.onChange?.();
 				try {
 					if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
 					await this.execute(suite, cwd, result, options.signal);
@@ -243,10 +288,11 @@ export class Pipeline {
 				catch (error) { result.outcome = "failed"; result.output = (result.output + String(error)).slice(-MAX_OUTPUT); }
 				result.finishedAt = new Date().toISOString();
 				result.durationMs = Date.parse(result.finishedAt) - Date.parse(result.startedAt);
-				try { result.changedDuringRun = fingerprint !== await sourceFingerprint(this.root); }
+				try { result.changedDuringRun = fingerprint !== await sourceFingerprint(this.root, [this.cacheRoot]); }
 				catch { result.changedDuringRun = true; }
 				await atomicJSON(join(this.storage, "results.json"), results);
 				completed.push(result);
+				options.onChange?.();
 			}
 			if (options.signal?.aborted && !completed.some(result => result.outcome === "cancelled")) throw new Error("Pipeline cancelled before remaining suites could execute; completed results are available in pipeline_status");
 			return completed;

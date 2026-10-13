@@ -1,6 +1,7 @@
 import { Type } from "typebox";
 import { withFileMutationQueue, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Pipeline, projectRoot, type Confirm, type RunResult } from "./pipeline/core.ts";
+import { Pipeline, projectRoot, type Confirm, type RunResult, type PipelineStatus, type RunOptions } from "./pipeline/core.ts";
+import { PipelineMonitor, renderWidget } from "./pipeline/widget.ts";
 
 const SuiteSchema = Type.Object({
 	command: Type.Array(Type.String(), { minItems: 1, description: "Executable followed by arguments; no shell interpolation or watch mode." }),
@@ -22,26 +23,37 @@ const failed = (results: RunResult[]) => results.some(result => result.outcome !
 const summary = (results: RunResult[]) => results.length ? results.map(r => `${r.suite}: ${r.outcome} (${r.durationMs}ms)\nLog: ${r.logPath}`).join("\n") : "Pipeline cancelled before execution.";
 
 export default function pipelineExtension(pi: ExtensionAPI): void {
-	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]> }>();
+	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]>; automatic: boolean }>();
 	let shuttingDown = false;
+	let generation = 0;
+	let monitor: PipelineMonitor | undefined;
+	let monitorRoot: string | undefined;
 	async function pipeline(ctx: ExtensionContext) { return new Pipeline(await projectRoot(ctx.cwd)); }
-	function start(p: Pipeline, ctx: ExtensionContext, suite: string, signal?: AbortSignal): Promise<RunResult[]> {
+	function refreshWidget(root: string) { if (!shuttingDown && monitorRoot === root) void monitor?.refresh(); }
+	function showWidget(ctx: ExtensionContext, status: PipelineStatus | undefined) {
+		if (!status?.configured || !Object.keys(status.suites).length) { ctx.ui.setWidget("pipeline", undefined); return; }
+		if (ctx.mode === "tui") {
+			ctx.ui.setWidget("pipeline", (_tui, theme) => ({ render: width => renderWidget(status, theme, width), invalidate() {} }));
+		} else ctx.ui.setWidget("pipeline", renderWidget(status, ctx.ui.theme, Number.MAX_SAFE_INTEGER));
+	}
+	function start(p: Pipeline, ctx: ExtensionContext, suite: string, signal?: AbortSignal, options: Pick<RunOptions, "automatic" | "expectedSourceFingerprint" | "expectedConfigFingerprint"> = {}): Promise<RunResult[]> {
 		if (shuttingDown) throw new Error("Pipeline extension is shutting down");
 		if (active.has(p.root)) throw new Error("Pipeline busy in this session");
 		const controller = new AbortController();
 		const abort = () => controller.abort();
 		signal?.addEventListener("abort", abort, { once: true });
 		if (signal?.aborted) abort();
-		const done = p.run(suite, { confirm: confirmation(ctx, controller.signal), signal: controller.signal }).finally(() => {
+		const done = p.run(suite, { ...options, confirm: options.automatic ? undefined : confirmation(ctx, controller.signal), signal: controller.signal, onChange: () => refreshWidget(p.root) }).finally(() => {
 			signal?.removeEventListener("abort", abort);
 			active.delete(p.root);
+			refreshWidget(p.root);
 		});
-		active.set(p.root, { controller, done });
+		active.set(p.root, { controller, done, automatic: options.automatic ?? false });
 		return done;
 	}
 	pi.registerTool({
 		name: "pipeline_configure", label: "Configure pipeline",
-		description: "Create or replace this project's .pi/pipeline.json with native user confirmation. Read pipeline_status first when updating: include every suite to retain; omitted suites are removed. Does not run tests. Automatic settings are reserved for future scheduling.",
+		description: "Create or replace this project's .pi/pipeline.json with native user confirmation. Read pipeline_status first when updating: include every suite to retain; omitted suites are removed. Saving does not immediately run tests. auto=after-agent opts a suite into quiet, cooldown-limited runs after the agent settles.",
 		parameters: Type.Object({ config: ConfigSchema }),
 		async execute(_id, params, signal, _update, ctx) {
 			const p = await pipeline(ctx);
@@ -51,6 +63,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 				const accepted = await confirm(text);
 				return accepted && !signal?.aborted;
 			} : undefined));
+			refreshWidget(p.root);
 			return response({ saved, configPath: p.configPath });
 		},
 	});
@@ -88,6 +101,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 				} else if (action === "cancel") {
 					const job = active.get(p.root);
 					job?.controller.abort();
+					monitor?.agentStarted(); // Pause automatic retries until the next settled agent turn.
 					ctx.ui.notify(job ? "Pipeline cancellation requested." : "No pipeline running in this session.", "info");
 				} else if (action === "logs") {
 					ctx.ui.notify(JSON.stringify(await p.logs(suite), null, 2), "info");
@@ -98,11 +112,37 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 			} catch (error) { ctx.ui.notify(String(error), "error"); }
 		},
 	});
-	pi.on("session_start", async () => { shuttingDown = false; });
+	pi.on("session_start", async (_event, ctx) => {
+		const currentGeneration = ++generation;
+		await monitor?.stop();
+		if (currentGeneration !== generation) return;
+		monitor = undefined;
+		monitorRoot = undefined;
+		shuttingDown = false;
+		if (!ctx.hasUI) return;
+		const p = await pipeline(ctx);
+		if (shuttingDown || currentGeneration !== generation) return;
+		monitorRoot = p.root;
+		monitor = new PipelineMonitor(() => p.status(), status => showWidget(ctx, status), undefined, {
+			idle: () => !shuttingDown && ctx.isIdle(),
+			run: status => start(p, ctx, "all", undefined, { automatic: true, expectedSourceFingerprint: status.sourceFingerprint, expectedConfigFingerprint: status.configFingerprint }),
+			cancel: () => { const job = active.get(p.root); if (job?.automatic) job.controller.abort(); },
+		});
+		await monitor.start();
+	});
+	pi.on("agent_start", async () => { monitor?.agentStarted(); });
+	pi.on("agent_settled", async () => { await monitor?.agentSettled(); });
+	pi.on("tool_execution_end", async (event) => {
+		if (["write", "edit", "bash", "pipeline_configure", "pipeline_run"].includes(event.toolName)) await monitor?.refresh();
+	});
 	pi.on("session_shutdown", async () => {
+		++generation;
 		shuttingDown = true;
 		const jobs = [...active.values()];
 		for (const job of jobs) job.controller.abort();
+		await monitor?.stop();
+		monitor = undefined;
+		monitorRoot = undefined;
 		await Promise.allSettled(jobs.map(job => job.done));
 	});
 }
