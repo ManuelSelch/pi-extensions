@@ -16,6 +16,20 @@ test('validates command arrays, names, relative cwd and unknown configuration fi
   ]) assert.throws(() => validateConfig(value));
 });
 
+test('configured suite order is preserved for manual runs, automatic runs and status', async t => {
+  const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
+  const c = { version: 1, suites: {
+    typecheck: { command: [process.execPath, '-e', ''], auto: 'after-agent' },
+    tests: { command: [process.execPath, '-e', ''], auto: 'after-agent' },
+  } };
+  await p.configure(c, approve);
+  assert.deepEqual(Object.keys((await p.config()).suites), ['typecheck', 'tests']);
+  assert.deepEqual(Object.keys((await p.status()).suites), ['typecheck', 'tests']);
+  assert.deepEqual(Array.from(await p.run('all'), r => r.suite), ['typecheck', 'tests']);
+  await fs.writeFile(path.join(f.root, 'source.txt'), 'changed');
+  assert.deepEqual(Array.from(await p.run('all', { automatic: true, cooldownMs: 0 }), r => r.suite), ['typecheck', 'tests']);
+});
+
 test('confirmation rejection leaves absent/existing config unchanged; acceptance persists local approval', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
   assert.equal(await p.configure(config(), async text => { assert.match(text, /Before:.*none/s); return false; }), false);

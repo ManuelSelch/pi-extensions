@@ -86,7 +86,7 @@ export function validateConfig(input: unknown): Config {
 	keys(value, ["version", "suites"]);
 	if (value.version !== 1) throw new Error("Pipeline version must be 1");
 	const suites: Record<string, Suite> = Object.create(null);
-	for (const [name, inputSuite] of Object.entries(object(value.suites)).sort(([a], [b]) => a.localeCompare(b))) {
+	for (const [name, inputSuite] of Object.entries(object(value.suites))) {
 		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error(`Invalid suite name: ${name}`);
 		const suite = object(inputSuite);
 		keys(suite, ["command", "cwd", "timeoutSeconds", "staleAfterMinutes", "auto"]);

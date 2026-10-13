@@ -26,6 +26,8 @@ Reload Pi after installing `pipeline.ts`. Ask the agent to inspect your test scr
 }
 ```
 
+Suite declaration order controls serial execution and widget order; suites are not alphabetically sorted. Use descriptive suite names (JavaScript enumerates integer-only names numerically). Reorder suites via `pipeline_configure` to review and approve the new configuration.
+
 Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's cwd outside git. Starting Pi in a git subdirectory still uses the worktree root. Commit the configuration if you want to share it; approvals and results are never stored in that file.
 
 - `pipeline_configure({config: ...})`: validate and save after approval.
