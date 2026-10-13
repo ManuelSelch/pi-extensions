@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -21,7 +22,34 @@ export function parseEvents(json: string): CalendarEvent[] {
 }
 
 function validDate(value: string): boolean {
-	return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00`));
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000-")) return false;
+	const date = new Date(`${value}T00:00:00Z`);
+	return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+// Use khal's own config loader and Python strftime rather than duplicating its
+// format defaults, config discovery, or locale-specific directives in JavaScript.
+export const KHAL_DATE_SCRIPT = `
+import json, sys
+from datetime import date
+from khal.settings import get_config
+fmt = get_config()['locale']['longdateformat']
+print(json.dumps([date.fromisoformat(value).strftime(fmt) for value in sys.argv[1:]]))
+`;
+
+export async function khalDates(start: string, end: string): Promise<[string, string]> {
+	// Homebrew/pip launchers point to the Python environment containing khal.
+	// A system python3 may not have khal installed, so use the launcher's interpreter.
+	const executable = (await run("which", ["khal"])).trim();
+	const launcher = await readFile(executable, "utf8");
+	const firstLine = launcher.split(/\r?\n/, 1)[0];
+	if (!firstLine.startsWith("#!")) throw new Error("Cannot determine khal's Python interpreter from its launcher.");
+	const [interpreter, ...prefix] = firstLine.slice(2).trim().split(/\s+/);
+	const result: unknown = JSON.parse(await run(interpreter, [...prefix, "-c", KHAL_DATE_SCRIPT, start, end]));
+	if (!Array.isArray(result) || result.length !== 2 || result.some(value => typeof value !== "string" || !value.trim())) {
+		throw new Error("Invalid date conversion returned by khal's Python interpreter.");
+	}
+	return result as [string, string];
 }
 
 async function run(command: string, args: string[]): Promise<string> {
@@ -38,8 +66,9 @@ async function syncedEvents(start: string, end: string): Promise<CalendarEvent[]
 	if (!validDate(start) || !validDate(end) || start > end) {
 		throw new Error("Dates must be valid YYYY-MM-DD values with start on or before end.");
 	}
+	const [khalStart, khalEnd] = await khalDates(start, end);
 	await run("vdirsyncer", ["sync"]);
-	const output = await run("khal", ["list", "--json", "all", start, end]);
+	const output = await run("khal", ["list", "--json", "all", khalStart, khalEnd]);
 	return parseEvents(output);
 }
 
