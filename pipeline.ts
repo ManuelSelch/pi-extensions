@@ -107,7 +107,8 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 					ctx.ui.notify(JSON.stringify(await p.logs(suite), null, 2), "info");
 				} else if (action === "status") {
 					const status = await p.status();
-					ctx.ui.notify(status.configured ? JSON.stringify(status, null, 2) : "No pipeline configuration.", "info");
+					const lines = renderWidget(status, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER);
+					ctx.ui.notify(!status.configured ? "No pipeline configuration." : lines.join("\n") || "No pipeline suites configured.", "info");
 				} else throw new Error("Usage: /pipeline [status|run [suite|all]|logs <suite>|cancel]");
 			} catch (error) { ctx.ui.notify(String(error), "error"); }
 		},

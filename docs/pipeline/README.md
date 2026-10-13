@@ -33,7 +33,7 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 - `pipeline_configure({config: ...})`: validate and save after approval.
 - `pipeline_run({suite: "unit"})`: wait for a suite's results; omit suite or use `all` to run all suites serially. Non-passing results are tool errors carrying outcome/output/log paths. Aborting the tool cancels execution.
 - `pipeline_status({})`: inspect configuration and latest outcomes/freshness without execution or a popup.
-- `/pipeline` or `/pipeline status`: show details.
+- `/pipeline` or `/pipeline status`: show a concise outcome/freshness line per suite; no commands, fingerprints or log paths. The agent's `pipeline_status` tool retains detailed data.
 - `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
 - `/pipeline logs unit`: show the last 16 KiB and full log path.
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.

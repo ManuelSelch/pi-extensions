@@ -228,6 +228,10 @@ test('extension registers tools and command, uses native approval, and shuts dow
   assert.ok(completion);
   assert.match(completion[0], /^unit: cancelled \(\d+ms\)$/);
   assert.doesNotMatch(completion[0], /Log:|\.log/);
+  await commands.pipeline.handler('status', ctx);
+  const statusNotice = notices.at(-1)[0];
+  assert.match(statusNotice, /■ unit cancelled just now/);
+  assert.doesNotMatch(statusNotice, /logPath|Fingerprint|command|startedAt|\.log|\{/);
 });
 
 test('shutdown dismisses a pending execution approval popup', async t => {
