@@ -41,13 +41,19 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "ma
 ## Widget and automatic execution
 
 ```text
-✓ unit 3m ago  ·  ✗ integration 12m ago  ·  ○ e2e never
-⚠ unit stale (✓ 3m ago)  ·  ⟳ integration running 24s
+✓ unit 3m ago
+✗ integration 12m ago
+○ e2e never
+```
+
+```text
+⚠ unit stale (✓ 3m ago)
+⟳ integration running 24s
 ```
 
 - No config (or no suites) means no widget and no setup reminder. Invalid/unreadable configuration hides the widget; `/pipeline status` exposes the error.
 - The widget shows test state only, never approval messages. Previous stale passes are warning-colored, not green current-code results. Cancelled and timed-out runs remain distinct.
-- Native TUI rendering fits terminal columns and wraps whole suite entries on narrow screens. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
+- Each suite appears on its own line. Native TUI rendering truncates entries to fit narrow terminal widths. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
 - While a UI session is open, poll source/config/shared results every 5 seconds (1 second while a suite is running), with immediate refreshes after file tools and persisted run-state changes. No recursive file watchers.
 - Automation is opt-in per suite. It begins only after an `agent_settled` event, not on startup or reload. Wait for at least **2 seconds of quiet code** and a **60-second per-suite cooldown** after the previous result. Polls keep detecting edits while idle after that settled turn.
 - Never rerun an unchanged tested snapshot just because its age expired or it failed/cancelled/timed out. Use a manual run to retry unchanged code. Source/config changes or changes detected during a run make it eligible after cooldown.

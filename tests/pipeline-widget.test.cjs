@@ -13,10 +13,10 @@ test('widget hides completely for absent or empty configuration', () => {
   assert.equal(renderWidget({ configured: true, suites: {} }, plain, 80, now).length, 0);
 });
 
-test('compact line shows age, outcomes and stale previous pass rather than green current code', () => {
+test('each suite gets its own line with age, outcome and stale previous pass', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: result('passed'), integration: result('failed', 12), e2e: { outcome: 'never', stale: false } } };
-  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '✓ unit 3m ago  ·  ✗ integration 12m ago  ·  ○ e2e never');
+  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '✓ unit 3m ago\n✗ integration 12m ago\n○ e2e never');
   status.suites.unit.stale = true;
   const colors = [];
   const theme = { fg: (color, text) => { colors.push([color, text]); return text; } };

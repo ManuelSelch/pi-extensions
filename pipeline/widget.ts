@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { automaticSuites, type PipelineStatus, type SuiteStatus } from "./core.ts";
 
@@ -21,22 +21,12 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 	const color = result.outcome === "passed" ? "success" : result.outcome === "failed" ? "error" : "warning";
 	return theme.fg(color, `${symbol} ${name} ${outcome}${elapsed}`);
 }
-/** One compact line when it fits; wrap whole suite entries on narrow terminals. */
+/** One line per suite, truncated to the available terminal width. */
 export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
 	if (!status?.configured || !Object.keys(status.suites).length || width <= 0) return [];
-	const lines: string[] = [];
-	let line = "";
-	for (const [name, result] of Object.entries(status.suites)) {
-		const text = suiteText(name, result, theme, now);
-		const separator = line ? "  ·  " : "";
-		if (visibleWidth(`${line}${separator}${text}`) <= width) line += separator + text;
-		else {
-			if (line) lines.push(truncateToWidth(line, width));
-			line = truncateToWidth(text, width);
-		}
-	}
-	lines.push(truncateToWidth(line, width));
-	return lines;
+	return Object.entries(status.suites).map(([name, result]) =>
+		truncateToWidth(suiteText(name, result, theme, now), width),
+	);
 }
 
 export interface Clock {
