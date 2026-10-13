@@ -49,7 +49,7 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "ma
 
 ```text
 ⚠ unit stale (✓ 3m ago)
-▶ integration running 24s
+› integration running 24s
 ```
 
 - No config (or no suites) means no widget and no setup reminder. Invalid/unreadable configuration hides the widget; `/pipeline status` exposes the error.
