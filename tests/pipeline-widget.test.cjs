@@ -26,6 +26,21 @@ test('compact line shows age, outcomes and stale previous pass rather than green
   assert.doesNotMatch(text, /approval|configur/i);
 });
 
+test('completed runs show just now below a minute, then coarse ages, including stale results', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  for (const outcome of ['passed', 'failed', 'cancelled', 'timed-out']) {
+    const status = { configured: true, suites: { unit: result(outcome, 52 / 60) } };
+    assert.match(renderWidget(status, plain, 120, now).join('\n'), /just now/);
+    assert.doesNotMatch(renderWidget(status, plain, 120, now).join('\n'), /52s|just now ago/);
+    status.suites.unit.stale = true;
+    assert.match(renderWidget(status, plain, 120, now).join('\n'), /stale .*just now/);
+  }
+  for (const [seconds, expected] of [[0, 'just now'], [59, 'just now'], [60, '1m ago'], [120, '2m ago'], [3600, '1h ago']]) {
+    const status = { configured: true, suites: { unit: result('passed', seconds / 60) } };
+    assert.ok(renderWidget(status, plain, 120, now).join('\n').endsWith(expected));
+  }
+});
+
 test('running, cancelled and timeout stay distinct; elapsed time and theme are evaluated on rendering', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: { outcome: 'running', stale: false, startedAt: new Date(now - 24000).toISOString() }, integration: result('cancelled'), e2e: result('timed-out') } };

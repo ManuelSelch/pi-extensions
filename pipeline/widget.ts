@@ -14,7 +14,8 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 	if (result.outcome === "running") return theme.fg("accent", `⟳ ${name} running ${age(result.startedAt, now)}`);
 	const symbols = { passed: "✓", failed: "✗", cancelled: "■", "timed-out": "⌛" };
 	const symbol = symbols[result.outcome];
-	const elapsed = `${age(result.finishedAt ?? result.startedAt, now)} ago`;
+	const timestamp = result.finishedAt ?? result.startedAt;
+	const elapsed = now - Date.parse(timestamp) < 60000 ? "just now" : `${age(timestamp, now)} ago`;
 	const outcome = result.outcome === "cancelled" ? "cancelled " : result.outcome === "timed-out" ? "timed out " : "";
 	if (result.stale) return theme.fg("warning", `⚠ ${name} stale (${symbol} ${outcome}${elapsed})`);
 	const color = result.outcome === "passed" ? "success" : result.outcome === "failed" ? "error" : "warning";
