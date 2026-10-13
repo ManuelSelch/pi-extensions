@@ -17,7 +17,8 @@ Make local test outcomes and freshness visible in Pi, so tests are not forgotten
 ## Requirements
 - Hide the widget completely when no pipeline config exists; no setup reminder.
 - Display configured suites with last-run age, outcome and freshness. Distinguish never run, running, passed, failed, cancelled and timed out; a previous pass on changed code must not appear current.
-- Show test status only: no approval-required text in the widget.
+- Show test status only: no approval-required text in the widget. Automatic-run progress and outcomes only refresh the widget; do not notify or send messages to the agent.
+- Any project source change marks all suite results stale in the first version; no per-suite input paths. Exclude generated results/logs and other non-source artifacts from source-change detection.
 - Configuration defines executable/arguments, optional project-relative working directory, timeout, freshness threshold and automatic-run mode per suite. Commands run once, not in watch mode.
 - `pipeline_configure` proposes suite additions, updates and removals, validates them and requests approval using Pi's native confirmation popup before writing. Show the exact changes, including automatic execution settings. Rejection changes nothing; saving does not run tests.
 - Approval is local and tied to the exact project/configuration, not committed with configuration. If configuration changes during review, request fresh approval. External execution-affecting changes require confirmation before execution; automatic runs remain paused until approved, without repeatedly opening popups.
@@ -42,11 +43,10 @@ Description: Define and validate `.pi/pipeline.json`; implement `pipeline_config
 Description: Add `pipeline_run`, `pipeline_status` and `/pipeline` run/log/cancel actions using approved configuration. Persist worktree-isolated outcomes/logs and source fingerprints, with locking, timeouts and process cleanup. Verify passing, failing, cancelled, timed-out and duplicate runs using fixture commands.
 
 ### 3. Compact status widget
-Description: Render suite outcomes, ages and freshness beside the existing git widget. Hide it when config is absent; never display approval state. Verify source changes, changes during runs, session restart and narrow terminal widths.
+Description: Render suite outcomes, ages and freshness beside the existing git widget. Hide it when config is absent; never display approval state. Verify any source change makes all suites stale, changes during runs, session restart and narrow terminal widths.
 
 ### 4. Optional automatic runs
-Description: After slices 1–3, add opt-in after-agent scheduling with cooldown, change detection and lifecycle cleanup. Verify unchanged code is skipped, unapproved commands never execute, sessions do not duplicate runs and shutdown/reload leaves no timers or processes.
+Description: After slices 1–3, add opt-in after-agent scheduling with cooldown, change detection and lifecycle cleanup. Verify unchanged code is skipped, unapproved commands never execute, automatic outcomes only refresh the widget without agent notifications, sessions do not duplicate runs and shutdown/reload leaves no timers or processes.
 
 ## Open Questions
-1. Should a failed automatic run only update the widget, or also send a notification to the agent?
-2. For the first version, should any project source change mark all suites stale, or should each suite support configurable input paths?
+None.
