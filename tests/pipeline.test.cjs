@@ -210,6 +210,10 @@ test('extension registers tools and command, uses native approval, and shuts dow
   assert.equal(status.details.suites.unit.outcome, 'cancelled');
   assert.equal(confirmations.length, 1);
   assert.equal(commands.pipeline.description.includes('pipeline'), true);
+  const completion = notices.find(([text]) => text.includes('unit: cancelled'));
+  assert.ok(completion);
+  assert.match(completion[0], /^unit: cancelled \(\d+ms\)$/);
+  assert.doesNotMatch(completion[0], /Log:|\.log/);
 });
 
 test('shutdown dismisses a pending execution approval popup', async t => {

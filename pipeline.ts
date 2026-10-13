@@ -20,7 +20,7 @@ const response = (data: unknown, isError = false) => {
 	return { content: [{ type: "text" as const, text: text.length > 24000 ? `${text.slice(0, 24000)}\n[Truncated; use pipeline_status or /pipeline logs <suite>. Full output is in the reported log files.]` : text }], details: data, isError };
 };
 const failed = (results: RunResult[]) => results.some(result => result.outcome !== "passed");
-const summary = (results: RunResult[]) => results.length ? results.map(r => `${r.suite}: ${r.outcome} (${r.durationMs}ms)\nLog: ${r.logPath}`).join("\n") : "Pipeline cancelled before execution.";
+const summary = (results: RunResult[]) => results.length ? results.map(r => `${r.suite}: ${r.outcome} (${r.durationMs}ms)`).join("\n") : "Pipeline cancelled before execution.";
 
 export default function pipelineExtension(pi: ExtensionAPI): void {
 	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]>; automatic: boolean }>();
