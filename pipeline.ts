@@ -17,7 +17,7 @@ const confirmation = (ctx: ExtensionContext, signal?: AbortSignal): Confirm | un
 	: undefined;
 const response = (data: unknown, isError = false) => {
 	const text = JSON.stringify(data, null, 2);
-	return { content: [{ type: "text" as const, text: text.length > 24000 ? `${text.slice(0, 24000)}\n[Truncated; use pipeline_status or /pipeline logs <suite>. Full output is in the reported log files.]` : text }], details: data, isError };
+	return { content: [{ type: "text" as const, text: text.length > 24000 ? `${text.slice(0, 24000)}\n[Truncated; use pipeline_status for details. Full output is in the reported log files.]` : text }], details: data, isError };
 };
 const failed = (results: RunResult[]) => results.some(result => result.outcome !== "passed");
 const summary = (results: RunResult[]) => results.length ? results.map(r => `${r.suite}: ${r.outcome} (${r.durationMs}ms)`).join("\n") : "Pipeline cancelled before execution.";
@@ -83,16 +83,16 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		async execute(_id, _params, _signal, _update, ctx) { return response(await (await pipeline(ctx)).status()); },
 	});
 	pi.registerCommand("pipeline", {
-		description: "Inspect local pipeline; run [suite|all], logs <suite>, cancel",
+		description: "Inspect local pipeline; run [suite|all], cancel",
 		getArgumentCompletions(prefix) {
-			const values = ["status", "run all", "logs", "cancel"].filter(value => value.startsWith(prefix));
+			const values = ["status", "run all", "cancel"].filter(value => value.startsWith(prefix));
 			return values.map(value => ({ value, label: value }));
 		},
 		async handler(args, ctx) {
 			try {
 				const p = await pipeline(ctx);
 				const [action = "status", suite = "all", ...extra] = args.trim().split(/\s+/).filter(Boolean);
-				if (extra.length) throw new Error("Usage: /pipeline [status|run [suite|all]|logs <suite>|cancel]");
+				if (extra.length) throw new Error("Usage: /pipeline [status|run [suite|all]|cancel]");
 				if (action === "run") {
 					const done = start(p, ctx, suite);
 					// Do not block the command loop: /pipeline cancel remains usable.
@@ -103,13 +103,11 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 					job?.controller.abort();
 					monitor?.agentStarted(); // Pause automatic retries until the next settled agent turn.
 					ctx.ui.notify(job ? "Pipeline cancellation requested." : "No pipeline running in this session.", "info");
-				} else if (action === "logs") {
-					ctx.ui.notify(JSON.stringify(await p.logs(suite), null, 2), "info");
 				} else if (action === "status") {
 					const status = await p.status();
 					const lines = renderWidget(status, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER);
 					ctx.ui.notify(!status.configured ? "No pipeline configuration." : lines.join("\n") || "No pipeline suites configured.", "info");
-				} else throw new Error("Usage: /pipeline [status|run [suite|all]|logs <suite>|cancel]");
+				} else throw new Error("Usage: /pipeline [status|run [suite|all]|cancel]");
 			} catch (error) { ctx.ui.notify(String(error), "error"); }
 		},
 	});

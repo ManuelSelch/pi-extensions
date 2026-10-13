@@ -35,7 +35,6 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 - `pipeline_status({})`: inspect configuration and latest outcomes/freshness without execution or a popup.
 - `/pipeline` or `/pipeline status`: show a concise outcome/freshness line per suite; no commands, fingerprints or log paths. The agent's `pipeline_status` tool retains detailed data.
 - `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
-- `/pipeline logs unit`: show the last 16 KiB and full log path.
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
 Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
