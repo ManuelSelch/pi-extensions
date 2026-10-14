@@ -65,7 +65,11 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "ma
 
 ## Approval and safety
 
-Native confirmation covers the exact commands, directories, timeouts and automation settings. Changes during review are refused and must be reviewed again. External configuration changes require approval before execution. Without a UI channel, unapproved execution/configuration is refused; previously approved manual runs can still execute.
+Native confirmation covers the exact commands, directories, timeouts and automation settings. In Git repositories, approval applies to identical validated configurations across **all worktrees of that repository**, identified by the canonical Git common directory (`git rev-parse --git-common-dir`). Independent repositories/clones do not share approval, even with the same remote. Outside Git, approval remains scoped to the canonical project directory. The confirmation popup explicitly shows this scope.
+
+Changes during review are refused and must be reviewed again. Configurations without an existing exact approval require confirmation before execution. Multiple approved configurations are retained, so approving a different configuration in another worktree does not invalidate earlier approvals. Without a UI channel, unapproved execution/configuration is refused; previously approved manual runs can still execute.
+
+Legacy `approval.json` records remain valid only in their original worktree; they are not silently promoted to repository-wide trust. To share an existing configuration, approve it once via `pipeline_configure` (even unchanged), or approve a manual run in a worktree without a legacy approval. New worktrees then reuse that approval automatically. Automatic scheduling still requires `auto: "after-agent"` and a settled agent turn.
 
 Approval covers configuration, not the contents of every executable, script, dependency or inherited environment variable. Only approve commands in projects you trust. This extension is not a sandbox and does not intercept arbitrary file-edit or bash tools. External configuration edits are checked before spawning, but cannot be made transactionally atomic with external writers.
 
@@ -73,7 +77,11 @@ A per-worktree filesystem lock prevents overlapping runs/configuration reviews a
 
 ## Results and freshness
 
-State lives under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/<hash-of-canonical-worktree-path>/`, with private permissions. It contains approval, latest results, per-run logs and a transient lock with owner PID. Full logs are retained; returned output is bounded. Logs can contain secrets printed by tests; retention/pruning is not implemented yet.
+Results, per-run logs and transient locks with owner PID live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/<hash-of-canonical-worktree-path>/`, with private permissions. They remain isolated per worktree; a new worktree starts with never-run results and can execute independently of another worktree.
+
+New approvals live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/approvals/<scope-hash>/<configuration-fingerprint>.json`. The scope hash includes the scope kind and canonical Git common-directory path (or canonical project-directory path outside Git). Separate atomic records preserve simultaneous approvals from different worktrees. Legacy worktree-local `approval.json` files are still recognized locally.
+
+Full logs are retained; returned output is bounded. Logs can contain secrets printed by tests; retention/pruning is not implemented yet.
 
 Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Any source change makes all completed suites stale. Changes detected between the start and end of a run also keep it stale, even if another run is fresh.
 
