@@ -39,7 +39,7 @@ test('registers workspace command and subcommand completion', () => {
   const { command, before } = load();
   assert.equal(typeof before, 'function');
   assert.deepEqual(Array.from(command.getArgumentCompletions('').map(x => x.value)), ['add', 'list', 'remove']);
-  assert.equal(command.getArgumentCompletions('add '), null);
+  assert.equal(command.getArgumentCompletions('list '), null);
 });
 test('missing configuration is a no-op and does not create files', async t => {
   const f = fixture(t), e = event();

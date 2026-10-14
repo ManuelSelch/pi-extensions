@@ -14,6 +14,8 @@ Commands:
 - `/workspace add [folder path]`: optional path argument; otherwise prompts for it. Always prompts for a label and optional description. A blank label defaults to the folder name. Escape cancels without saving.
 - `/workspace remove [number]`: choose a link interactively or pass its number from the list. Only removes the link; never deletes the folder or files.
 
+Type `/workspace add ` in the main prompt and use folder autocomplete, just like `/cwd`. Suggestions include directories only, append `/`, preserve relative/absolute/`~/` paths, and hide dot-folders unless the current segment starts with `.`. Relative suggestions follow the current session working directory, including after `/cwd` switches. Autocomplete is on the command argument; the plain folder input dialog does not have path completion.
+
 Paths may be absolute, start with `~/`, or be relative to the workspace root. Paths containing spaces work, including an optional pair of surrounding quotes. The entire argument after `add` is the path, not additional options. Existing directories are required; symlink aliases resolve to their real path and cannot be linked twice.
 
 Descriptions can define aliases and default documents, for example: `Lecture materials; 'the script' means Algorithms.pdf`. These descriptions are supplied to the agent as metadata. There is no separate file attachment or alias parser.

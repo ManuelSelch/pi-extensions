@@ -1,5 +1,5 @@
 /** Multi-root workspace links. Configuration is scoped to ctx.cwd, never AGENTS.md. */
-import { mkdirSync, readFileSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -116,10 +116,35 @@ function mapping(workspace: Workspace, cwd: string): { content: string; missing:
   };
 }
 
+/** Match /cwd: preserve path form, hide dot-folders, and complete directories with '/'. */
+function completeFolders(prefix: string, cwd: string) {
+  const lastSlash = prefix.lastIndexOf("/");
+  const displayDir = lastSlash === -1 ? "" : prefix.slice(0, lastSlash + 1);
+  const segment = prefix === "~" ? "" : prefix.slice(lastSlash + 1);
+  const homePath = prefix === "~" || displayDir.startsWith("~/");
+  const parent = homePath ? join(homedir(), displayDir.slice(1)) : resolve(cwd, displayDir);
+  const valuePrefix = prefix === "~" ? "~/" : displayDir;
+  try {
+    return readdirSync(parent, { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && (segment.startsWith(".") || !entry.name.startsWith(".")) && entry.name.startsWith(segment))
+      .map(entry => entry.name).sort()
+      .map(name => ({ value: `${valuePrefix}${name}/`, label: `${valuePrefix}${name}/`, description: join(parent, name) }));
+  } catch {
+    return []; // Missing or unreadable parent: no suggestions, same as /cwd.
+  }
+}
+
 export default function workspaceExtension(pi: ExtensionAPI) {
+  // Command completion has no context argument; session_start tracks reloads and /cwd switches.
+  let currentCwd = process.cwd();
+  pi.on("session_start", (_event, ctx) => { currentCwd = ctx.cwd; });
   pi.registerCommand("workspace", {
     description: "Link folders to this workspace: add, list, remove",
     getArgumentCompletions(prefix) {
+      const add = prefix.match(/^(add\s+)(.*)$/);
+      if (add) {
+        return completeFolders(add[2], currentCwd).map(item => ({ ...item, value: `${add[1]}${item.value}` }));
+      }
       if (/\s/.test(prefix)) return null;
       const items = ["add", "list", "remove"].filter(value => value.startsWith(prefix)).map(value => ({ value, label: value }));
       return items.length ? items : null;
