@@ -189,14 +189,35 @@ export class Pipeline {
 		catch (error) { await rm(lock, { recursive: true, force: true }); throw error; }
 		return () => rm(lock, { recursive: true, force: true });
 	}
+	private async approvalScope(): Promise<{ directory: string; description: string }> {
+		let commonDir: string | undefined;
+		try {
+			const result = await exec("git", ["rev-parse", "--git-common-dir"], { cwd: this.root });
+			commonDir = result.stdout.trim();
+		} catch { /* Non-git projects retain directory-scoped approval. */ }
+		const identity = commonDir === undefined ? await realpath(this.root) : await realpath(resolve(this.root, commonDir));
+		return {
+			directory: join(this.cacheRoot, "approvals", digest(JSON.stringify([commonDir === undefined ? "directory" : "git", identity]))),
+			description: commonDir === undefined ? `Approval applies only to this project directory: ${identity}.` : `Approval applies to identical configurations in all worktrees of this repository (Git common directory: ${identity}).`,
+		};
+	}
 	async isApproved(config?: Config): Promise<boolean> {
 		const current = config ?? await this.config();
 		if (!current) return false;
+		const fingerprint = digest(JSON.stringify(current));
+		const scope = await this.approvalScope();
+		const shared = await optionalText(join(scope.directory, `${fingerprint}.json`));
+		if (shared !== undefined && JSON.parse(shared).fingerprint === fingerprint) return true;
+		// Legacy approvals remain worktree-local; never silently broaden their trust.
 		const text = await optionalText(join(this.storage, "approval.json"));
-		return text !== undefined && JSON.parse(text).fingerprint === digest(JSON.stringify(current));
+		return text !== undefined && JSON.parse(text).fingerprint === fingerprint;
 	}
 	private async approve(config: Config) {
-		await atomicJSON(join(this.storage, "approval.json"), { fingerprint: digest(JSON.stringify(config)), approvedAt: new Date().toISOString() });
+		const scope = await this.approvalScope();
+		const fingerprint = digest(JSON.stringify(config));
+		await mkdir(scope.directory, { recursive: true, mode: 0o700 });
+		// Separate atomic records avoid lost approvals when different worktrees approve concurrently.
+		await atomicJSON(join(scope.directory, `${fingerprint}.json`), { fingerprint, approvedAt: new Date().toISOString() });
 	}
 	async configure(input: unknown, confirm?: Confirm): Promise<boolean> {
 		const proposal = validateConfig(input);
@@ -205,7 +226,7 @@ export class Pipeline {
 		const release = await this.acquire();
 		try {
 			const before = await optionalText(this.configPath);
-			if (!await confirm(`Project: ${this.root}\nBefore: ${before ?? "(none)"}\nAfter: ${JSON.stringify(proposal, null, 2)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown. Saving does not immediately run tests.`)) return false;
+			if (!await confirm(`Project: ${this.root}\n${(await this.approvalScope()).description}\nBefore: ${before ?? "(none)"}\nAfter: ${JSON.stringify(proposal, null, 2)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown. Saving does not immediately run tests.`)) return false;
 			if (await optionalText(this.configPath) !== before) throw new Error("Configuration changed during review; request fresh approval");
 			await mkdir(join(this.root, ".pi"), { recursive: true });
 			if (!inside(this.root, await realpath(join(this.root, ".pi")))) throw new Error("Configuration directory is outside the project");
@@ -347,7 +368,7 @@ export class Pipeline {
 		if (await this.isApproved(config)) return;
 		if (!confirm) throw new Error("User approval required: no interactive confirmation channel");
 		const before = await optionalText(this.configPath);
-		if (!await confirm(`Approve pipeline execution for ${this.root}?\n${JSON.stringify(config, null, 2)}`)) throw new Error("Pipeline execution approval rejected");
+		if (!await confirm(`Approve pipeline execution for ${this.root}?\n${(await this.approvalScope()).description}\n${JSON.stringify(config, null, 2)}`)) throw new Error("Pipeline execution approval rejected");
 		if (await optionalText(this.configPath) !== before || JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed during review; request fresh approval");
 		await this.approve(config);
 	}
