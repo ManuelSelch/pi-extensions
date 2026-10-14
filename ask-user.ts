@@ -145,21 +145,4 @@ export default function askUserExtension(pi: ExtensionAPI) {
 			return makeToolResult(answers, false);
 		},
 	});
-
-	pi.registerCommand("ask-user-demo", {
-		description: "Show a demo ask_user select/input/confirm flow",
-		handler: async (_args, ctx) => {
-			if (!ctx.hasUI) {
-				ctx.ui.notify("ask-user-demo requires a dialog-capable UI", "error");
-				return;
-			}
-
-			const favorite = await ctx.ui.select("Pick a UI control:", ["select", "input", "confirm", "text"]);
-			if (!favorite) return;
-			const name = await ctx.ui.input("What should I call you?", "Name");
-			if (name === undefined) return;
-			const ok = await ctx.ui.confirm("Confirm", `Use ${favorite} for ${name}?`);
-			ctx.ui.notify(ok ? `Confirmed: ${name} chose ${favorite}` : "Cancelled", ok ? "info" : "warning");
-		},
-	});
 }
