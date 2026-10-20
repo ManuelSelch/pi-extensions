@@ -4,11 +4,15 @@ Provides native-confirmed configuration, manual execution, persisted results, a 
 
 ## Usage
 
-Reload Pi after installing `pipeline.ts`. Ask the agent to inspect your test scripts and call `pipeline_configure`. The tool takes a **complete replacement configuration**: include every suite you want to retain; omitted suites are removed. Nothing is written until you confirm the before/after popup. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
+Reload Pi after installing `pipeline.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the before/after popup. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
 
 ```json
 {
   "version": 1,
+  "prepare": {
+    "command": ["npm", "ci"],
+    "timeoutSeconds": 300
+  },
   "suites": {
     "unit": {
       "command": ["npm", "run", "test:unit"],
@@ -39,6 +43,18 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 
 Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
 
+## Optional once-per-worktree preparation
+
+`prepare` accepts an executable/argument array, optional project-relative `cwd` (default `.`), and `timeoutSeconds` (default 300). It has no freshness or automatic-run mode of its own.
+
+- Before the first selected suite, run approved preparation under the same worktree lock. This applies to `all`, a single suite, command runs and automatic runs. Merely configuring or reading status never executes preparation.
+- Persist success in the worktree-local cache's `prepare.json`. Once successful, skip it across sessions/reloads and all future runs in that worktree. Shared repository approvals do **not** share preparation success.
+- Failure, timeout or cancellation blocks every selected suite and does not mark the worktree prepared. An explicit subsequent run retries preparation. Automatic runs do not repeatedly retry an unchanged failed preparation; changed source/config can make a later automatic attempt eligible after cooldown.
+- **No invalidation:** manifest/lockfile edits, a different preparation command, deleted dependencies, or removing/readding `prepare` do not clear prior success. Dependency maintenance afterward is manual. A successful flag is scoped to the cached worktree path, not a Git branch name; reusing the same checkout path reuses its cache.
+- Preparation is optional; existing configurations without it behave as before and retain their exact approval fingerprints. Adding/changing it requires native approval, even if preparation already succeeded.
+- `pipeline_status` exposes `prepare` separately from suite outcomes; the widget adds a preparation row only when configured. A run that performs preparation includes its result before suite results. Failed preparation is a tool error with bounded output and a full log reference.
+- Put installation here, and keep ordinary compilation/build as a suite: editing source should not reinstall dependencies. Preparation is not a general suite dependency graph; ordinary suite failures still do not stop later suites.
+
 ## Widget and automatic execution
 
 ```text
@@ -53,7 +69,7 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "ma
 ```
 
 - No config (or no suites) means no widget and no setup reminder. Invalid/unreadable configuration hides the widget; `/pipeline status` exposes the error.
-- The widget shows test state only, never approval messages. Previous stale passes are warning-colored, not green current-code results. Cancelled and timed-out runs remain distinct.
+- The widget shows preparation/test state only, never approval messages. Previous stale passes are warning-colored, not green current-code results. Cancelled and timed-out runs remain distinct.
 - Each suite appears on its own line. Native TUI rendering truncates entries to fit narrow terminal widths. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
 - While a UI session is open, poll source/config/shared results every 5 seconds (1 second while a suite is running), with immediate refreshes after file tools and persisted run-state changes. No recursive file watchers.
 - Automation is opt-in per suite. It begins only after an `agent_settled` event, not on startup or reload. Wait for at least **2 seconds of quiet code** and a **60-second per-suite cooldown** after the previous result. Polls keep detecting edits while idle after that settled turn.

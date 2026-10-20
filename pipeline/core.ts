@@ -9,14 +9,16 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const exec = promisify(execFile);
 export type Confirm = (description: string) => Promise<boolean>;
-export interface Suite {
+export interface Prepare {
 	command: string[];
 	cwd: string;
 	timeoutSeconds: number;
+}
+export interface Suite extends Prepare {
 	staleAfterMinutes: number;
 	auto: "manual" | "after-agent";
 }
-export interface Config { version: 1; suites: Record<string, Suite> }
+export interface Config { version: 1; suites: Record<string, Suite>; prepare?: Prepare }
 export interface RunResult {
 	suite: string;
 	outcome: "running" | "passed" | "failed" | "cancelled" | "timed-out";
@@ -40,6 +42,7 @@ export interface PipelineStatus {
 	sourceFingerprint?: string;
 	configFingerprint?: string;
 	suites: Record<string, SuiteStatus>;
+	prepare?: SuiteStatus;
 }
 export interface RunOptions {
 	confirm?: Confirm;
@@ -54,6 +57,11 @@ export const AUTO_COOLDOWN_MS = 60000;
 /** Skip unchanged snapshots regardless of outcome or age, so failures never create a retry loop. */
 export function automaticSuites(status: PipelineStatus | undefined, now = Date.now(), cooldownMs = AUTO_COOLDOWN_MS): string[] {
 	if (!status?.configured || !status.config || !status.sourceFingerprint || !status.configFingerprint) return [];
+	const prepare = status.prepare;
+	if (prepare && prepare.outcome !== "never" && prepare.outcome !== "passed") {
+		if (prepare.outcome === "running" || now - Date.parse(prepare.finishedAt ?? prepare.startedAt) < cooldownMs) return [];
+		if (!prepare.changedDuringRun && prepare.sourceFingerprint === status.sourceFingerprint && prepare.configFingerprint === status.configFingerprint) return [];
+	}
 	return Object.entries(status.config.suites).filter(([name, suite]) => {
 		if (suite.auto !== "after-agent") return false;
 		const result = status.suites[name];
@@ -83,7 +91,7 @@ function keys(value: Record<string, unknown>, allowed: string[]) {
 }
 export function validateConfig(input: unknown): Config {
 	const value = object(input);
-	keys(value, ["version", "suites"]);
+	keys(value, ["version", "suites", "prepare"]);
 	if (value.version !== 1) throw new Error("Pipeline version must be 1");
 	const suites: Record<string, Suite> = Object.create(null);
 	for (const [name, inputSuite] of Object.entries(object(value.suites))) {
@@ -104,7 +112,11 @@ export function validateConfig(input: unknown): Config {
 		if (auto !== "manual" && auto !== "after-agent") throw new Error(`${name}: invalid auto mode`);
 		suites[name] = { command: [...suite.command], cwd, timeoutSeconds: timeoutSeconds as number, staleAfterMinutes: staleAfterMinutes as number, auto };
 	}
-	return { version: 1, suites };
+	if (value.prepare === undefined) return { version: 1, suites }; // Preserve existing approval fingerprints.
+	const prepare = object(value.prepare);
+	keys(prepare, ["command", "cwd", "timeoutSeconds"]);
+	const normalized = validateConfig({ version: 1, suites: { prepare } }).suites.prepare;
+	return { version: 1, suites, prepare: { command: normalized.command, cwd: normalized.cwd, timeoutSeconds: normalized.timeoutSeconds } };
 }
 export async function projectRoot(cwd: string): Promise<string> {
 	try {
@@ -171,7 +183,7 @@ export class Pipeline {
 		const text = await optionalText(this.configPath);
 		return text === undefined ? undefined : validateConfig(JSON.parse(text));
 	}
-	async suiteCwd(suite: Suite): Promise<string> {
+	async suiteCwd(suite: Prepare): Promise<string> {
 		const cwd = await realpath(resolve(this.root, suite.cwd));
 		if (!inside(this.root, cwd)) throw new Error("Suite working directory is outside the project");
 		if (!(await stat(cwd)).isDirectory()) throw new Error("Suite cwd is not a directory");
@@ -221,7 +233,7 @@ export class Pipeline {
 	}
 	async configure(input: unknown, confirm?: Confirm): Promise<boolean> {
 		const proposal = validateConfig(input);
-		for (const suite of Object.values(proposal.suites)) await this.suiteCwd(suite);
+		for (const suite of [...Object.values(proposal.suites), ...(proposal.prepare ? [proposal.prepare] : [])]) await this.suiteCwd(suite);
 		if (!confirm) throw new Error("User approval required: no interactive confirmation channel");
 		const release = await this.acquire();
 		try {
@@ -239,6 +251,10 @@ export class Pipeline {
 		const text = await optionalText(join(this.storage, "results.json"));
 		return Object.assign(Object.create(null), text ? JSON.parse(text) : {});
 	}
+	private async preparation(): Promise<RunResult | undefined> {
+		const text = await optionalText(join(this.storage, "prepare.json"));
+		return text === undefined ? undefined : JSON.parse(text);
+	}
 	async status(): Promise<PipelineStatus> {
 		const config = await this.config();
 		if (!config) return { configured: false, suites: {} };
@@ -250,7 +266,9 @@ export class Pipeline {
 			const result = results[name];
 			suites[name] = result ? { ...result, stale: result.changedDuringRun || result.sourceFingerprint !== fingerprint || result.configFingerprint !== configFingerprint || Date.now() - Date.parse(result.finishedAt ?? result.startedAt) > suite.staleAfterMinutes * 60000 } : { outcome: "never", stale: false };
 		}
-		return { configured: true, root: this.root, config, suites, sourceFingerprint: fingerprint, configFingerprint };
+		const preparation = config.prepare ? await this.preparation() : undefined;
+		return { configured: true, root: this.root, config, suites, sourceFingerprint: fingerprint, configFingerprint,
+			...(config.prepare ? { prepare: { ...(preparation ?? { outcome: "never" as const }), stale: false } } : {}) };
 	}
 	async logs(name: string): Promise<{ logPath: string; output: string }> {
 		const result = (await this.results())[name];
@@ -286,40 +304,62 @@ export class Pipeline {
 			} : undefined);
 			const results = await this.results();
 			const completed: RunResult[] = [];
-			for (const name of names) {
-				if (options.signal?.aborted) break;
+			const runStep = async (name: string, step: Prepare, file: string, preparation = false): Promise<RunResult> => {
 				if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
-				const suite = config.suites[name];
-				const cwd = await this.suiteCwd(suite);
+				const cwd = await this.suiteCwd(step);
 				const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
-				if (options.automatic && fingerprint !== automaticStatus?.sourceFingerprint) break; // Edits resumed; wait for another quiet snapshot.
-				if (options.signal?.aborted) break;
 				const result: RunResult = {
 					suite: name, outcome: "running", startedAt: new Date().toISOString(), durationMs: 0, exitCode: null,
 					logPath: join(this.storage, `${name}-${randomUUID()}.log`), output: "", sourceFingerprint: fingerprint,
 					configFingerprint: digest(JSON.stringify(config)), changedDuringRun: false, pid: process.pid,
 				};
-				results[name] = result;
-				await atomicJSON(join(this.storage, "results.json"), results);
+				if (!preparation) results[name] = result;
+				const persist = () => atomicJSON(join(this.storage, file), preparation ? result : results);
+				await persist();
 				options.onChange?.();
 				try {
-					if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
-					await this.execute(suite, cwd, result, options.signal);
+					if (options.signal?.aborted) result.outcome = "cancelled";
+					else if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
+					else await this.execute(step, cwd, result, options.signal);
 				}
 				catch (error) { result.outcome = "failed"; result.output = (result.output + String(error)).slice(-MAX_OUTPUT); }
 				result.finishedAt = new Date().toISOString();
 				result.durationMs = Date.parse(result.finishedAt) - Date.parse(result.startedAt);
-				try { result.changedDuringRun = fingerprint !== await sourceFingerprint(this.root, [this.cacheRoot]); }
+				try {
+					const after = await sourceFingerprint(this.root, [this.cacheRoot]);
+					result.changedDuringRun = fingerprint !== after;
+					if (preparation && result.outcome !== "passed") {
+						// Partial install artifacts must not create an automatic retry loop.
+						result.sourceFingerprint = after;
+						result.changedDuringRun = false;
+					}
+				}
 				catch { result.changedDuringRun = true; }
-				await atomicJSON(join(this.storage, "results.json"), results);
+				await persist();
 				completed.push(result);
 				options.onChange?.();
+				return result;
+			};
+			if (config.prepare && (await this.preparation())?.outcome !== "passed") {
+				const preparation = await runStep("prepare", config.prepare, "prepare.json", true);
+				if (preparation.outcome !== "passed") return completed; // Never run tests after failed/cancelled setup.
+				// Preparation may legitimately generate project inputs before the first test snapshot.
+				if (automaticStatus) automaticStatus.sourceFingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
+			}
+			for (const name of names) {
+				if (options.signal?.aborted) break;
+				if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
+				const suite = config.suites[name];
+				const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
+				if (options.automatic && fingerprint !== automaticStatus?.sourceFingerprint) break; // Edits resumed; wait for another quiet snapshot.
+				if (options.signal?.aborted) break;
+				await runStep(name, suite, "results.json");
 			}
 			if (options.signal?.aborted && !completed.some(result => result.outcome === "cancelled")) throw new Error("Pipeline cancelled before remaining suites could execute; completed results are available in pipeline_status");
 			return completed;
 		} finally { await release(); }
 	}
-	private async execute(suite: Suite, cwd: string, result: RunResult, signal?: AbortSignal): Promise<void> {
+	private async execute(suite: Prepare, cwd: string, result: RunResult, signal?: AbortSignal): Promise<void> {
 		const log = createWriteStream(result.logPath, { mode: 0o600 });
 		await once(log, "open");
 		const child = spawn(suite.command[0], suite.command.slice(1), { cwd, shell: false, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });

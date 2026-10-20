@@ -24,7 +24,11 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 /** One line per suite, truncated to the available terminal width. */
 export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
 	if (!status?.configured || !Object.keys(status.suites).length || width <= 0) return [];
-	return Object.entries(status.suites).map(([name, result]) =>
+	const entries: [string, SuiteStatus][] = [
+		...(status.prepare ? [["prepare", status.prepare] as [string, SuiteStatus]] : []),
+		...Object.entries(status.suites),
+	];
+	return entries.map(([name, result]) =>
 		truncateToWidth(suiteText(name, result, theme, now), width),
 	);
 }
@@ -119,7 +123,7 @@ export class PipelineMonitor {
 	}
 	private arm() {
 		this.clock.clearTimeout(this.timer);
-		const running = Object.values(this.latest?.suites ?? {}).some(suite => suite.outcome === "running");
+		const running = this.latest?.prepare?.outcome === "running" || Object.values(this.latest?.suites ?? {}).some(suite => suite.outcome === "running");
 		let delay = running ? 1000 : 5000;
 		if (this.automation && this.autoWindow && !this.automatic && automaticSuites(this.latest, this.clock.now(), 0).length) {
 			const due = Math.max(this.stableSince + QUIET_MS, this.settledAt + QUIET_MS, this.nextAttemptAt) - this.clock.now();
