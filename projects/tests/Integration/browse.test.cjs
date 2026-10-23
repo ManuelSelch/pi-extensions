@@ -13,7 +13,8 @@ test('browse completes projects → repositories → details → back without mu
   d.selectProjectNext('One'); d.selectRepositoryNext('Backend'); d.backNext(); d.backNext(); d.closeNext();
   await d.send('browse');
   d.thenMenuCount(5); d.thenMenuTitle(0,'Projects');
-  d.thenMenuOption(1,/Backend — Local: ✗ failed · GitHub: ✓ passed/);
+  d.thenMenuOption(1,/^1\. Backend$/);
+  d.thenMenuTitle(1,/Backend\s+│ ✗\s+│ ✓/);
   d.thenMenuTitle(2,/^Backend\n[\s\S]*✗ test[\s\S]*✓ CI/);
   d.thenMenuTitle(4,'Projects'); d.thenReadCount(1); d.thenReaderStopped();
   d.thenNoNotices(); d.thenCatalogueUnchanged(); d.thenNativeDialogSignals();
@@ -56,7 +57,8 @@ test('catalogue refresh discovers newly registered projects without reading unse
 test('per-repository failure does not hide healthy repositories', async t => {
   const d = app(t); d.seedStatusRepositories(2); d.failOneStatus();
   d.selectProjectNext('Many'); d.selectRepositoryNext('repo-0'); d.closeNext();
-  await d.send('browse'); d.thenMenuOption(1,/repo-0 — Local: unavailable/); d.thenMenuOption(1,/repo-1 — Local: ✓ passed/);
+  await d.send('browse'); d.thenMenuOption(1,/^1\. repo-0$/); d.thenMenuOption(1,/^2\. repo-1$/);
+  d.thenMenuTitle(1,/repo-0\s+│ !\s+│ ![\s\S]*repo-1\s+│ ✓\s+│ —/);
   d.thenMenuTitle(2,/Status unavailable: invalid local config/);
 });
 test('browse bounds concurrent status reads to four', async t => {

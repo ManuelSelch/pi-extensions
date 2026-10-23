@@ -132,7 +132,10 @@ function createDriver(t) {
       const choice = options.find(option => option.includes(`. ${name} —`));
       assert.ok(choice, `Missing project ${name}`); return choice;
     }); },
-    selectRepositoryNext(name) { driver.selectProjectNext(name); },
+    selectRepositoryNext(name) { selections.push((_title, options) => {
+      const choice = options.find(option => /^\d+\. /.test(option) && option.slice(option.indexOf('. ') + 2) === name);
+      assert.ok(choice, `Missing repository ${name}`); return choice;
+    }); },
     backNext() { chooseMatching(/^← Back/); },
     closeNext() { chooseMatching(/^Close$/); },
     cancelNext() { selections.push(undefined); },
