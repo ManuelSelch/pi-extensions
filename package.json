@@ -6,7 +6,7 @@
   "description": "Personal Pi coding-agent extensions (loaded from ~/.pi/agent/extensions)",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.cjs projects/tests/Domain/*.test.cjs projects/tests/Integration/*.test.cjs projects/tests/UI/Components/*.test.cjs extension-manager/tests/*.test.cjs"
+    "test": "node scripts/test.cjs"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.85.1",
