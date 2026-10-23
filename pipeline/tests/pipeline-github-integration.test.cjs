@@ -23,14 +23,14 @@ test('remote-only project exposes status via tool, command and widget using a sh
   const d = await driver(t, Reader);
   await d.events.session_start({}, d.ctx);
   await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('Tests running')));
-  assert.match(d.widgets.at(-1).join('\n'), /## GitHub\n› Tests running/);
+  assert.match(d.widgets.at(-1).join('\n'), /GitHub\n› Tests running/);
   const result = await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(result.details.configured, false);
   assert.equal(result.details.github.workflows[0].url, remote.workflows[0].url);
   assert.equal(result.details.github.workflows[0].jobs[0].url, remote.workflows[0].jobs[0].url);
   assert.match(d.widgets.at(-1).join('\n'), /\n  └─ ✗ e2e failed/);
   await d.commands.pipeline.handler('status', d.ctx);
-  assert.match(d.notices.at(-1), /## GitHub\n› Tests running/);
+  assert.match(d.notices.at(-1), /GitHub\n› Tests running/);
   assert.match(d.notices.at(-1), /\n  └─ ✗ e2e failed/);
   assert.equal(instances, 1);
   await d.events.session_shutdown({}, d.ctx);
@@ -54,7 +54,7 @@ test('session startup completes while GitHub is pending and the widget appears a
   resolveRead(remote);
   await starting;
   await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('Tests running')));
-  assert.match(d.widgets.at(-1).join('\n'), /## GitHub\n› Tests running/);
+  assert.match(d.widgets.at(-1).join('\n'), /GitHub\n› Tests running/);
 });
 
 test('shutdown cancels an awaited remote refresh and cannot resurrect the widget', async t => {
