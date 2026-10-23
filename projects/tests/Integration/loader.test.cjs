@@ -9,4 +9,5 @@ test('real Pi loader registers projects and uses the configured agent directory'
   await projects.send('add "My project" "My repository"'); projects.thenRepositoryName('My repository');
   await projects.send('show "My project"'); projects.thenNotice(/My repository/);
   projects.thenCompletion('add "My', ['add "My project"']);
+  await projects.send('status "My project"'); projects.thenNotice(/My repository[\s\S]*Local: not configured/);
 });

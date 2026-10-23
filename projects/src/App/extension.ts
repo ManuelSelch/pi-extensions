@@ -7,13 +7,15 @@ import {
 } from "../Domain/catalogue.ts";
 import { readCatalogue, updateCatalogue } from "../Infra/storage.ts";
 import { resolveRepository } from "../Infra/git.ts";
+import { ProjectStatus } from "./status.ts";
 
-const commands = ["create", "add", "remove", "list", "show", "rename", "delete", "repo-name"];
+const commands = ["create", "add", "remove", "list", "show", "rename", "delete", "repo-name", "status"];
 const usages: Record<string, [number, number, string]> = {
   create: [1, 1, "create <name>"], add: [0, 2, "add [project] [repo-name]"],
   remove: [0, 1, "remove [project]"], list: [0, 0, "list"], show: [1, 1, "show <project>"],
   rename: [2, 2, "rename <project> <new-name>"], delete: [1, 1, "delete <project>"],
   "repo-name": [0, 1, "repo-name [name] (omit name to reset)"],
+  status: [0, 1, "status [project]"],
 };
 function quote(value: string): string {
   return /^[^\s'"\\]+$/.test(value) ? value : `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
@@ -31,12 +33,15 @@ async function pickProject(ctx: ExtensionContext, projects: Project[]): Promise<
 
 export default function projectsExtension(pi: ExtensionAPI): void {
   const file = () => join(getAgentDir(), "projects", "config.json");
+  const status = new ProjectStatus();
+  pi.on("session_start", () => status.stop());
+  pi.on("session_shutdown", () => status.stop());
   pi.registerCommand("projects", {
     description: "Manage virtual project collections and the current repository",
     getArgumentCompletions(prefix) {
       if (!/\s/.test(prefix)) return commands.filter(value => value.startsWith(prefix)).map(value => ({ value, label: value }));
       const match = prefix.match(/^(\S+)\s+([\s\S]*)$/);
-      if (!match || !["add", "remove", "show", "rename", "delete"].includes(match[1])) return null;
+      if (!match || !["add", "remove", "show", "rename", "delete", "status"].includes(match[1])) return null;
       const [, action, input] = match;
       try {
         return readCatalogue(file()).projects
@@ -56,6 +61,10 @@ export default function projectsExtension(pi: ExtensionAPI): void {
         if (action === "list") {
           notify(current.projects.length ? current.projects.map(project => `${project.name} — ${project.repositories.length} repositories`).join("\n") :
             "No projects. Use /projects create <name>.");
+        } else if (action === "status") {
+          const projects = args[0] === undefined ? current.projects : [findProject(current, args[0])];
+          const report = await status.report(current, projects);
+          if (report !== undefined) notify(report);
         } else if (action === "create") {
           let created = "";
           updateCatalogue(file(), data => { created = createProject(data, args[0], randomUUID()).name; });

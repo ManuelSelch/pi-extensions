@@ -179,7 +179,7 @@ test('after-agent automatic execution refreshes widgets only and shutdown cleans
   await events.session_start({}, ctx);
   await events.agent_start({}, ctx); await events.agent_settled({}, ctx);
   await waitFor(async () => (await p.status()).suites.unit.outcome === 'running');
-  assert.ok(widgets.some(lines => lines?.join('\n').includes('running')));
+  await waitFor(() => widgets.some(lines => lines?.join('\n').includes('running')));
   await events.session_shutdown({}, ctx);
   assert.equal((await p.status()).suites.unit.outcome, 'cancelled');
   assert.equal(notifications, 0); assert.equal(confirmations, 0); assert.equal(widgets.at(-1), undefined);

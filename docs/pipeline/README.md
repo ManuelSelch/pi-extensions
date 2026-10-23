@@ -43,6 +43,30 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 
 Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
 
+## TypeScript status API
+
+Other extensions in this repository can import the public `pipeline/api.ts` module instead of calling slash commands or reading private cache files:
+
+```typescript
+import { PipelineStatusReader, type PipelineStatus } from "./pipeline/api.ts";
+
+const reader = new PipelineStatusReader();
+try {
+  const status: PipelineStatus = await reader.read("/path/to/checkout");
+  // status.suites: local outcomes and freshness
+  // status.github: optional remote workflows, jobs and errors
+} finally {
+  reader.stop();
+}
+```
+
+- Own a reader for your consumer's lifecycle to reuse its per-worktree GitHub cache across requests. Stop it on session replacement/shutdown/reload; create a new reader for the next lifecycle. There is no global singleton or automatic polling.
+- `read(cwd)` canonicalizes a checkout or subdirectory to its worktree root. Different worktrees retain separate local results and remote readers. Existing non-Git directories use their own directory as the root; missing paths reject.
+- `read` is read-only: it never executes suites/preparation, changes configuration or approvals, registers UI, or creates local result caches. It does use the existing read-only Git/`gh` status queries. No active Pi session in the target repository is needed.
+- Local status is recomputed per call; remote requests reuse the existing 60-second cache, in-flight deduplication and branch invalidation. Independent reader instances have independent caches. Local configuration/read errors reject; remote-unavailable errors are returned in `status.github.error`. Non-GitHub or unsupported branch selections omit `github`.
+- `stop()` is idempotent, aborts remote requests and releases remote readers. Further reads and in-flight reads that reach their completion after disposal reject with a stopped-reader error. Local filesystem status reads already underway are not cancellable, but their late results are discarded.
+- The API re-exports local/remote status types. It does not aggregate outcomes into a combined pass/fail policy. The pipeline tool, slash command and widget use this same API.
+
 ## Automatic GitHub Actions status
 
 No setup or pipeline configuration is needed. In a checkout with a `github.com` Git remote, the extension uses the installed `gh` CLI and its existing authentication (`gh auth login`). Prefer `origin` when multiple GitHub remotes exist; HTTPS, SCP-style SSH and `ssh://git@github.com/` URLs are supported. GitHub Enterprise hosts and detached HEAD checkouts are not supported in this minimal version.
@@ -53,15 +77,15 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 ## GitHub
 ✓ Server package passed 32m ago
 ✗ Tests failed 29m ago
-  ✓ build passed
-  ✓ unit passed
-  ✗ e2e failed
-  ○ sonar skipped
+  ├─ ✓ build passed
+  ├─ ✓ unit passed
+  ├─ ✗ e2e failed
+  └─ ○ sonar skipped
 › Deploy running 1m ago
 ```
 
 - Show the latest run **per workflow on the current branch**, even if it tested an older commit. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
-- Rows are grouped under one `## Local` and one `## GitHub` heading; empty sections are hidden. Indented job rows show all jobs from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
+- Rows are grouped under one `## Local` and one `## GitHub` heading; empty sections are hidden. Tree-nested job rows (`├─` / `└─`) show all jobs from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
 - Remote rows also appear when `.pi/pipeline.json` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
 - The initial monitor refresh runs in the background: opening a session does not wait for source scanning or GitHub requests. The widget appears when status is ready; shutdown still cancels pending remote requests.
 - While a UI session is open, the existing monitor refreshes remote data at most once per 60 seconds. Branch/repository changes invalidate that cache. Status commands/tools share the same session cache; they do not force a network fetch within its lifetime.

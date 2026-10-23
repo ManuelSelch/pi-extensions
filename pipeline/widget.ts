@@ -23,7 +23,7 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 }
 // Workflow names come from remote content; never emit terminal control sequences.
 const safeText = (value: string) => value.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
-function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, job = false): string {
+function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, branch?: "├─" | "└─"): string {
 	const state = workflow.status === "completed" ? workflow.conclusion ?? "unknown" : workflow.status;
 	const states: Record<string, [string, Parameters<Theme["fg"]>[0], string]> = {
 		success: ["✓", "success", "passed"], failure: ["✗", "error", "failed"],
@@ -34,8 +34,8 @@ function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<
 	};
 	const [symbol, color, label] = Object.hasOwn(states, state) ? states[state] : ["○", "warning" as const, state.replace(/_/g, " ")];
 	const elapsed = workflow.updatedAt && Number.isFinite(Date.parse(workflow.updatedAt)) ? ` ${age(workflow.updatedAt, now)} ago` : "";
-	return theme.fg(color, job
-		? `  ${symbol} ${safeText(workflow.name)} ${safeText(label)}`
+	return theme.fg(color, branch
+		? `  ${branch} ${symbol} ${safeText(workflow.name)} ${safeText(label)}`
 		: `${symbol} ${safeText(workflow.name)} ${safeText(label)}${elapsed}`);
 }
 /** One line per local suite / remote workflow, truncated to the available terminal width. */
@@ -52,8 +52,13 @@ export function renderWidget(status: PipelineStatus | undefined, theme: Pick<The
 	if (status.github?.error) lines.push(theme.fg("warning", status.github.error));
 	else for (const workflow of status.github?.workflows ?? []) {
 		lines.push(githubText(workflow, theme, now));
-		if (workflow.jobsError) lines.push(theme.fg("warning", `  ⚠ ${safeText(workflow.jobsError)}`));
-		else for (const job of workflow.jobs ?? []) lines.push(githubText(job, theme, now, true));
+		if (workflow.jobsError) lines.push(theme.fg("warning", `  └─ ⚠ ${safeText(workflow.jobsError)}`));
+		else {
+			const jobs = workflow.jobs ?? [];
+			for (const [index, job] of jobs.entries()) {
+				lines.push(githubText(job, theme, now, index === jobs.length - 1 ? "└─" : "├─"));
+			}
+		}
 	}
 	return lines.map(line => truncateToWidth(line, width));
 }

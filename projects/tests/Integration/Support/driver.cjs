@@ -10,7 +10,18 @@ function createDriver(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const load = loader({ '@earendil-works/pi-coding-agent': { getAgentDir: () => path.join(root, 'agent') } });
   const source = name => path.resolve(__dirname, '../../../src', name);
-  let store, git, command;
+  let store, git, command, pipeline;
+  const events = new Map();
+  const readers = [], reads = [];
+  let response = async () => ({ configured: false, suites: {} });
+  const statusLoad = loader({
+    '@earendil-works/pi-coding-agent': { getAgentDir: () => path.join(root, 'agent') },
+    '../../../pipeline/api.ts': { PipelineStatusReader: class {
+      constructor() { readers.push(this); this.stopped = false; }
+      read(path) { reads.push(path); return response(path); }
+      stop() { this.stopped = true; }
+    } },
+  });
   const notices = [], selections = [];
   let confirmation = true, cwd = root;
   const run = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -19,7 +30,53 @@ function createDriver(t) {
   const driver = {
     loadInfrastructure() { store = load(source('Infra/storage.ts')); git = load(source('Infra/git.ts')); },
     registerCommands() {
-      load(source('App/extension.ts')).default({ registerCommand(name, value) { assert.equal(name, 'projects'); command = value; } });
+      statusLoad(source('App/extension.ts')).default({
+        registerCommand(name, value) { assert.equal(name, 'projects'); command = value; },
+        on(name, handler) { events.set(name, handler); },
+      });
+    },
+    useRealPipeline() { pipeline = new (load(source('Infra/pipeline.ts')).ProjectPipelineReader)(); t.after(() => pipeline.stop()); },
+    async thenLocalOnlyStatus() {
+      const result = await pipeline.read(repo);
+      assert.equal(result.configured, false); assert.deepEqual(result.suites, {}); assert.equal(result.github, undefined);
+    },
+    async thenMissingCheckoutFails() { await assert.rejects(pipeline.read(path.join(root, 'missing')), /ENOENT/); },
+    async thenConfiguredSuiteNeverRan() {
+      fs.mkdirSync(path.join(repo, '.pi'));
+      fs.writeFileSync(path.join(repo, '.pi/pipeline.json'), JSON.stringify({ version: 1, suites: { test: { command: ['do-not-execute'] } } }));
+      const result = await pipeline.read(repo);
+      assert.equal(result.configured, true); assert.equal(result.suites.test.outcome, 'never');
+    },
+    failOneStatus() { response = async checkout => {
+      if (checkout.endsWith('repo-0')) throw new Error('invalid local config');
+      return { configured: true, suites: { test: { outcome: 'passed', stale: false } } };
+    }; },
+    removeCheckout() { fs.rmSync(repo, { recursive: true, force: true }); },
+    respondWithStatus(value) { response = async () => value; },
+    failStatus(message) { response = async () => { throw new Error(message); }; },
+    thenReadCount(count) { assert.equal(reads.length, count); },
+    thenDefaultCheckoutRead() { assert.equal(reads.at(-1), fs.realpathSync(repo)); },
+    async lifecycle(name) { await events.get(name)?.({}, {}); },
+    thenReaderStopped() { assert.ok(readers.at(-1).stopped); },
+    holdStatus() {
+      let release, entered;
+      const started = new Promise(resolve => { entered = resolve; });
+      const pending = new Promise(resolve => { release = resolve; });
+      response = async () => { entered(); return pending; };
+      driver.waitForStatus = () => started;
+      driver.releaseStatus = () => release({ configured: false, suites: {} });
+    },
+    seedStatusRepositories(count) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const repositories = Array.from({ length: count }, (_, i) => ({ identity: path.join(root, `git-${i}`), name: `repo-${i}`, path: path.join(root, `repo-${i}`) }));
+      for (const repository of repositories) fs.mkdirSync(repository.path);
+      fs.writeFileSync(file, JSON.stringify({ version: 1, repositories, projects: [{ id: 'many', name: 'Many', repositories: repositories.map(r => r.identity) }] }));
+    },
+    async thenReadsAreBounded() {
+      let active = 0, maximum = 0;
+      response = async () => { active++; maximum = Math.max(maximum, active); await new Promise(resolve => setImmediate(resolve)); active--; return { configured: false, suites: {} }; };
+      await driver.send('status');
+      assert.equal(maximum, 4); assert.equal(reads.length, 9);
     },
     async registerWithPiLoader() {
       const previous = process.env.PI_CODING_AGENT_DIR;
