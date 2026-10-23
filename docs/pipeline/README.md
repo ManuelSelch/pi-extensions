@@ -4,7 +4,7 @@ Provides native-confirmed local test configuration, manual execution, persisted 
 
 ## Usage
 
-Reload Pi after installing `pipeline.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the before/after popup. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
+Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the before/after popup. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
 
 ```json
 {
@@ -159,10 +159,10 @@ An abrupt crash can leave a lock and a last result marked running. Inspect the l
 ## Verification
 
 ```sh
-node --test tests/pipeline*.test.cjs
+npm test -- pipeline
 npm test
 npm run typecheck
-pi --no-extensions -e ./pipeline.ts --help
+pi --no-extensions -e ./pipeline/index.ts --help
 ```
 
 See [requirements and implementation slices](REQUIREMENTS.md).

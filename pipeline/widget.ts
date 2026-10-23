@@ -47,8 +47,11 @@ export function renderWidget(status: PipelineStatus | undefined, theme: Pick<The
 	];
 	const lines = status.configured && Object.keys(status.suites).length
 		? entries.map(([name, result]) => suiteText(name, result, theme, now)) : [];
-	if (lines.length) lines.unshift(theme.fg("accent", "## Local"));
-	if (status.github?.error || status.github?.workflows.length) lines.push(theme.fg("accent", "## GitHub"));
+	const hasGitHubSection = status.github?.error || status.github?.workflows.length;
+	if (hasGitHubSection) {
+		if (lines.length) lines.unshift(theme.fg("muted", "Local"));
+		lines.push(theme.fg("muted", "GitHub"));
+	}
 	if (status.github?.error) lines.push(theme.fg("warning", status.github.error));
 	else for (const workflow of status.github?.workflows ?? []) {
 		lines.push(githubText(workflow, theme, now));

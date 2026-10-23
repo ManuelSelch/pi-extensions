@@ -11,6 +11,9 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["*.ts"],
-  "exclude": ["node_modules", "pi-chat.ts"]
+  "include": ["*.ts", "*/**/*.ts"],
+  "exclude": [
+    "node_modules", "**/node_modules", "**/tests", "mockups", "pi-chat.ts",
+    "agentic-flow", "claude-auth", "dot-clean", "pdf", "session-cleanup", "thinking-toggle"
+  ]
 }
