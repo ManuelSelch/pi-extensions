@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Projects browse · Interaction preview</title><link rel="stylesheet" href="./styles.css"></head>
+<body>
+<main class="review">
+  <div class="review-bar"><div><span class="eyebrow">INTERACTION PREVIEW · REVISION 1</span><h1>One overview. Two interfaces.</h1></div><nav aria-label="Preview interface"><a href="?view=chat" data-view="chat">Pi Chat</a><a href="?view=terminal" data-view="terminal">Terminal</a></nav></div>
+  <p class="intro">Browse registered projects, inspect pipelines, and get back to your conversation. All data is simulated.</p>
+  <section class="workspace" aria-label="Simulated Pi workspace">
+    <header class="workspace-header"><strong id="host-title">Pi Chat</strong><span>extensions / feat-projects-status</span><span class="connected">● Connected</span></header>
+    <div class="transcript"><p class="role">YOU</p><p>Show me the projects and their pipelines.</p><div class="command">/projects browse</div></div>
+    <div class="composer"><label for="composer">Message Pi</label><input id="composer" placeholder="Continue the conversation…"><button id="open">Open projects</button></div>
+    <div class="scrim" id="scrim"><dialog open id="popup" aria-labelledby="popup-title" aria-describedby="popup-scope">
+      <header class="dialog-header"><div><div class="title-line"><h2 id="popup-title">Projects</h2><span id="counts" class="count"></span></div><p id="popup-scope">Local pipelines & GitHub Actions · registered checkouts</p></div><button id="close" class="icon" aria-label="Close projects">×</button></header>
+      <div class="toolbar"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="Search projects and repositories" placeholder="Search projects or repositories…" autocomplete="off"><kbd>/</kbd></label><button id="refresh">↻ <span>Refresh</span></button></div>
+      <div class="columns" id="columns"><span>PROJECT / REPOSITORY</span><div><span>LOCAL</span><span>GITHUB</span></div></div>
+      <div id="viewport" class="viewport" tabindex="0" aria-label="Projects and repository rows"></div>
+      <footer><span id="progress" role="status" aria-live="polite">Snapshot ready</span><span class="cache-note">GitHub cache ≤60s</span></footer>
+      <div class="hints"><span><kbd>↑↓</kbd> Navigate</span><span><kbd>Enter</kbd> Expand / details</span><span><kbd>/</kbd> Search</span><span><kbd>r</kbd> Refresh</span><span><kbd>Esc</kbd> Back / close</span></div>
+    </dialog></div>
+  </section>
+  <div class="review-bottom"><p>Try search, project collapse, repository details and refresh. Resize for a narrow layout.</p><div class="states"><span>Preview states:</span><a href="?state=populated">Populated</a><a href="?state=loading">Loading</a><a href="?state=error">Error</a><a href="?state=empty">Empty</a></div><p id="approximation">Pi Chat approximation. Production will use the existing Mantine dialog and composer-focus conventions.</p></div>
+</main><script type="module" src="./main.js"></script>
+</body></html>
