@@ -23,7 +23,7 @@ test('shows local and remote status through the pipeline API', async t => {
   const d = app(t); d.createRepository(); await d.send('create One'); await d.send('add One');
   d.respondWithStatus({ configured: true, suites: { test: { outcome: 'failed', stale: true } },
     github: { repository: 'o/r', branch: 'main', workflows: [{ name: 'CI', status: 'completed', conclusion: 'success', jobs: [{ name: 'unit', status: 'queued' }] }] } });
-  await d.send('status One', false); d.thenNotice(/test: failed \(stale\)[\s\S]*CI: passed[\s\S]*unit: queued/);
+  await d.send('status One', false); d.thenNotice(/⚠ test stale \(✗\)[\s\S]*✓ CI[\s\S]*○ unit queued/);
 });
 test('repository errors and missing paths do not abort the remaining report', async t => {
   const d = app(t); d.createRepository(); await d.send('create Broken'); await d.send('add Broken'); await d.send('create Empty');
@@ -33,7 +33,7 @@ test('repository errors and missing paths do not abort the remaining report', as
 });
 test('keeps healthy repository statuses when another repository fails', async t => {
   const d = app(t); d.seedStatusRepositories(2); d.failOneStatus();
-  await d.send('status'); d.thenNotice(/repo-0[\s\S]*unavailable: invalid local config[\s\S]*repo-1[\s\S]*test: passed/);
+  await d.send('status'); d.thenNotice(/repo-0[\s\S]*unavailable: invalid local config[\s\S]*repo-1[\s\S]*✓ test/);
 });
 test('bounds concurrent API reads', async t => {
   const d = app(t); d.seedStatusRepositories(9); await d.thenReadsAreBounded();

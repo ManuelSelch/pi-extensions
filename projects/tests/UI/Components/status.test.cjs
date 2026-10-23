@@ -20,16 +20,28 @@ test('renders status details without checkout paths or workflow/job URLs', () =>
       jobs: [{ name: 'unit', status: 'in_progress', url: 'https://example/job' }],
     }, { name: 'Deploy', status: 'never', jobsError: 'jobs unavailable' }] },
   });
-  for (const expected of ['prepare: passed', 'test: failed (stale)', 'lint: never', 'GitHub: owner/repo · main',
-    'Tests: failed', 'unit: running', 'Deploy: never', 'jobs unavailable']) assert.ok(text.includes(expected), text);
+  for (const expected of ['✓ prepare', '⚠ test stale (✗)', '○ lint never', 'GitHub: owner/repo · main',
+    '✗ Tests', '› unit running', '○ Deploy never', 'jobs unavailable']) assert.ok(text.includes(expected), text);
   assert.ok(!text.includes('/checkouts/repo'), text);
   assert.ok(!text.includes('https://'), text);
+});
+test('uses pipeline symbols for local outcomes and never treats unknown remote states as success', () => {
+  const format = render();
+  for (const [outcome, expected] of [['passed', '✓ test'], ['failed', '✗ test'], ['running', '› test running'],
+    ['cancelled', '■ test cancelled'], ['timed-out', '⌛ test timed out']]) {
+    assert.ok(format('Repo', { configured: true, suites: { test: { outcome, stale: false } } }).includes(expected));
+  }
+  assert.match(format('Repo', { configured: true, suites: { test: { outcome: 'passed', stale: true } } }), /⚠ test stale \(✓\)/);
+  const unknown = format('Repo', { configured: false, suites: {}, github: { repository: 'o/r', branch: 'main',
+    workflows: [{ name: 'CI', status: 'completed', conclusion: 'action_required', jobs: [{ name: 'unit', status: 'completed', conclusion: 'failure' }] }] } });
+  assert.match(unknown, /○ CI action required/); assert.match(unknown, /✗ unit/); assert.doesNotMatch(unknown, /✓/);
 });
 test('keeps local results on remote errors and strips terminal controls from all supplied text', () => {
   const text = render()('Repo\x1b', { configured: true, suites: { test: { outcome: 'passed', stale: false } },
     github: { repository: 'o/r', branch: 'main', error: 'auth\x1b failed', workflows: [] } });
-  assert.match(text, /test: passed/);
+  assert.match(text, /✓ test/);
   assert.match(text, /GitHub unavailable: auth failed/);
   assert.ok(!text.includes('\x1b'));
-  assert.match(render()('Repo', { configured: false, suites: {}, github: { repository: 'o/r', branch: 'main', workflows: [] } }), /no workflows/);
+  const empty = render()('Repo', { configured: false, suites: {}, github: { repository: 'o/r', branch: 'main', workflows: [] } });
+  assert.doesNotMatch(empty, /GitHub|no workflows|o\/r|main/);
 });

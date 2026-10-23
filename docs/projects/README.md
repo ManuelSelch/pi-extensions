@@ -47,7 +47,7 @@ Keep custom names single-line and at most 200 characters. Catalogue size is limi
 
 ## Pipeline status
 
-`/projects status [project]` reads each repository's registered default checkout through the public pipeline API. Reports include local preparation and named suites (including never-run and stale results), plus available GitHub workflow and job names and outcomes. Checkout paths and run/job URLs are omitted to keep the report compact. Unconfigured local pipelines, absent remote data and errors are explicit; one failed repository does not hide the others.
+`/projects status [project]` reads each repository's registered default checkout through the public pipeline API. Reports include local preparation and named suites (including never-run and stale results), plus available GitHub workflow and job names and outcomes. Checkout paths and run/job URLs are omitted to keep the report compact. Empty GitHub workflow sections are hidden; GitHub errors remain visible. Status rows use pipeline symbols: ✓ passed, ✗ failed, ⚠ stale (with the previous outcome), plus running/queued/cancelled indicators. Unconfigured local pipelines, absent remote data and errors are explicit; one failed repository does not hide the others.
 
 This is an on-demand, read-only report: it never executes tests, installs dependencies or requests approvals. Shared repositories are read once per report, with up to four reads in parallel. Remote data uses the pipeline API's session cache (60 seconds) and current branch; it is not matched against local commits. GitHub requires installed/authenticated `gh`. GitLab is not supported by the API today.
 
