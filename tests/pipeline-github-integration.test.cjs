@@ -83,9 +83,9 @@ test('session replacement disposes the previous status reader and creates a fres
   class Reader { constructor() { created++; } async read() { return remote; } stop() { stopped++; } }
   const d = await driver(t, Reader);
   await d.events.session_start({}, d.ctx);
-  assert.equal(created, 1);
+  await waitFor(() => created === 1);
   await d.events.session_start({}, d.ctx);
-  assert.equal(created, 2);
+  await waitFor(() => created === 2);
   assert.equal(stopped, 1);
   const result = await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(result.details.github.repository, 'owner/repo');
