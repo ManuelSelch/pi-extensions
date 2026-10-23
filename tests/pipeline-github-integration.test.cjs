@@ -22,14 +22,14 @@ test('remote-only project exposes status via tool, command and widget using a sh
   class Reader { constructor() { instances++; } async read() { return remote; } stop() { stopped++; } }
   const d = await driver(t, Reader);
   await d.events.session_start({}, d.ctx);
-  assert.match(d.widgets.at(-1).join('\n'), /GitHub · Tests running/);
+  assert.match(d.widgets.at(-1).join('\n'), /## GitHub\n› Tests running/);
   const result = await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(result.details.configured, false);
   assert.equal(result.details.github.workflows[0].url, remote.workflows[0].url);
   assert.equal(result.details.github.workflows[0].jobs[0].url, remote.workflows[0].jobs[0].url);
   assert.match(d.widgets.at(-1).join('\n'), /\n  ✗ e2e failed/);
   await d.commands.pipeline.handler('status', d.ctx);
-  assert.match(d.notices.at(-1), /GitHub · Tests running/);
+  assert.match(d.notices.at(-1), /## GitHub\n› Tests running/);
   assert.match(d.notices.at(-1), /\n  ✗ e2e failed/);
   assert.equal(instances, 1);
   await d.events.session_shutdown({}, d.ctx);

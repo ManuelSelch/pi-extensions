@@ -48,18 +48,20 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "ma
 No setup or pipeline configuration is needed. In a checkout with a `github.com` Git remote, the extension uses the installed `gh` CLI and its existing authentication (`gh auth login`). Prefer `origin` when multiple GitHub remotes exist; HTTPS, SCP-style SSH and `ssh://git@github.com/` URLs are supported. GitHub Enterprise hosts and detached HEAD checkouts are not supported in this minimal version.
 
 ```text
+## Local
 ✓ unit 3m ago
-✓ GitHub · Server package passed 32m ago
-✗ GitHub · Tests failed 29m ago
+## GitHub
+✓ Server package passed 32m ago
+✗ Tests failed 29m ago
   ✓ build passed
   ✓ unit passed
   ✗ e2e failed
   ○ sonar skipped
-› GitHub · Deploy running 1m ago
+› Deploy running 1m ago
 ```
 
 - Show the latest run **per workflow on the current branch**, even if it tested an older commit. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
-- Indented job rows show all jobs from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
+- Rows are grouped under one `## Local` and one `## GitHub` heading; empty sections are hidden. Indented job rows show all jobs from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
 - Remote rows also appear when `.pi/pipeline.json` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
 - While a UI session is open, the existing monitor refreshes remote data at most once per 60 seconds. Branch/repository changes invalidate that cache. Status commands/tools share the same session cache; they do not force a network fetch within its lifetime.
 - Missing CLI, authentication/access problems and network failures produce a concise remote-unavailable row, without hiding local results. Failed refreshes replace prior remote success, rather than presenting old cached results as a successful fetch. Requests use a 10-second per-process timeout, 15-second overall remote-fetch deadline and bounded output.

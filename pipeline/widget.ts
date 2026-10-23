@@ -36,7 +36,7 @@ function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<
 	const elapsed = workflow.updatedAt && Number.isFinite(Date.parse(workflow.updatedAt)) ? ` ${age(workflow.updatedAt, now)} ago` : "";
 	return theme.fg(color, job
 		? `  ${symbol} ${safeText(workflow.name)} ${safeText(label)}`
-		: `${symbol} GitHub · ${safeText(workflow.name)} ${safeText(label)}${elapsed}`);
+		: `${symbol} ${safeText(workflow.name)} ${safeText(label)}${elapsed}`);
 }
 /** One line per local suite / remote workflow, truncated to the available terminal width. */
 export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
@@ -47,6 +47,8 @@ export function renderWidget(status: PipelineStatus | undefined, theme: Pick<The
 	];
 	const lines = status.configured && Object.keys(status.suites).length
 		? entries.map(([name, result]) => suiteText(name, result, theme, now)) : [];
+	if (lines.length) lines.unshift(theme.fg("accent", "## Local"));
+	if (status.github?.error || status.github?.workflows.length) lines.push(theme.fg("accent", "## GitHub"));
 	if (status.github?.error) lines.push(theme.fg("warning", status.github.error));
 	else for (const workflow of status.github?.workflows ?? []) {
 		lines.push(githubText(workflow, theme, now));

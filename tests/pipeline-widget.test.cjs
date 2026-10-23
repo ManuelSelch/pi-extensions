@@ -20,10 +20,10 @@ test('remote-only widget shows latest outcomes without local configuration or fr
     { name: 'Build', status: 'in_progress' }, { name: 'Lint', status: 'queued' }, { name: 'Unused', status: 'never' },
   ] } };
   const text = renderWidget(status, plain, 120, now).join('\n');
-  assert.match(text, /✓ GitHub · Tests passed 1h ago/);
-  assert.match(text, /› GitHub · Build running/);
-  assert.match(text, /GitHub · Lint queued/);
-  assert.match(text, /GitHub · Unused never/);
+  assert.match(text, /## GitHub\n✓ Tests passed 1h ago/);
+  assert.match(text, /› Build running/);
+  assert.match(text, /Lint queued/);
+  assert.match(text, /Unused never/);
   assert.doesNotMatch(text, /stale|HEAD|local changes/);
   status.github.workflows = [];
   assert.equal(renderWidget(status, plain, 120, now).length, 0);
@@ -38,7 +38,8 @@ test('remote errors do not hide local suites and unknown conclusions never use s
   for (const conclusion of ['failure', 'cancelled', 'skipped', 'timed_out', 'neutral', 'action_required', 'unknown']) {
     colors.length = 0;
     const remote = { configured: false, suites: {}, github: { workflows: [{ name: 'Tests', status: 'completed', conclusion }] } };
-    assert.ok(renderWidget(remote, theme, 120, now)[0].includes('GitHub · Tests'));
+    assert.equal(renderWidget(remote, theme, 120, now)[0], '## GitHub');
+    assert.ok(renderWidget(remote, theme, 120, now)[1].includes('Tests'));
     assert.equal(colors.includes('success'), false);
     assert.ok(renderWidget(remote, theme, 5, now).every(line => require('@earendil-works/pi-tui').visibleWidth(line) <= 5));
   }
@@ -61,7 +62,7 @@ test('jobs render below their workflow with status, matrix names and no repeated
     { name: 'Deploy', status: 'queued', jobs: [] },
   ] } };
   const lines = renderWidget(status, theme, 120, now);
-  assert.equal(lines.join('\n'), '✗ GitHub · Tests failed 1m ago\n  ✓ build (node 24) passed\n  ✗ e2e failed\n  ○ sonar skipped\n  › unit running\n  ○ lint queued\n  ○ unknown future\n○ GitHub · Deploy queued');
+  assert.equal(lines.join('\n'), '## GitHub\n✗ Tests failed 1m ago\n  ✓ build (node 24) passed\n  ✗ e2e failed\n  ○ sonar skipped\n  › unit running\n  ○ lint queued\n  ○ unknown future\n○ Deploy queued');
   assert.ok(colors.some(([color, text]) => color === 'error' && text.includes('e2e')));
   assert.equal(colors.some(([color, text]) => color === 'success' && text.includes('unknown')), false);
   jobs[0].name = 'build\x1b[31m\n漢字';
@@ -78,13 +79,13 @@ test('job-fetch warning keeps workflow status and local rows visible', () => {
   const status = { configured: true, suites: { unit: result('passed') }, github: { workflows: [
     { name: 'Tests', status: 'completed', conclusion: 'failure', jobsError: 'Jobs unavailable: check connection and repository access.' },
   ] } };
-  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '✓ unit 3m ago\n✗ GitHub · Tests failed\n  ⚠ Jobs unavailable: check connection and repository access.');
+  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '## Local\n✓ unit 3m ago\n## GitHub\n✗ Tests failed\n  ⚠ Jobs unavailable: check connection and repository access.');
 });
 
 test('each suite gets its own line with age, outcome and stale previous pass', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: result('passed'), integration: result('failed', 12), e2e: { outcome: 'never', stale: false } } };
-  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '✓ unit 3m ago\n✗ integration 12m ago\n○ e2e never');
+  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '## Local\n✓ unit 3m ago\n✗ integration 12m ago\n○ e2e never');
   status.suites.unit.stale = true;
   const colors = [];
   const theme = { fg: (color, text) => { colors.push([color, text]); return text; } };
