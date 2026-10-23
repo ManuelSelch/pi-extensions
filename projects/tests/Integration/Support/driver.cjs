@@ -22,7 +22,13 @@ function createDriver(t) {
       stop() { this.stopped = true; }
     } },
   });
-  const notices = [], selections = [];
+  const notices = [], selections = [], menus = [];
+  const chooseMatching = (pattern, before) => selections.push(async (_title, options) => {
+    before?.();
+    const choice = options.find(option => pattern.test(option));
+    assert.ok(choice, `Missing option ${pattern}: ${options.join('; ')}`);
+    return choice;
+  });
   let confirmation = true, cwd = root;
   const run = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const repo = path.join(root, 'repo');
@@ -58,6 +64,7 @@ function createDriver(t) {
     thenDefaultCheckoutRead() { assert.equal(reads.at(-1), fs.realpathSync(repo)); },
     async lifecycle(name) { await events.get(name)?.({}, {}); },
     thenReaderStopped() { assert.ok(readers.at(-1).stopped); },
+    thenActiveReaderCount(count) { assert.equal(readers.filter(reader => !reader.stopped).length, count); },
     holdStatus() {
       let release, entered;
       const started = new Promise(resolve => { entered = resolve; });
@@ -121,12 +128,68 @@ function createDriver(t) {
       assert.deepEqual(fs.readdirSync(path.dirname(file)), ['config.json']);
     },
     selectNext(value) { selections.push(value); },
+    selectProjectNext(name) { selections.push((_title, options) => {
+      const choice = options.find(option => option.includes(`. ${name} —`));
+      assert.ok(choice, `Missing project ${name}`); return choice;
+    }); },
+    selectRepositoryNext(name) { driver.selectProjectNext(name); },
+    backNext() { chooseMatching(/^← Back/); },
+    closeNext() { chooseMatching(/^Close$/); },
+    cancelNext() { selections.push(undefined); },
+    refreshNext() { chooseMatching(/^↻ Refresh/); },
+    removeProjectThenRefreshNext(name) { chooseMatching(/^↻ Refresh/, () => {
+      const data = JSON.parse(fs.readFileSync(file));
+      data.projects = data.projects.filter(project => project.name !== name);
+      fs.writeFileSync(file, JSON.stringify(data));
+    }); },
+    unlinkRepositoryThenRefreshNext() { chooseMatching(/^↻ Refresh/, () => {
+      const data = JSON.parse(fs.readFileSync(file));
+      data.projects.forEach(project => { project.repositories = []; });
+      fs.writeFileSync(file, JSON.stringify(data));
+    }); },
+    addProjectThenRefreshNext(name) { chooseMatching(/^↻ Refresh/, () => {
+      const data = JSON.parse(fs.readFileSync(file));
+      data.projects.push({ id: name, name, repositories: [] });
+      fs.writeFileSync(file, JSON.stringify(data));
+    }); },
+    failNextMenu() { selections.push(() => { throw new Error('native dialog failed'); }); },
+    corruptCatalogueThenRefreshNext() { chooseMatching(/^↻ Refresh/, () => fs.writeFileSync(file, '{broken')); },
+    holdNextMenu(ignoreSignal = false) {
+      let entered;
+      const started = new Promise(resolve => { entered = resolve; });
+      selections.push((_title, _options, opts) => new Promise(resolve => {
+        entered();
+        if (!ignoreSignal) opts?.signal?.addEventListener('abort', () => resolve(undefined), { once: true });
+        t.after(() => resolve(undefined));
+      }));
+      driver.waitForMenu = () => started;
+    },
+    preserveCatalogue() { driver.catalogueBefore = fs.readFileSync(file, 'utf8'); },
+    thenCatalogueUnchanged() { assert.equal(fs.readFileSync(file, 'utf8'), driver.catalogueBefore); },
+    thenMenuCount(count) { assert.equal(menus.length, count); },
+    thenMenuTitle(index, expected) {
+      if (expected instanceof RegExp) assert.match(menus[index]?.title ?? '', expected);
+      else assert.equal(menus[index]?.title, expected);
+    },
+    thenMenuOption(index, pattern) { assert.ok(menus[index]?.options.some(option => pattern.test(option)), JSON.stringify(menus)); },
+    thenNativeDialogSignals() { assert.ok(menus.length); assert.ok(menus.every(menu => menu.signal instanceof AbortSignal)); },
+    thenReadCountForSharedRepositories(count) { assert.equal(new Set(reads).size, count); assert.equal(reads.length, count); },
+    async thenBrowseReadsAreBounded() {
+      let active = 0, maximum = 0;
+      response = async () => { active++; maximum = Math.max(maximum, active); await new Promise(resolve => setImmediate(resolve)); active--; return { configured: false, suites: {} }; };
+      driver.selectProjectNext('Many'); driver.closeNext(); await driver.send('browse');
+      assert.equal(maximum, 4); assert.equal(reads.length, 9);
+    },
     confirmNext(value) { confirmation = value; },
     async send(input, interactive = true) {
       notices.length = 0;
       await command.handler(input, { cwd, hasUI: interactive, ui: {
         notify(message, level) { notices.push({ message, level }); },
-        async select(_title, options) { const choice = selections.shift(); return typeof choice === 'number' ? options[choice] : choice; },
+        async select(title, options, opts) {
+          menus.push({ title, options: [...options], signal: opts?.signal });
+          const choice = selections.shift();
+          return typeof choice === 'function' ? choice(title, options, opts) : typeof choice === 'number' ? options[choice] : choice;
+        },
         async confirm() { return confirmation; },
       } });
     },

@@ -12,6 +12,7 @@ A global catalogue of named, virtual collections of Git repositories. Reload Pi 
 | `/projects remove [project]` | Unlink the current repository |
 | `/projects show <project>` | List repository names and checkout paths |
 | `/projects status [project]` | Show local pipeline and available GitHub Actions status; omit project for all collections |
+| `/projects browse` | Browse projects, repository status and pipeline details through native select menus |
 | `/projects rename <project> <new-name>` | Rename a collection without changing its identity |
 | `/projects delete <project>` | Confirm deletion of the collection only |
 | `/projects repo-name [name]` | Rename the current repository; omit name to reset its default |
@@ -26,7 +27,7 @@ Example, from a repository session:
 /projects show "Pi ecosystem"
 ```
 
-Omitting a project for `add` opens the native project picker; for `remove`, the picker contains only current memberships. Cancellation changes nothing. Unknown projects are not created implicitly. Deletion requires an interactive confirmation. Native dialogs can be forwarded by clients that support Pi extension UI; this MVP does not add a custom Pi Chat popup.
+Omitting a project for `add` opens the native project picker; for `remove`, the picker contains only current memberships. Cancellation changes nothing. Unknown projects are not created implicitly. Deletion requires an interactive confirmation. Native dialogs can be forwarded by clients that support Pi extension UI, including Pi Chat. Browsing reuses these existing dialogs; it adds no custom terminal overlay or Pi Chat component.
 
 ## Repository identity
 
@@ -53,6 +54,17 @@ This is an on-demand, read-only report: it never executes tests, installs depend
 
 Status is worktree-specific: it reads the registered checkout, not every linked worktree or the current session checkout. Use `/projects show <project>` to see checkout paths. Missing/moved paths are reported without automatically repairing catalogue entries. Readers stop on session replacement/shutdown; obsolete in-flight reports are discarded.
 
+## Native project browser
+
+Run `/projects browse` for **Projects → repositories → pipeline details**. The populated Projects menu is simply titled **Projects**, with no explanatory subtitle. Project rows show repository counts; repository rows show separate local and GitHub summaries. Numbers disambiguate duplicate display names. Only repositories belonging to registered projects appear; retained unlinked repository records are excluded.
+
+- Select a project to read its repositories' completed status snapshot, then select a repository for preparation, suite, workflow and job details. Shared repositories reuse their completed snapshot until refresh. Reads are bounded to four concurrent repositories.
+- **Back** or **Escape/Cancel** returns one level; cancelling at Projects closes. **Close** exits from any menu. Use the host's native arrows/Enter controls; Pi Chat also provides its existing pointer and Cancel/OK controls.
+- **Refresh catalogue** rereads the project catalogue. **Refresh status** rereads the catalogue and the selected project's repository status, retaining details if the membership still exists. Removed projects return to Projects; removed repositories return to their project. Refresh does not run tests and does not bypass the pipeline API's 60-second GitHub cache.
+- Status reads finish before the next menu opens: there are no progressive live updates or background polls. Separate local/GitHub summaries highlight running, failure, stale/never and unavailable results; detailed mixed outcomes remain available in the repository menu. No aggregate project pass/fail is computed.
+- Native terminal Pi replaces the editor with a selector; Pi Chat renders its existing prompt modal. Theme, keyboard bindings, wrapping, optional filtering and focus restoration belong to the host. Large menus/reports retain native host limits; this is not a custom searchable tree or responsive dashboard.
+- Browsing is read-only, does not add the overview to model context, and stops its own readers/selects on close, replacement or shutdown. Existing text-report readers are independent. Non-interactive modes should use `/projects list` or `/projects status`.
+
 ## MVP limits
 
-No searchable overview popup, session launching, worktree picker, live Git status or background polling yet. Missing/moved checkout paths are not automatically repaired.
+No custom searchable overview, session launching, worktree picker, live Git status or background polling. Status covers local pipelines and GitHub Actions only. Missing/moved checkout paths are not automatically repaired.

@@ -8,14 +8,16 @@ import {
 import { readCatalogue, updateCatalogue } from "../Infra/storage.ts";
 import { resolveRepository } from "../Infra/git.ts";
 import { ProjectStatus } from "./status.ts";
+import { ProjectBrowser } from "./browse.ts";
+import { browseProjects } from "../UI/Containers/browse.ts";
 
-const commands = ["create", "add", "remove", "list", "show", "rename", "delete", "repo-name", "status"];
+const commands = ["create", "add", "remove", "list", "show", "rename", "delete", "repo-name", "status", "browse"];
 const usages: Record<string, [number, number, string]> = {
   create: [1, 1, "create <name>"], add: [0, 2, "add [project] [repo-name]"],
   remove: [0, 1, "remove [project]"], list: [0, 0, "list"], show: [1, 1, "show <project>"],
   rename: [2, 2, "rename <project> <new-name>"], delete: [1, 1, "delete <project>"],
   "repo-name": [0, 1, "repo-name [name] (omit name to reset)"],
-  status: [0, 1, "status [project]"],
+  status: [0, 1, "status [project]"], browse: [0, 0, "browse"],
 };
 function quote(value: string): string {
   return /^[^\s'"\\]+$/.test(value) ? value : `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
@@ -34,8 +36,10 @@ async function pickProject(ctx: ExtensionContext, projects: Project[]): Promise<
 export default function projectsExtension(pi: ExtensionAPI): void {
   const file = () => join(getAgentDir(), "projects", "config.json");
   const status = new ProjectStatus();
-  pi.on("session_start", () => status.stop());
-  pi.on("session_shutdown", () => status.stop());
+  let browser: ProjectBrowser | undefined;
+  const stop = () => { status.stop(); browser?.stop(); browser = undefined; };
+  pi.on("session_start", stop);
+  pi.on("session_shutdown", stop);
   pi.registerCommand("projects", {
     description: "Manage virtual project collections and the current repository",
     getArgumentCompletions(prefix) {
@@ -61,6 +65,13 @@ export default function projectsExtension(pi: ExtensionAPI): void {
         if (action === "list") {
           notify(current.projects.length ? current.projects.map(project => `${project.name} — ${project.repositories.length} repositories`).join("\n") :
             "No projects. Use /projects create <name>.");
+        } else if (action === "browse") {
+          if (!ctx.hasUI) throw new Error("Browsing needs interactive dialogs. Use /projects list or /projects status instead.");
+          browser?.stop();
+          const currentBrowser = new ProjectBrowser(current, () => readCatalogue(file()));
+          browser = currentBrowser;
+          try { await browseProjects(currentBrowser, ctx.ui); }
+          finally { if (browser === currentBrowser) browser = undefined; }
         } else if (action === "status") {
           const projects = args[0] === undefined ? current.projects : [findProject(current, args[0])];
           const report = await status.report(current, projects);

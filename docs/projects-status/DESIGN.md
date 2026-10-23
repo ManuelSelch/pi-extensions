@@ -1,23 +1,22 @@
-# Interactive Projects Status Popup — Design
+# Projects Browse Native Menus — Design
 
 ## Proposed Design
-- Implement approved mockup revision 1. Keep the existing catalogue, public pipeline adapter and text status commands; add `/projects browse` without changing bare `/projects`.
-- In the extensions repository, add pure browser state under `projects/src/Domain`, incremental status coordination under `App`, and separate terminal Components/Containers. Each browser interaction owns its reader, refresh generation and subscription. Emit loading/results/errors progressively; deduplicate repository identities and run at most four reads concurrently. Text reporting retains its existing API and lifecycle.
-- Terminal Container opens `ctx.ui.custom()` as an overlay. Components render value-only snapshots using Pi width/theme utilities; input uses Pi key handling and a searchable bounded viewport. Render separate local/GitHub indicators and in-place details, not a combined verdict.
-- Pi Chat needs a new narrow, optional extension-view channel across `pi-server`, `pi-sdk-typescript` and `pi-chat`. Server’s public extension registry registers the projects-browser provider; it returns sanitized, path-free snapshots and refresh/dispose callbacks. No filesystem or pipeline access occurs in the browser.
-- SDK defines capability-gated `extension.view.open`, `extension.view.refresh`, `extension.view.close` operations and targeted view-update events. Open returns an opaque view ID and initial snapshot before reads complete. Buffer updates until that response is sent. Server binds ownership to the initiating connection/session; reject foreign IDs and dispose on disconnect, session replacement/close, reload and shutdown. Updates carry view ID and refresh generation; clients ignore obsolete updates.
-- Pi Chat routes the exact `/projects browse` command locally to this channel instead of submitting it to the model. A thin container binds SDK updates to Mantine presentation matching the mockup; search/selection/expansion stay client-local. Reuse composer-focus restoration on dialog exit.
+- Use the native `ctx.ui.select(title, options)` approach presented in chat and approved in `mockups/projects-select/DESIGN.md` revision 2. No `ui.custom()`, new Pi Chat component or server/SDK channel. The approved removal of the Projects subtitle applies to production.
+- `/projects browse` opens Projects → repositories → repository details. Menu options implement Back, Refresh and Close. Cancelling returns one level and closes at Projects. Existing bare/list/show/status commands remain unchanged.
+- Keep catalogue/status coordination in projects App; pure menu builders in UI/Components produce titles and string labels; a thin UI/Container runs native selects and dispatches selected actions. Use numbered repository/project labels to disambiguate duplicate names.
+- Reuse the existing pipeline adapter and text detail formatter. Expose structured completed reads from `ProjectStatus` without changing its text report contract. Each browser owns a separate status coordinator, caching shared repository results until manual refresh and limiting reads to four.
+- Load the selected project's completed snapshot before offering repository choices. Refresh rereads the catalogue and refreshes the selected project's status, returning to the appropriate menu if membership disappeared. Never mutate an open native select or stream intermediate results.
+- Stop the browser's reader and cancel its native select on session replacement/shutdown or a superseding browse invocation. Discard late results and release resources on normal close and failures.
 
 ## Decisions & Trade-offs
-- Current server implements `ctx.ui.custom()` as a no-op; existing prompts support only select/confirm/input/editor. Neither supports this interactive browser. Do not emulate it with repeated prompts or globally broadcast extension state.
-- Cross-repository protocol work is required; keep the channel limited to the present projects-browser use case, validate payloads and bound snapshot sizes. Unsupported clients receive text-command guidance. Clients without the optional capability receive no new events; Swift UI changes are outside scope.
-- Keep terminal use independent of an installed server package. Register the web provider only when the optional host API is present. No new polling, remote-cache bypass or pipeline execution. Refresh cancellation suppresses obsolete work even where underlying reads cannot abort immediately.
-- Update pinned server/SDK artifacts and receipts in their consumers after independent tests. No publishing, pushing or live service replacement.
+- This replaces the unapproved custom-dialog/cross-repository design with the approved native-menu alternative. Pi Chat already forwards native selects and owns modal layout, keyboard/pointer handling and composer focus. Terminal Pi replaces the editor with its native selector.
+- No custom search, expansion tree, viewport, status colors or live polling. Menu titles contain plain multiline detail text; labels contain symbols and words. Exact rendering, wrapping and optional host filtering depend on the host. Large menus/reports retain native host limitations.
+- Repository summaries keep local and GitHub results separate, distinguish stale/never/unconfigured/error data and do not invent project-level success. Default checkout, GitHub cache and provider scope stay unchanged.
 
 ## Verification
-- TDD covers search/selection, incremental completion, four-read concurrency, shared membership, errors and cancellation. Preserve text report regressions and Pi loader/typecheck tests.
-- Driver-based terminal and browser tests cover approved interactions, narrow layouts, Unicode/control characters, focus and lifecycle races. Server/SDK tests cover capability negotiation, response/update ordering, payload bounds and cross-connection ownership.
-- Verify each affected repository and its artifact consumers before committing completed implementation steps.
+- TDD for structured status reads, native menu labels, details, duplicate names, empty states, refresh, back/cancel/close, per-repository errors and lifecycle suppression.
+- Integration scenarios use the existing command driver extended with native-select scripts and assertions. Verify no custom UI calls, no catalogue mutations and unchanged text commands.
+- Run focused projects tests, full extension tests, typecheck and actual Pi loader smoke. Host-native UI behavior is reused; do not claim a live Pi Chat/terminal walkthrough unless performed.
 
 ## Open Questions
 None.

@@ -1,47 +1,46 @@
-# Interactive Projects Status Popup — Requirements
+# Projects Browse Native Menus — Requirements
 
 ## Goal
-Provide an interactive overview in Pi’s terminal UI and Pi Chat of all registered projects, their member repositories, and local/GitHub pipeline status without flooding the transcript with a long notification. Extend the existing projects catalogue and read-only status reporting; do not implement a separate catalogue or status provider.
+Browse registered projects, their member repositories and local/GitHub pipeline status in Pi terminal and Pi Chat using existing native select dialogs. The approved native-select mockup revision 2 supersedes the earlier custom-popup plan and removes the populated Projects menu subtitle.
 
 ## Requirements
-- **R1** — Provide `/projects browse` to open a popup in both Pi’s terminal UI and Pi Chat, listing every catalogue project and its member repositories, including empty projects. Exclude retained repository records with no project membership. A repository shared across projects appears under each membership but is read only once per refresh. Display configured project and repository names, not checkout paths or remote URLs.
-- **R2** — Present a compact hierarchical overview with project headings and repository rows. Users can select rows, expand/collapse projects, and open/close repository status details. Project headings show repository counts; do not invent an aggregate project pass/fail verdict.
-- **R3** — Show local pipeline preparation and named suite status, including running, failed, passed, stale, never-run and unconfigured states. Expanded repository details show available GitHub workflows and their nested jobs using existing pipeline symbols and semantics. Hide empty GitHub workflow sections but preserve meaningful remote errors and unavailable states. Status scope is limited to local pipelines and GitHub Actions; exclude Git dirty/ahead/behind, session activity and other CI providers.
-- **R4** — Support case-insensitive search across project and repository names. Matching a project exposes its repositories; matching a repository retains its project heading. Clearing search restores the full catalogue, and no matches has an explicit state. Preserve selection by stable identity where possible, including project membership for shared repositories.
-- **R5** — Support keyboard navigation, page scrolling, expansion, details, manual refresh and dismissal, with visible key hints. Escape clears an active search first, then returns from details, then closes the popup. Closing restores the previous Pi interaction without adding the overview to the conversation. Pi Chat also provides pointer-accessible controls and restores composer focus after the popup closes.
-- **R6** — Open the popup before status reads finish. Show per-repository loading, results and failures progressively without blocking input. Refresh rereads the catalogue and status, retaining valid selection and expansion state. Use existing pipeline cache/freshness rules; manual refresh must not promise uncached remote data. Show refresh progress and last completed refresh time.
-- **R7** — Reuse the public pipeline reader and registered default checkout semantics. Deduplicate shared repository reads and bound concurrency to four. Missing checkouts, malformed pipeline configurations, authentication failures and unavailable providers must not hide other repositories or appear as successful checks.
-- **R8** — Keep the popup read-only: no suite execution, dependency preparation, catalogue mutations, Git changes, filesystem discovery, session launching or background polling. Closing, session replacement, shutdown or a superseding refresh must prevent obsolete results from updating the popup; release popup-owned resources without breaking existing text reports.
-- **R9** — Fit available terminal width and height with a bounded viewport, safe truncation of wide/Unicode names, sanitized terminal control characters, and active theme colors plus text/symbol status cues. Retain keyboard access on small terminals and after resize; show a compact fallback when the full layout cannot fit. Pi Chat presents the same information and interaction model in a responsive, accessible web dialog with bounded scrolling and theme-aware status cues.
-- **R10** — Preserve bare `/projects`, explicit `/projects list`, `/projects show <project>` and `/projects status [project]` behavior. Route `/projects browse` to the appropriate terminal overlay or Pi Chat web dialog. Other unsupported clients/modes receive clear guidance to use existing text commands, not an attempted custom overlay.
-- **R11** — Document the entry command, controls, status meanings, remote cache limits, default-checkout scope and terminal/Pi Chat support. Verify interaction through terminal and browser UI drivers, including search, expansion, details, refresh, dismissal, resize and asynchronous failure/lifecycle cases.
+- **R1** — `/projects browse` lists registered projects and their member repositories, including empty projects but excluding unlinked retained repository records. Shared repositories reuse completed reads until refresh. Display names, not checkout paths or run URLs.
+- **R2** — Use sequential Projects → repositories → detail menus, with project repository counts and numbered labels to disambiguate duplicate names. Do not compute project-level pass/fail. Custom trees and expand/collapse rows are removed from scope.
+- **R3** — Show separate compact local/GitHub summaries and full preparation/suite/workflow/job details, preserving stale, never-run, unconfigured, unavailable and error states. Hide empty GitHub workflow sections. Only local pipelines and GitHub Actions are supported.
+- **R4** — Use host-native selection and filtering where available. Cross-host search and selection preservation are not guaranteed; custom search is removed from scope.
+- **R5** — Offer Back, Refresh and Close as appropriate. Escape/cancel returns one level, closing at Projects. Use native keyboard/pointer/focus behavior without adding overview messages to model context. The populated Projects menu has no explanatory subtitle.
+- **R6** — Read a completed status snapshot before opening the selected project's repository menu. Refresh rereads the catalogue and relevant status before reopening the menu; preserve navigation where the project/repository still exists. No progressive updates or custom refresh timestamp/progress UI. Existing remote cache rules remain in force.
+- **R7** — Reuse the public pipeline reader at registered default checkouts, deduplicate identities and bound concurrency to four. One missing/invalid repository must not hide other results or appear successful.
+- **R8** — Keep browsing read-only: no test execution, dependency installation, catalogue changes, discovery, Git changes, session launching or polling. Stop browser-owned readers/selects on replacement/shutdown and discard late results without affecting text reports.
+- **R9** — Use plain strings and native host presentation, sanitize terminal control characters and retain text/symbol status cues. Native host wrapping, theme and large-menu/report limits apply; custom responsive layout and viewport guarantees are removed from scope.
+- **R10** — Preserve bare `/projects`, list/show/status and all management commands. Use the same `ctx.ui.select` flow in terminal and Pi Chat; unsupported modes get text-command guidance. No Pi Chat/server/SDK production changes.
+- **R11** — Document controls, default-checkout scope, caching and native UI limitations. Verify behavior through pure formatter tests and driver-based command integration tests, plus full suite/typecheck/loader checks. Do not claim host UI walkthroughs not performed.
 
 ## Assumptions
-- Repository details stay within the popup, replacing the overview temporarily if necessary on narrow terminals. Terminal mouse support is not required; Pi Chat uses normal web pointer and keyboard controls.
-- Both interfaces can share structured catalogue/status snapshots and interaction semantics, with separate terminal and web presentation adapters. Current memory establishes Pi Chat extension slots/actions but does not establish a custom-dialog contribution API; S1 must inspect current capabilities before selecting an integration mechanism. A terminal custom component alone does not provide a Pi Chat popup.
-- Pi Studio is outside this scope.
+- Pi Chat's existing native prompt forwarding and host-owned focus restoration remain available; no custom UI adapter is needed.
+- Large menus/details retain existing host limitations. Pi Studio is out of scope.
 
 ## Implementation Plan
 ### S1 — Approve Interaction Preview
-Description: Inspect current Pi Chat command, extension and dialog capabilities and identify the supported integration route and any minimal host-side changes required. Produce isolated terminal and Pi Chat web previews using deterministic catalogue/status fixtures, without changing production commands. Demonstrate grouped projects, repository details, search, loading/errors and narrow layouts. Obtain explicit approval of both interactions and layouts before production UI implementation. Covers the UX contract in R1–R6 and R9; Q1–Q4 are resolved.
+Description: Completed: native-select revision 2 approved for both hosts, with the populated Projects subtitle removed. This replaces the custom-popup preview direction.
 
-### S2 — Expose Incremental Status Snapshots
-Description: Refactor the existing status coordinator to expose structured per-repository loading/results/errors while preserving its text report API. Reuse the pipeline adapter, bound reads to four, deduplicate memberships and guard refresh generations and lifecycle cleanup. Verify incremental completion, per-repository failures, refresh races and unchanged text reports with deterministic readers. Implements R6–R8; independent of the final visual layout.
+### S2 — Read Completed Status Snapshots
+Description: Expose structured completed reads from the existing status coordinator without changing text reports. Verify deduplication, concurrency, errors and lifecycle suppression. Replaces the earlier incremental-streaming slice; implements R3 and R6–R8.
 
-### S3 — Build Searchable Project Browser
-Description: After S1, build the approved terminal presentation and shared interaction state using fixture snapshots: grouped rows, stable selection, project expansion, search, scrolling, repository details, key hints and responsive rendering. Keep status I/O outside rendering components and state reusable by Pi Chat. Verify behavior with a UI driver, including duplicate names, shared repositories, empty states, Unicode, terminal control characters, resizing and theme invalidation. Implements terminal behavior for R1–R5 and R9.
+### S3 — Build Native Project Menus
+Description: Add pure title/option builders and App navigation, using numbered project/repository labels, compact status summaries and existing detail formatting. Verify empty/duplicate/error states and Back/Refresh/Close behavior. Replaces the custom searchable tree; implements R1–R5 and R9.
 
-### S4 — Connect Popup Command and Refresh
-Description: After S2 and S3, wire `/projects browse` to the terminal popup and incremental status snapshots, preserving bare `/projects` and existing text subcommands. Implement manual refresh, loading/failure states, catalogue rereads, safe close and lifecycle cleanup, plus unsupported-mode guidance. Establish the client-neutral browse contract used by S6 without attempting terminal overlays in Pi Chat. Verify real command integration, progressive updates, cached remote refresh semantics and rapid close/reopen. Implements terminal behavior for R6–R8 and R10.
+### S4 — Connect Browse Command and Refresh
+Description: Wire `/projects browse` to native selects, completed snapshots, catalogue rereads and lifecycle cancellation. Verify exact Projects title, management/text-command preservation and unsupported-mode guidance. Implements R6–R10.
 
-### S6 — Add Pi Chat Popup Adapter
-Description: After S1, S2 and S4, implement the approved responsive Pi Chat dialog and `/projects browse` routing through the integration route selected in S1. Reuse the structured snapshot and browse contract, adding only the minimal host integration needed. Provide search, expansion, details, refresh, keyboard/pointer access and composer-focus restoration. Keep data access server-side; scope updates to the requesting client and discard results after close, session replacement or refresh supersession. Verify with a browser UI driver and host/extension integration tests. Implements Pi Chat behavior for R1–R10.
+### S6 — Reuse Pi Chat Native Dialogs
+Description: Use the same select contract already forwarded by Pi Chat. No custom adapter or protocol implementation remains in this slice. Cover the serialized title/options contract through the command driver; document that native host rendering/focus is reused, not independently changed. Implements Pi Chat support in R10.
 
-### S5 — Verify and Document Popup Workflow
-Description: After S4 and S6, complete end-to-end terminal and Pi Chat interaction checks and document the approved controls and limitations in the existing projects README. Run focused projects tests, the full extension test suite, typecheck and Pi loader smoke checks, plus relevant Pi Chat tests/typecheck/build for host changes. Verify regular/fullscreen terminal focus and resizing, web dialog accessibility/responsiveness and composer-focus restoration. Implements R11 and closes cross-cutting regressions from R1–R10.
+### S5 — Verify and Document Native Menus
+Description: After S2–S4, complete focused/full tests, typecheck and loader checks; document the approved native controls and limitations. Implements R11.
 
 ## Open Questions
 - **Q1 — Resolved:** Use `/projects browse`; preserve bare `/projects` as the text overview.
 - **Q2 — Resolved:** Include only local pipeline and GitHub Actions status.
-- **Q3 — Resolved:** Support both Pi’s terminal UI and Pi Chat. Pi Studio is not requested.
-- **Q4 — Resolved:** Include only repositories belonging to registered projects; exclude unlinked retained records.
+- **Q3 — Resolved:** Support terminal Pi and Pi Chat through existing native select dialogs; no custom web components.
+- **Q4 — Resolved:** Include only repositories belonging to registered projects.
