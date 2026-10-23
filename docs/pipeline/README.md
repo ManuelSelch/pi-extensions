@@ -77,15 +77,15 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 ## GitHub
 ✓ Server package passed 32m ago
 ✗ Tests failed 29m ago
-  ✓ build passed
-  ✓ unit passed
-  ✗ e2e failed
-  ○ sonar skipped
+  ├─ ✓ build passed
+  ├─ ✓ unit passed
+  ├─ ✗ e2e failed
+  └─ ○ sonar skipped
 › Deploy running 1m ago
 ```
 
 - Show the latest run **per workflow on the current branch**, even if it tested an older commit. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
-- Rows are grouped under one `## Local` and one `## GitHub` heading; empty sections are hidden. Indented job rows show all jobs from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
+- Rows are grouped under one `## Local` and one `## GitHub` heading; empty sections are hidden. Tree-nested job rows (`├─` / `└─`) show all jobs from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
 - Remote rows also appear when `.pi/pipeline.json` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
 - The initial monitor refresh runs in the background: opening a session does not wait for source scanning or GitHub requests. The widget appears when status is ready; shutdown still cancels pending remote requests.
 - While a UI session is open, the existing monitor refreshes remote data at most once per 60 seconds. Branch/repository changes invalidate that cache. Status commands/tools share the same session cache; they do not force a network fetch within its lifetime.

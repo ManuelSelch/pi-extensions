@@ -45,6 +45,36 @@ test('remote errors do not hide local suites and unknown conclusions never use s
   }
 });
 
+test('workflow groups have visible job branches and separate last-child markers', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  const job = (name, conclusion = 'success') => ({ name, status: 'completed', conclusion });
+  const status = { configured: false, suites: {}, github: { workflows: [
+    { ...job('Server package'), updatedAt: new Date(now - 51 * 60000).toISOString(), jobs: [job('swift-packed'), job('package')] },
+    { ...job('Tests', 'failure'), updatedAt: new Date(now - 49 * 60000).toISOString(), jobs: [job('unit'), job('build'), job('swift-integration'), job('e2e'), job('sonar', 'failure')] },
+    { ...job('Single'), jobs: [job('only')] },
+    { ...job('Empty'), jobs: [] },
+  ] } };
+  const expected = [
+    '## GitHub',
+    '✓ Server package passed 51m ago',
+    '  ├─ ✓ swift-packed passed',
+    '  └─ ✓ package passed',
+    '✗ Tests failed 49m ago',
+    '  ├─ ✓ unit passed',
+    '  ├─ ✓ build passed',
+    '  ├─ ✓ swift-integration passed',
+    '  ├─ ✓ e2e passed',
+    '  └─ ✗ sonar failed',
+    '✓ Single passed',
+    '  └─ ✓ only passed',
+    '✓ Empty passed',
+  ];
+  assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), expected);
+  const colored = { fg: (_color, text) => `\x1b[31m${text}\x1b[0m` };
+  const { stripVTControlCharacters } = require('node:util');
+  assert.deepEqual(Array.from(renderWidget(status, colored, 120, now), stripVTControlCharacters), expected);
+});
+
 test('jobs render below their workflow with status, matrix names and no repeated age', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const colors = [];
@@ -62,7 +92,7 @@ test('jobs render below their workflow with status, matrix names and no repeated
     { name: 'Deploy', status: 'queued', jobs: [] },
   ] } };
   const lines = renderWidget(status, theme, 120, now);
-  assert.equal(lines.join('\n'), '## GitHub\n✗ Tests failed 1m ago\n  ✓ build (node 24) passed\n  ✗ e2e failed\n  ○ sonar skipped\n  › unit running\n  ○ lint queued\n  ○ unknown future\n○ Deploy queued');
+  assert.equal(lines.join('\n'), '## GitHub\n✗ Tests failed 1m ago\n  ├─ ✓ build (node 24) passed\n  ├─ ✗ e2e failed\n  ├─ ○ sonar skipped\n  ├─ › unit running\n  ├─ ○ lint queued\n  └─ ○ unknown future\n○ Deploy queued');
   assert.ok(colors.some(([color, text]) => color === 'error' && text.includes('e2e')));
   assert.equal(colors.some(([color, text]) => color === 'success' && text.includes('unknown')), false);
   jobs[0].name = 'build\x1b[31m\n漢字';
@@ -79,7 +109,7 @@ test('job-fetch warning keeps workflow status and local rows visible', () => {
   const status = { configured: true, suites: { unit: result('passed') }, github: { workflows: [
     { name: 'Tests', status: 'completed', conclusion: 'failure', jobsError: 'Jobs unavailable: check connection and repository access.' },
   ] } };
-  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '## Local\n✓ unit 3m ago\n## GitHub\n✗ Tests failed\n  ⚠ Jobs unavailable: check connection and repository access.');
+  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '## Local\n✓ unit 3m ago\n## GitHub\n✗ Tests failed\n  └─ ⚠ Jobs unavailable: check connection and repository access.');
 });
 
 test('each suite gets its own line with age, outcome and stale previous pass', () => {
