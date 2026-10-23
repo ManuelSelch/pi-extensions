@@ -14,6 +14,7 @@ directly, so there is no build step.
 | `pdf.ts` | `/pdf <file.pdf>` — converts to `.txt` via `pdftotext`. |
 | `pi-open.ts` | `/open <app>` — opens the current directory using an app configured in `~/.pi/agent/pi-open.json`. |
 | `pipeline.ts` | `/pipeline` and `pipeline_configure` / `pipeline_run` / `pipeline_status` — approved test commands, compact status widget, manual/opt-in automatic runs, logs and persisted outcomes. See [pipeline usage](docs/pipeline/README.md). |
+| `projects.ts` | `/projects` — virtual project collections, current-repository membership and display names. See [projects usage](docs/projects/README.md). |
 | `readonly-mode.ts` | `/readonly` — blocks `write`/`edit` and destructive bash. |
 | `workspace.ts` | `/workspace add\|list\|remove` — persistent multi-root folder links with per-run workspace context. See [workspace usage](docs/workspace/README.md). |
 | `session-cleanup.ts` | `/session-cleanup-now`, `/session-cleanup-dry` — trashes every old session except the active session (`PI_SESSION_CLEANUP_DAYS`, default 3). |
