@@ -5,8 +5,8 @@
 - Discover standalone `.ts`/`.js` files and immediate folders containing `index.ts`/`index.js`. Ignore nested source and tests. Use Pi's configured agent directory rather than hardcoding the home directory.
 - Disabling writes an exact `-path` entry into the owning scope's `settings.json` `extensions` array; enabling removes equivalent exact exclusions and uses a native exact inclusion when necessary to override broader filters. Resolve paths relative to the settings file's directory, including existing absolute and tilde forms.
 - Preserve unrelated settings and resource entries. Validate configuration before writing; report invalid JSON rather than overwriting it. Do not modify another scope's exclusions silently.
-- Keep defaults and seen-state in `extension-manager.json`, with stable legacy identities for migrated folders. Protect the manager by its actual entry path, not the shared filename `index.ts`. Leave package toggling unchanged.
-- Leave existing `.disabled` files untouched and identify them as requiring explicit conversion; never silently activate them.
+- Keep defaults and seen-state in `extension-manager.json`, using current entry identities without legacy-key mapping. Protect the manager by its actual entry path, not the shared filename `index.ts`. Leave package toggling unchanged.
+- Remove `.disabled` support entirely: no discovery, conversion notices, migration code, or compatibility branches. The manager recognizes only normal native entry points and settings exclusions. Converting tracked disabled files during the broader folder refactor is a one-time repository change, not a runtime manager responsibility.
 
 ## Decisions & Trade-offs
 - Reuse Pi's native resource filtering instead of adding a custom loader, configuration format, or runtime enabled checks. No new dependencies.
