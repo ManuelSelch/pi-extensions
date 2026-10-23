@@ -1,23 +1,23 @@
-# Project Pipeline Status — Design
+# Interactive Projects Status Popup — Design
 
 ## Proposed Design
-- Add `/projects status [project]` to the existing projects command, including autocomplete. A named project reports its repositories; omitting the name reports all projects. Empty projects and an empty catalogue receive explicit messages.
-- Read each repository's registered default checkout through the public `PipelineStatusReader` from `pipeline/api.ts`. Deduplicate reads for repositories shared across projects and limit concurrent reads to four. Do not enumerate or aggregate other worktrees.
-- Keep pipeline access in a small projects Infra adapter. App coordinates catalogue selection and reporting; a pure presentation component formats repository names, paths and status rows.
-- Show local preparation and named suite outcomes, including stale and never-run states. Show GitHub workflows and jobs when returned, preserving unavailable/error states rather than suggesting success. Include workflow/job links in the detailed report.
-- Publish the report through the existing notification mechanism. Own one lazily created reader per session lifecycle; stop it on session replacement/shutdown and suppress late reports from an obsolete lifecycle.
+- Implement approved mockup revision 1. Keep the existing catalogue, public pipeline adapter and text status commands; add `/projects browse` without changing bare `/projects`.
+- In the extensions repository, add pure browser state under `projects/src/Domain`, incremental status coordination under `App`, and separate terminal Components/Containers. Each browser interaction owns its reader, refresh generation and subscription. Emit loading/results/errors progressively; deduplicate repository identities and run at most four reads concurrently. Text reporting retains its existing API and lifecycle.
+- Terminal Container opens `ctx.ui.custom()` as an overlay. Components render value-only snapshots using Pi width/theme utilities; input uses Pi key handling and a searchable bounded viewport. Render separate local/GitHub indicators and in-place details, not a combined verdict.
+- Pi Chat needs a new narrow, optional extension-view channel across `pi-server`, `pi-sdk-typescript` and `pi-chat`. Server’s public extension registry registers the projects-browser provider; it returns sanitized, path-free snapshots and refresh/dispose callbacks. No filesystem or pipeline access occurs in the browser.
+- SDK defines capability-gated `extension.view.open`, `extension.view.refresh`, `extension.view.close` operations and targeted view-update events. Open returns an opaque view ID and initial snapshot before reads complete. Buffer updates until that response is sent. Server binds ownership to the initiating connection/session; reject foreign IDs and dispose on disconnect, session replacement/close, reload and shutdown. Updates carry view ID and refresh generation; clients ignore obsolete updates.
+- Pi Chat routes the exact `/projects browse` command locally to this channel instead of submitting it to the model. A thin container binds SDK updates to Mantine presentation matching the mockup; search/selection/expansion stay client-local. Reuse composer-focus restoration on dialog exit.
 
 ## Decisions & Trade-offs
-- Reuse the API's local freshness rules, remote branch selection and 60-second remote cache. No new combined pass/fail policy, polling, dependencies or pipeline configuration.
-- Default checkout status is worktree-specific, not repository-wide test coverage. Display its path so this distinction is visible.
-- Catch errors per repository so a missing checkout or invalid local configuration cannot hide other repositories. Explicitly reject missing checkout directories before reading; never repair catalogue paths automatically.
-- Distinguish unconfigured local pipelines and absent remote data from successful checks. Remote support remains whatever the API provides today: GitHub Actions, not GitLab.
-- This is read-only: never execute suites, prepare dependencies, approve commands or mutate catalogue data. Existing list/show behavior remains unchanged.
+- Current server implements `ctx.ui.custom()` as a no-op; existing prompts support only select/confirm/input/editor. Neither supports this interactive browser. Do not emulate it with repeated prompts or globally broadcast extension state.
+- Cross-repository protocol work is required; keep the channel limited to the present projects-browser use case, validate payloads and bound snapshot sizes. Unsupported clients receive text-command guidance. Clients without the optional capability receive no new events; Swift UI changes are outside scope.
+- Keep terminal use independent of an installed server package. Register the web provider only when the optional host API is present. No new polling, remote-cache bypass or pipeline execution. Refresh cancellation suppresses obsolete work even where underlying reads cannot abort immediately.
+- Update pinned server/SDK artifacts and receipts in their consumers after independent tests. No publishing, pushing or live service replacement.
 
 ## Verification
-- Test pure rendering for preparation, suite freshness, workflow/job outcomes, absent configuration, remote errors and safe handling of terminal control characters.
-- Extend the command integration driver with a fake public API to cover named/all projects, shared-repository deduplication, bounded concurrency, per-repository failures, autocomplete and lifecycle cleanup/late-result suppression.
-- Exercise the real API against temporary Git checkouts without remote access, including missing paths and local-only status. Run projects tests, the full extension suite, typecheck and Pi loader smoke before committing.
+- TDD covers search/selection, incremental completion, four-read concurrency, shared membership, errors and cancellation. Preserve text report regressions and Pi loader/typecheck tests.
+- Driver-based terminal and browser tests cover approved interactions, narrow layouts, Unicode/control characters, focus and lifecycle races. Server/SDK tests cover capability negotiation, response/update ordering, payload bounds and cross-connection ownership.
+- Verify each affected repository and its artifact consumers before committing completed implementation steps.
 
 ## Open Questions
 None.

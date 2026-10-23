@@ -1,7 +1,7 @@
 # Projects Browse — Interaction Preview
 
 ## Goal and scope
-- Revision: **1**. Review status: **in review**. No layout approval recorded yet; the user approved requirements and continuing to S1, not this unseen preview.
+- Revision: **1**. Review status: **approved**. User approved both presented interface previews with “approved. implement it”. Approval covers this revision’s layout and interactions; production technical design remains a separate approval checkpoint.
 - Explore `/projects browse` in Pi terminal and Pi Chat with the same registered-project hierarchy and local/GitHub pipeline information.
 - Isolated HTML/CSS/JavaScript with deterministic fixtures only. No production source, backend, real catalogue, credentials, API calls or persistence.
 
@@ -31,6 +31,6 @@
 - Before production design approval, inspect the matching server/SDK public contracts to choose the smallest request-scoped structured browse channel. Do not put popup-open state or repository status into global extension state if it would broadcast to unrelated clients. Any required server/SDK changes need explicit cross-repository design scope and verification.
 
 ## Approval and limitations
-- Awaiting user review of revision 1 for both views. No production implementation authorized by this preview alone.
+- Revision 1 approved for both views; user requested implementation. Preserve these sources as the approved visual reference and complete the technical-design approval checkpoint before production changes.
 - Browser serving and syntax checks are not visual/interaction verification. User-led review; no automated browser walkthrough or screenshots requested.
 - Still to establish in technical design: exact Pi Chat command-to-dialog transport and per-client refresh/cancellation mechanism. These are engineering investigation items, not changes to the approved feature requirements.
