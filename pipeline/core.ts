@@ -7,6 +7,8 @@ import { lstat, mkdir, open, readFile, readdir, readlink, realpath, rename, rm, 
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import type { GitHubStatus } from "./github.ts";
+
 const exec = promisify(execFile);
 export type Confirm = (description: string) => Promise<boolean>;
 export interface Prepare {
@@ -36,6 +38,7 @@ export interface RunResult {
 }
 export type SuiteStatus = (RunResult | { outcome: "never" }) & { stale: boolean };
 export interface PipelineStatus {
+	github?: GitHubStatus;
 	configured: boolean;
 	root?: string;
 	config?: Config;

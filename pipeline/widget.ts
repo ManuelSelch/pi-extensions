@@ -21,16 +21,33 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 	const color = result.outcome === "passed" ? "success" : result.outcome === "failed" ? "error" : "warning";
 	return theme.fg(color, `${symbol} ${name} ${outcome}${elapsed}`);
 }
-/** One line per suite, truncated to the available terminal width. */
+// Workflow names come from remote content; never emit terminal control sequences.
+const safeText = (value: string) => value.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
+function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number): string {
+	const state = workflow.status === "completed" ? workflow.conclusion ?? "unknown" : workflow.status;
+	const states: Record<string, [string, Parameters<Theme["fg"]>[0], string]> = {
+		success: ["✓", "success", "passed"], failure: ["✗", "error", "failed"],
+		in_progress: ["›", "accent", "running"], queued: ["○", "accent", "queued"],
+		waiting: ["○", "accent", "waiting"], pending: ["○", "accent", "pending"], requested: ["○", "accent", "requested"],
+		cancelled: ["■", "warning", "cancelled"], skipped: ["○", "muted", "skipped"],
+		timed_out: ["⌛", "warning", "timed out"], never: ["○", "muted", "never"],
+	};
+	const [symbol, color, label] = Object.hasOwn(states, state) ? states[state] : ["○", "warning" as const, state.replace(/_/g, " ")];
+	const elapsed = workflow.updatedAt && Number.isFinite(Date.parse(workflow.updatedAt)) ? ` ${age(workflow.updatedAt, now)} ago` : "";
+	return theme.fg(color, `${symbol} GitHub · ${safeText(workflow.name)} ${safeText(label)}${elapsed}`);
+}
+/** One line per local suite / remote workflow, truncated to the available terminal width. */
 export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
-	if (!status?.configured || !Object.keys(status.suites).length || width <= 0) return [];
+	if (!status || width <= 0) return [];
 	const entries: [string, SuiteStatus][] = [
 		...(status.prepare ? [["prepare", status.prepare] as [string, SuiteStatus]] : []),
 		...Object.entries(status.suites),
 	];
-	return entries.map(([name, result]) =>
-		truncateToWidth(suiteText(name, result, theme, now), width),
-	);
+	const lines = status.configured && Object.keys(status.suites).length
+		? entries.map(([name, result]) => suiteText(name, result, theme, now)) : [];
+	if (status.github?.error) lines.push(theme.fg("warning", status.github.error));
+	else for (const workflow of status.github?.workflows ?? []) lines.push(githubText(workflow, theme, now));
+	return lines.map(line => truncateToWidth(line, width));
 }
 
 export interface Clock {

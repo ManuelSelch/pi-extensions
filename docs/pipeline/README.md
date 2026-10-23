@@ -1,6 +1,6 @@
-# Local pipeline extension
+# Pipeline extension
 
-Provides native-confirmed configuration, manual execution, persisted results, a compact test-status widget and opt-in after-agent scheduling.
+Provides native-confirmed local test configuration, manual execution, persisted results, a compact status widget, opt-in after-agent scheduling and automatic read-only GitHub Actions status.
 
 ## Usage
 
@@ -36,12 +36,29 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 
 - `pipeline_configure({config: ...})`: validate and save after approval.
 - `pipeline_run({suite: "unit"})`: wait for a suite's results; omit suite or use `all` to run all suites serially. Non-passing results are tool errors carrying outcome/output/log paths. Aborting the tool cancels execution.
-- `pipeline_status({})`: inspect configuration and latest outcomes/freshness without execution or a popup.
-- `/pipeline` or `/pipeline status`: show a concise outcome/freshness line per suite; no commands, fingerprints or log paths. The agent's `pipeline_status` tool retains detailed data.
+- `pipeline_status({})`: inspect local configuration/outcomes/freshness and the latest GitHub Actions runs, including run URLs, without executing tests or showing a popup.
+- `/pipeline` or `/pipeline status`: show a concise outcome/freshness line per local suite and outcome/age per GitHub workflow; no commands, fingerprints or log paths. The agent's `pipeline_status` tool retains detailed data.
 - `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
 Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
+
+## Automatic GitHub Actions status
+
+No setup or pipeline configuration is needed. In a checkout with a `github.com` Git remote, the extension uses the installed `gh` CLI and its existing authentication (`gh auth login`). Prefer `origin` when multiple GitHub remotes exist; HTTPS, SCP-style SSH and `ssh://git@github.com/` URLs are supported. GitHub Enterprise hosts and detached HEAD checkouts are not supported in this minimal version.
+
+```text
+✓ unit 3m ago
+✓ GitHub · Server package passed 32m ago
+✗ GitHub · Tests failed 29m ago
+› GitHub · Deploy running 1m ago
+```
+
+- Show the latest run **per workflow on the current branch**, even if it tested an older commit. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
+- Remote rows also appear when `.pi/pipeline.json` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
+- While a UI session is open, the existing monitor refreshes remote data at most once per 60 seconds. Branch/repository changes invalidate that cache. Status commands/tools share the same session cache; they do not force a network fetch within its lifetime.
+- Missing CLI, authentication/access problems and network failures produce a concise remote-unavailable row, without hiding local results. Failed refreshes replace prior remote success, rather than presenting old cached results as a successful fetch. Requests use a 10-second per-process timeout, 15-second overall remote-fetch deadline and bounded output.
+- Data stays in session memory. Shutdown/reload cancels pending requests and clears polling; nothing is written to the project or remote repository. `pipeline_run` remains local-only. No workflow creation, reruns, cancellation, filtering or remote configuration fields are added.
 
 ## Optional once-per-worktree preparation
 
@@ -68,7 +85,7 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "ma
 › integration running 24s
 ```
 
-- No config (or no suites) means no widget and no setup reminder. Invalid/unreadable configuration hides the widget; `/pipeline status` exposes the error.
+- No local config (or no suites) means no local rows and no setup reminder; GitHub rows remain independent. With neither local nor remote rows, the widget is hidden. Invalid/unreadable local configuration hides the widget; `/pipeline status` exposes the error.
 - The widget shows preparation/test state only, never approval messages. Previous stale passes are warning-colored, not green current-code results. Cancelled and timed-out runs remain distinct.
 - Each suite appears on its own line. Native TUI rendering truncates entries to fit narrow terminal widths. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
 - While a UI session is open, poll source/config/shared results every 5 seconds (1 second while a suite is running), with immediate refreshes after file tools and persisted run-state changes. No recursive file watchers.

@@ -2,6 +2,7 @@ import { Type } from "typebox";
 import { withFileMutationQueue, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Pipeline, projectRoot, type Confirm, type RunResult, type PipelineStatus, type RunOptions } from "./pipeline/core.ts";
 import { PipelineMonitor, renderWidget } from "./pipeline/widget.ts";
+import { GitHubActions } from "./pipeline/github.ts";
 
 const SuiteSchema = Type.Object({
 	command: Type.Array(Type.String(), { minItems: 1, description: "Executable followed by arguments; no shell interpolation or watch mode." }),
@@ -29,6 +30,18 @@ const summary = (results: RunResult[]) => results.length ? results.map(r => `${r
 
 export default function pipelineExtension(pi: ExtensionAPI): void {
 	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]>; automatic: boolean }>();
+	const githubReaders = new Map<string, GitHubActions>();
+	function stopGitHub() {
+		for (const reader of githubReaders.values()) reader.stop();
+		githubReaders.clear();
+	}
+	async function status(p: Pipeline): Promise<PipelineStatus> {
+		if (shuttingDown) return p.status();
+		let reader = githubReaders.get(p.root);
+		if (!reader) { reader = new GitHubActions(p.root); githubReaders.set(p.root, reader); }
+		const [local, github] = await Promise.all([p.status(), reader.read()]);
+		return { ...local, ...(github ? { github } : {}) };
+	}
 	let shuttingDown = false;
 	let generation = 0;
 	let monitor: PipelineMonitor | undefined;
@@ -36,7 +49,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	async function pipeline(ctx: ExtensionContext) { return new Pipeline(await projectRoot(ctx.cwd)); }
 	function refreshWidget(root: string) { if (!shuttingDown && monitorRoot === root) void monitor?.refresh(); }
 	function showWidget(ctx: ExtensionContext, status: PipelineStatus | undefined) {
-		if (!status?.configured || !Object.keys(status.suites).length) { ctx.ui.setWidget("pipeline", undefined); return; }
+		if (!renderWidget(status, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER).length) { ctx.ui.setWidget("pipeline", undefined); return; }
 		if (ctx.mode === "tui") {
 			ctx.ui.setWidget("pipeline", (_tui, theme) => ({ render: width => renderWidget(status, theme, width), invalidate() {} }));
 		} else ctx.ui.setWidget("pipeline", renderWidget(status, ctx.ui.theme, Number.MAX_SAFE_INTEGER));
@@ -83,12 +96,12 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	});
 	pi.registerTool({
 		name: "pipeline_status", label: "Pipeline status",
-		description: "Read local pipeline configuration and latest suite outcomes/freshness without executing tests or requesting approval.",
+		description: "Read local pipeline configuration and suite outcomes/freshness, plus latest GitHub Actions runs for the current branch. Remote status uses authenticated gh and a 60-second cache; no commit matching. Does not execute tests or request approval.",
 		parameters: Type.Object({}),
-		async execute(_id, _params, _signal, _update, ctx) { return response(await (await pipeline(ctx)).status()); },
+		async execute(_id, _params, _signal, _update, ctx) { return response(await status(await pipeline(ctx))); },
 	});
 	pi.registerCommand("pipeline", {
-		description: "Inspect local pipeline; run [suite|all], cancel",
+		description: "Inspect local pipeline and GitHub Actions; run [suite|all], cancel",
 		getArgumentCompletions(prefix) {
 			const values = ["status", "run all", "cancel"].filter(value => value.startsWith(prefix));
 			return values.map(value => ({ value, label: value }));
@@ -109,15 +122,16 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 					monitor?.agentStarted(); // Pause automatic retries until the next settled agent turn.
 					ctx.ui.notify(job ? "Pipeline cancellation requested." : "No pipeline running in this session.", "info");
 				} else if (action === "status") {
-					const status = await p.status();
-					const lines = renderWidget(status, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER);
-					ctx.ui.notify(!status.configured ? "No pipeline configuration." : lines.join("\n") || "No pipeline suites configured.", "info");
+					const current = await status(p);
+					const lines = renderWidget(current, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER);
+					ctx.ui.notify(lines.join("\n") || (!current.configured ? "No pipeline configuration or GitHub Actions runs." : "No pipeline suites configured."), "info");
 				} else throw new Error("Usage: /pipeline [status|run [suite|all]|cancel]");
 			} catch (error) { ctx.ui.notify(String(error), "error"); }
 		},
 	});
 	pi.on("session_start", async (_event, ctx) => {
 		const currentGeneration = ++generation;
+		stopGitHub();
 		await monitor?.stop();
 		if (currentGeneration !== generation) return;
 		monitor = undefined;
@@ -127,7 +141,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		const p = await pipeline(ctx);
 		if (shuttingDown || currentGeneration !== generation) return;
 		monitorRoot = p.root;
-		monitor = new PipelineMonitor(() => p.status(), status => showWidget(ctx, status), undefined, {
+		monitor = new PipelineMonitor(() => status(p), status => showWidget(ctx, status), undefined, {
 			idle: () => !shuttingDown && ctx.isIdle(),
 			run: status => start(p, ctx, "all", undefined, { automatic: true, expectedSourceFingerprint: status.sourceFingerprint, expectedConfigFingerprint: status.configFingerprint }),
 			cancel: () => { const job = active.get(p.root); if (job?.automatic) job.controller.abort(); },
@@ -144,6 +158,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		shuttingDown = true;
 		const jobs = [...active.values()];
 		for (const job of jobs) job.controller.abort();
+		stopGitHub();
 		await monitor?.stop();
 		monitor = undefined;
 		monitorRoot = undefined;

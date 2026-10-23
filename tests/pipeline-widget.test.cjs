@@ -13,6 +13,37 @@ test('widget hides completely for absent or empty configuration', () => {
   assert.equal(renderWidget({ configured: true, suites: {} }, plain, 80, now).length, 0);
 });
 
+test('remote-only widget shows latest outcomes without local configuration or freshness warnings', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  const status = { configured: false, suites: {}, github: { repository: 'owner/repo', branch: 'main', checkedAt: new Date(now).toISOString(), workflows: [
+    { name: 'Tests', status: 'completed', conclusion: 'success', updatedAt: new Date(now - 3600000).toISOString() },
+    { name: 'Build', status: 'in_progress' }, { name: 'Lint', status: 'queued' }, { name: 'Unused', status: 'never' },
+  ] } };
+  const text = renderWidget(status, plain, 120, now).join('\n');
+  assert.match(text, /✓ GitHub · Tests passed 1h ago/);
+  assert.match(text, /› GitHub · Build running/);
+  assert.match(text, /GitHub · Lint queued/);
+  assert.match(text, /GitHub · Unused never/);
+  assert.doesNotMatch(text, /stale|HEAD|local changes/);
+  status.github.workflows = [];
+  assert.equal(renderWidget(status, plain, 120, now).length, 0);
+});
+
+test('remote errors do not hide local suites and unknown conclusions never use success color', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  const colors = [];
+  const theme = { fg: (color, text) => { colors.push(color); return text; } };
+  const status = { configured: true, suites: { unit: result('passed') }, github: { workflows: [], error: 'GitHub Actions unavailable: check gh auth login.' } };
+  assert.match(renderWidget(status, theme, 120, now).join('\n'), /✓ unit.*\n.*GitHub Actions unavailable/s);
+  for (const conclusion of ['failure', 'cancelled', 'skipped', 'timed_out', 'neutral', 'action_required', 'unknown']) {
+    colors.length = 0;
+    const remote = { configured: false, suites: {}, github: { workflows: [{ name: 'Tests', status: 'completed', conclusion }] } };
+    assert.ok(renderWidget(remote, theme, 120, now)[0].includes('GitHub · Tests'));
+    assert.equal(colors.includes('success'), false);
+    assert.ok(renderWidget(remote, theme, 5, now).every(line => require('@earendil-works/pi-tui').visibleWidth(line) <= 5));
+  }
+});
+
 test('each suite gets its own line with age, outcome and stale previous pass', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: result('passed'), integration: result('failed', 12), e2e: { outcome: 'never', stale: false } } };
