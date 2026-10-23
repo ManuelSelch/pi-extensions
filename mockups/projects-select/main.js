@@ -35,7 +35,7 @@ function menu() {
   let heading = '', body = '';
   if (level === 'projects') {
     heading = 'Projects';
-    body = projects.length ? 'Choose a registered project.' : 'No registered projects. Use /projects create <name>.';
+    body = projects.length ? '' : 'No registered projects. Use /projects create <name>.';
     projects.forEach((item,index) => choices.push({label:`${index + 1}. ${item.name} — ${item.repos.length} repositories`,run:() => {project=item;level='repos';}}));
     choices.push({label:'↻ Refresh catalogue',run:refresh},{label:'Close',run:close});
   } else if (level === 'repos') {
@@ -52,7 +52,7 @@ function menu() {
     choices.push({label:`← Back to ${project.name}`,run:back},{label:'↻ Refresh status',run:refresh},{label:'Close',run:close});
   }
   // Exactly the serialized content production can pass through native select.
-  const title = `${heading}\n${body}`;
+  const title = body ? `${heading}\n${body}` : heading;
   $('#selector').dataset.selectTitle = title;
   $('#title').textContent = heading;
   $('#body').textContent = body; $('#body').hidden = !body;

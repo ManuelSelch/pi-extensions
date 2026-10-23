@@ -1,8 +1,8 @@
 # Projects — Native Select Preview
 
 ## Scope and review
-- Revision **1**, **in review**. No approval recorded for this simplified design.
-- Small disposable alternative to the approved custom-browser mockup. Production files and existing requirements/design remain unchanged pending selection of this approach.
+- Revision **2**, **approved**. User approved the native-select design with “approved. but remove the Choose a registered project. label”. Revision 2 applies that exact requested removal; populated Projects menus have no explanatory subtitle.
+- This approved native-select alternative replaces the custom-browser direction. Production files and existing requirements/technical design have not yet been reconciled with this simpler scope.
 - Goal: demonstrate the same `ctx.ui.select(title, string[])` menu flow in terminal Pi and Pi Chat. No `ui.custom()`, special web component, protocol changes or global extension state.
 
 ## Interaction
@@ -30,4 +30,4 @@
 - Both support `state=populated`, `state=empty`, `state=error` (Pi Chat checkout unreadable).
 - Fixtures cover passed, failed, stale (previously passed), running, queued, unconfigured local pipeline and no GitHub runs. All data is simulated; no APIs, credentials or persistence.
 - User-led review. Only serving and JavaScript syntax are checked by the agent; no browser automation requested.
-- Design question: approve this small native-menu alternative in place of the custom-browser design, or continue iterating?
+- Approval covers both interface approximations and the native menu flow, with the requested label removed. Approved mockup sources are preserved; no production code changed.
