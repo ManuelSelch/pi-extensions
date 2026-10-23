@@ -2,7 +2,7 @@ import { Type } from "typebox";
 import { withFileMutationQueue, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Pipeline, projectRoot, type Confirm, type RunResult, type PipelineStatus, type RunOptions } from "./pipeline/core.ts";
 import { PipelineMonitor, renderWidget } from "./pipeline/widget.ts";
-import { GitHubActions } from "./pipeline/github.ts";
+import { PipelineStatusReader } from "./pipeline/api.ts";
 
 const SuiteSchema = Type.Object({
 	command: Type.Array(Type.String(), { minItems: 1, description: "Executable followed by arguments; no shell interpolation or watch mode." }),
@@ -30,17 +30,10 @@ const summary = (results: RunResult[]) => results.length ? results.map(r => `${r
 
 export default function pipelineExtension(pi: ExtensionAPI): void {
 	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]>; automatic: boolean }>();
-	const githubReaders = new Map<string, GitHubActions>();
-	function stopGitHub() {
-		for (const reader of githubReaders.values()) reader.stop();
-		githubReaders.clear();
-	}
+	let statusReader = new PipelineStatusReader();
 	async function status(p: Pipeline): Promise<PipelineStatus> {
 		if (shuttingDown) return p.status();
-		let reader = githubReaders.get(p.root);
-		if (!reader) { reader = new GitHubActions(p.root); githubReaders.set(p.root, reader); }
-		const [local, github] = await Promise.all([p.status(), reader.read()]);
-		return { ...local, ...(github ? { github } : {}) };
+		return statusReader.read(p.root);
 	}
 	let shuttingDown = false;
 	let generation = 0;
@@ -131,9 +124,10 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	});
 	pi.on("session_start", async (_event, ctx) => {
 		const currentGeneration = ++generation;
-		stopGitHub();
+		statusReader.stop();
 		await monitor?.stop();
 		if (currentGeneration !== generation) return;
+		statusReader = new PipelineStatusReader();
 		monitor = undefined;
 		monitorRoot = undefined;
 		shuttingDown = false;
@@ -158,7 +152,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		shuttingDown = true;
 		const jobs = [...active.values()];
 		for (const job of jobs) job.controller.abort();
-		stopGitHub();
+		statusReader.stop();
 		await monitor?.stop();
 		monitor = undefined;
 		monitorRoot = undefined;
