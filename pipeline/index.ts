@@ -1,8 +1,8 @@
 import { Type } from "typebox";
 import { withFileMutationQueue, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Pipeline, projectRoot, type Confirm, type RunResult, type PipelineStatus, type RunOptions } from "./pipeline/core.ts";
-import { PipelineMonitor, renderWidget } from "./pipeline/widget.ts";
-import { PipelineStatusReader } from "./pipeline/api.ts";
+import { Pipeline, projectRoot, type Confirm, type RunResult, type PipelineStatus, type RunOptions } from "./core.ts";
+import { PipelineMonitor, renderWidget } from "./widget.ts";
+import { PipelineStatusReader } from "./api.ts";
 
 const SuiteSchema = Type.Object({
 	command: Type.Array(Type.String(), { minItems: 1, description: "Executable followed by arguments; no shell interpolation or watch mode." }),

@@ -4,7 +4,7 @@ const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-const source = readFileSync(require('node:path').join(__dirname, '..', 'preview.ts'), 'utf8');
+const source = readFileSync(require('node:path').join(__dirname, '..', 'index.ts'), 'utf8');
 const code = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;

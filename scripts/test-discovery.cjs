@@ -13,8 +13,6 @@ function discoverTests(root, moduleName) {
       else if (entry.isFile() && entry.name.endsWith('.test.cjs')) files.push(file);
     }
   }
-  // Transitional root suites remain supported until all extensions are moved.
-  if (!moduleName && existsSync(join(root, 'tests'))) walk('tests');
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || ignored.has(entry.name) || (moduleName && entry.name !== moduleName)) continue;
     const tests = entry.name + '/tests';

@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 function load() {
-  const source = readFileSync(require('node:path').join(__dirname, '..', 'agent-defaults.ts'), 'utf8');
+  const source = readFileSync(require('node:path').join(__dirname, '..', 'index.ts'), 'utf8');
   const code = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;

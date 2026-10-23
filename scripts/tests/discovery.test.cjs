@@ -16,7 +16,7 @@ test('discovers sorted module tests at any depth, excluding helpers and dependen
   for (const file of ['beta/tests/Integration/b.test.cjs', 'alpha/tests/a.test.cjs',
     'alpha/tests/Support/helper.cjs', 'node_modules/ignored/tests/no.test.cjs',
     'alpha/tests/node_modules/no.test.cjs', 'mockups/demo/tests/no.test.cjs',
-    'alpha/src/no.test.cjs']) add(file);
+    'alpha/src/no.test.cjs', 'tests/legacy.test.cjs']) add(file);
   assert.deepEqual(discoverTests(root), ['alpha/tests/a.test.cjs', 'beta/tests/Integration/b.test.cjs']);
   assert.deepEqual(discoverTests(root, 'beta'), ['beta/tests/Integration/b.test.cjs']);
   assert.throws(() => discoverTests(root, '../alpha'), /Invalid module/);

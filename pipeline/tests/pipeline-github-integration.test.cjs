@@ -6,7 +6,7 @@ async function driver(t, Reader) {
   const f = await fixture(t);
   const tools = {}, events = {}, commands = {}, widgets = [], notices = [];
   const Type = (await import('typebox')).Type;
-  const { default: extension } = load('pipeline.ts', {
+  const { default: extension } = load('pipeline/index.ts', {
     typebox: { Type }, './github.ts': { GitHubActions: Reader },
     '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_path, fn) => fn() },
   });

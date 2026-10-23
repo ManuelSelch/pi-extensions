@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 function load(file = 'pipeline/core.ts', overrides = {}) {
   const module = { exports: {} };
-  const code = ts.transpileModule(readFileSync(path.join(__dirname, '..', file), 'utf8'), {
+  const code = ts.transpileModule(readFileSync(path.join(__dirname, '..', '..', file), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   vm.runInNewContext(code, { module, exports: module.exports, process, Buffer, console, setTimeout, clearTimeout, AbortController,

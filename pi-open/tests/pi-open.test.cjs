@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { EventEmitter } = require('node:events');
 
-const source = readFileSync(require('node:path').join(__dirname, '..', 'pi-open.ts'), 'utf8');
+const source = readFileSync(require('node:path').join(__dirname, '..', 'index.ts'), 'utf8');
 const code = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;

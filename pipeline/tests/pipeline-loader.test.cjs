@@ -7,8 +7,8 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   const f = await fixture(t);
   const before = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = f.cache;
   t.after(() => { if (before === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = before; });
-  const { loadExtensions } = await import('../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js');
-  const result = await loadExtensions([path.resolve(__dirname, '..', 'pipeline.ts')], f.root);
+  const { loadExtensions } = await import('../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js');
+  const result = await loadExtensions([path.resolve(__dirname, '..', 'index.ts')], f.root);
   assert.deepEqual(result.errors, []); assert.equal(result.extensions.length, 1);
   const ext = result.extensions[0], widgets = [];
   assert.deepEqual([...ext.tools.keys()].sort(), ['pipeline_configure', 'pipeline_run', 'pipeline_status']);

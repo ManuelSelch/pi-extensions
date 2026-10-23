@@ -167,7 +167,7 @@ test('extension restores persisted results, refreshes stale code and clears hidd
   const p = new Pipeline(f.root);
   await p.configure(config(), approve); await p.run('unit');
   const Type = (await import('typebox')).Type;
-  const { default: extension } = load('pipeline.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
+  const { default: extension } = load('pipeline/index.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
   const events = {}, widgets = [];
   extension({ registerTool() {}, registerCommand() {}, on(name, fn) { events[name] = fn; } });
   const ctx = { cwd: f.root, mode: 'rpc', hasUI: true, isIdle: () => true, ui: { theme: plain, setWidget: (_key, content) => widgets.push(content) } };
@@ -188,7 +188,7 @@ test('extension restores persisted results, refreshes stale code and clears hidd
 test('TUI widget factory uses current theme and terminal width; non-UI sessions stay inactive', async t => {
   const f = await fixture(t); const Type = (await import('typebox')).Type;
   await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, JSON.stringify(config()));
-  const { default: extension } = load('pipeline.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
+  const { default: extension } = load('pipeline/index.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
   const events = {}, widgets = [];
   extension({ registerTool() {}, registerCommand() {}, on(name, fn) { events[name] = fn; } });
   const ctx = { cwd: f.root, mode: 'tui', hasUI: true, isIdle: () => true, ui: { theme: plain, setWidget: (_key, value) => widgets.push(value) } };
@@ -211,7 +211,7 @@ test('TUI widget factory uses current theme and terminal width; non-UI sessions 
 
 test('shutdown during async session initialization never creates a late widget or polling timer', async t => {
   const f = await fixture(t); const Type = (await import('typebox')).Type;
-  const { default: extension } = load('pipeline.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
+  const { default: extension } = load('pipeline/index.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
   const events = {}, widgets = [];
   extension({ registerTool() {}, registerCommand() {}, on(name, fn) { events[name] = fn; } });
   const ctx = { cwd: f.root, mode: 'rpc', hasUI: true, isIdle: () => true, ui: { theme: plain, setWidget: (_key, value) => widgets.push(value) } };

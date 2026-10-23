@@ -203,7 +203,7 @@ test('timeout kills the process group including a child that ignores SIGTERM', {
 test('extension registers tools and command, uses native approval, and shuts down background runs', async t => {
   const f = await fixture(t);
   const Type = (await import('typebox')).Type;
-  const { default: extension } = load('pipeline.ts', {
+  const { default: extension } = load('pipeline/index.ts', {
     typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_path, fn) => fn() },
   });
   const tools = {}, events = {}, commands = {}, notices = [], confirmations = [];
@@ -241,7 +241,7 @@ test('extension registers tools and command, uses native approval, and shuts dow
 
 test('shutdown dismisses a pending execution approval popup', async t => {
   const f = await fixture(t); const Type = (await import('typebox')).Type;
-  const { default: extension } = load('pipeline.ts', {
+  const { default: extension } = load('pipeline/index.ts', {
     typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_path, fn) => fn() },
   });
   const events = {}, commands = {};

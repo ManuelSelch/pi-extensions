@@ -168,7 +168,7 @@ test('after-agent automatic execution refreshes widgets only and shutdown cleans
   const p = new Pipeline(f.root), c = config('setTimeout(() => {}, 10000)'); c.suites.unit.auto = 'after-agent';
   await p.configure(c, approve);
   const Type = (await import('typebox')).Type;
-  const { default: extension } = load('pipeline.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
+  const { default: extension } = load('pipeline/index.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
   const events = {}, widgets = []; let notifications = 0, confirmations = 0;
   extension({ registerTool() {}, registerCommand() {}, on(name, fn) { events[name] = fn; }, sendMessage() { throw new Error('must not send agent messages'); } });
   const ctx = { cwd: f.root, mode: 'rpc', hasUI: true, isIdle: () => true, ui: {

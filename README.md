@@ -1,38 +1,54 @@
 # Pi extensions
 
-Personal extensions for the [Pi coding agent](https://github.com/badlogic/pi-mono), loaded
-from `~/.pi/agent/extensions`. This directory *is* the repo — Pi loads every `*.ts` here
-directly, so there is no build step.
+Personal extensions for the [Pi coding agent](https://pi.dev), loaded from
+`~/.pi/agent/extensions`. This directory is the repository. Pi loads TypeScript
+entry points directly through jiti; there is no build step.
 
-| File | Commands / behaviour |
+## Active extensions
+
+| Entry point | Commands / behaviour |
 |---|---|
-| `claude-auth.ts` | `/claude-login` — refreshes the Claude Code OAuth token doppelclaude depends on; also refreshes proactively before a doppelclaude turn. |
-| `codex-accounts.ts` | `/codex-account list\|add\|remove` — registers extra `openai-codex-<id>` providers so several ChatGPT subscriptions can be logged in at once (`~/.pi/agent/codex-accounts.json`). |
-| `extension-manager.ts` | `/extensions` — manage local file/folder entry points through native settings exclusions; save and restore defaults. |
-| `manual-updates.ts` | `/update` — runs `pi update --all` and restarts the current session. |
-| `model-filter.ts` | `/models-filter`, `/models-add`, `/models-remove` — edits the `enabledModels` filter in `settings.json`, including models whose provider is not logged in yet. |
-| `minimal-tui.ts` | No command. Suppresses the startup package banner and hides footer token/cost stats. |
-| `pdf.ts` | `/pdf <file.pdf>` — converts to `.txt` via `pdftotext`. |
-| `pi-open.ts` | `/open <app>` — opens the current directory using an app configured in `~/.pi/agent/pi-open.json`. |
-| `pipeline.ts` | `/pipeline` and `pipeline_configure` / `pipeline_run` / `pipeline_status` — approved test commands, compact status widget, manual/opt-in automatic runs, logs and persisted outcomes. See [pipeline usage](docs/pipeline/README.md). |
-| `projects.ts` | `/projects` — virtual project collections, current-repository membership and display names. See [projects usage](docs/projects/README.md). |
-| `readonly-mode.ts` | `/readonly` — blocks `write`/`edit` and destructive bash. |
-| `workspace.ts` | `/workspace add\|list\|remove` — persistent multi-root folder links with per-run workspace context. See [workspace usage](docs/workspace/README.md). |
-| `session-cleanup.ts` | `/session-cleanup-now`, `/session-cleanup-dry` — trashes every old session except the active session (`PI_SESSION_CLEANUP_DAYS`, default 3). |
-| `thinking-toggle.ts` | `/thinking-toggle` — switches between `minimal` and `high`. |
+| [agent-defaults/index.ts](agent-defaults/index.ts) | `/defaults` — edit global model, provider, thinking and enabled-model defaults. |
+| [ask-user/index.ts](ask-user/index.ts) | `ask_user` — interactive questions and text editing. |
+| [calendar/index.ts](calendar/index.ts) | `calendar_list`, `calendar_read` — sync and read configured calendars using vdirsyncer/khal. |
+| [context-badge/index.ts](context-badge/index.ts) | Show context-window usage as a status label. |
+| [extension-manager/index.ts](extension-manager/index.ts) | `/extensions` — manage local native exclusions and package enablement; save and restore defaults. |
+| [git-status/index.ts](git-status/index.ts) | Show repository/worktree Git status. |
+| [manual-updates/index.ts](manual-updates/index.ts) | `/update` — run `pi update --all`; restart Pi manually afterward. |
+| [minimal-tui/index.ts](minimal-tui/index.ts) | Suppress startup package notifications and hide footer token/cost stats. |
+| [model-filter/index.ts](model-filter/index.ts) | `/models-filter`, `/models-add`, `/models-remove` — edit the enabled-model filter. |
+| [pi-open/index.ts](pi-open/index.ts) | `/open <app>` — open the current directory in a configured app. |
+| [pipeline/index.ts](pipeline/index.ts) | `/pipeline`, `pipeline_configure`, `pipeline_run`, `pipeline_status` — approved local tests and GitHub Actions status. See [usage](docs/pipeline/README.md). |
+| [preview/index.ts](preview/index.ts) | `/preview`, `preview_start`, `preview_manage` — managed development previews. |
+| [projects.ts](projects.ts) | `/projects` — virtual repository collections and pipeline status. See [usage](docs/projects/README.md). Its existing loader and [projects/](projects/) tree are deliberately unchanged. |
+| [readonly-mode/index.ts](readonly-mode/index.ts) | `/readonly` — block write/edit tools and destructive bash. |
+| [todo/index.ts](todo/index.ts) | `todo`, `/todos` — session task tracking. |
+
+The six tracked files `agentic-flow.ts.disabled`, `claude-auth.ts.disabled`,
+`dot-clean.ts.disabled`, `pdf.ts.disabled`, `session-cleanup.ts.disabled`, and
+`thinking-toggle.ts.disabled` remain untouched and disabled. They are not native
+entry points and are not listed by `/extensions`. No personal settings are changed
+by this refactor. Absent/external extensions such as `workspace` are not part of
+this repository's migration.
 
 ## Open the current directory in an app
 
-The `pi-open.ts` extension registers `/open <app>`. It reads the supported app list from `~/.pi/agent/pi-open.json`; app names and launch commands are not built into the extension. Copy [`pi-open.example.json`](pi-open.example.json) to that location and customize it. The JSON `apps` object maps completion/command names to an executable and an `args` array. Use `{cwd}` wherever the current Pi working directory should appear; it is substituted as one argv element, and the process also starts with that directory as its cwd. No shell is used.
+`/open <app>` reads `~/.pi/agent/pi-open.json`. Copy the
+[example](pi-open/pi-open.example.json) there and customize it. The JSON `apps`
+object maps names to an executable `command` and `args` array. `{cwd}` is
+substituted within each argument; the process also starts in that directory. No
+shell is used. Configuration locations have not changed.
 
-The example entries target macOS: Finder and Apple Terminal use the `open` utility; VS Code uses the `code` CLI, which must be installed and available on `PATH`. Add or remove apps in the JSON file; restart Pi (or reload extensions) to ensure completion reflects changes.
+The example targets macOS: Finder and Apple Terminal use `open`; VS Code uses
+`code`, which must be on `PATH`. Reload/restart Pi after changing the app list to
+refresh completion.
 
 ## Enable or disable extensions
 
 `/extensions` lists local files and immediate folders containing `index.ts` or
 `index.js`, with separate user/project identities. Disabling writes an exact
-`-path` exclusion into the owning scope's `settings.json`; it never renames source
-files. For example, in the agent's settings file:
+`-path` exclusion into the owning scope's `settings.json`; it never renames files.
+For example, in the agent's settings file:
 
 ```json
 {
@@ -41,45 +57,54 @@ files. For example, in the agent's settings file:
 ```
 
 Paths are relative to the settings directory (the agent directory for user
-settings, or the project's `.pi` directory). The example is for a folder entry
-point; the current standalone pipeline entry uses `-extensions/pipeline.ts`.
-Enabling removes equivalent exact exclusions; if a broader glob still excludes
-the entry, the manager adds an exact `+path` inclusion. Exact exclusions take
-precedence. Conflicting settings in another scope are reported rather than
-silently rewritten. Other settings are preserved; malformed settings are not
-overwritten. Pi's built-in `pi config` is an alternative interface.
+settings, or the project's `.pi` directory). Enabling removes equivalent exact
+exclusions and may add an exact `+path` inclusion to override a broader glob.
+Exact exclusions take precedence. Conflicting exclusions in another scope are
+reported, not silently rewritten. Unrelated settings are preserved; malformed
+settings are not overwritten. Pi's built-in `pi config` is an alternative.
 
-Apply changes with `/reload` or restart. Saved defaults and seen-state live in
+Apply changes with `/reload` or restart. Defaults and seen-state live in
 `extension-manager.json` inside Pi's configured agent directory, keyed by current
-scope and entry path. There is no legacy-key mapping or `.disabled` file support.
-Package toggles still manage package declarations separately.
+scope and entry path. Old root paths have no compatibility shims or legacy-key
+mapping. Package toggles manage package declarations separately.
 
-The default-for-new policy cannot prevent first-load execution: Pi may already
-have selected an extension for the current runtime. Native exclusions must exist
-before loading when preventing execution matters. The default `enable` policy
-respects existing explicit exclusions.
+The default-for-new policy cannot prevent first-load execution: native exclusions
+must already exist before loading when preventing execution matters. The default
+`enable` policy respects existing explicit exclusions.
 
-## Development
-
-```bash
-npm install          # types only; Pi itself loads the .ts files via jiti
-npm run typecheck    # tsc --noEmit
-npm test            # full repository suite
-node --test extension-manager/tests/*.test.cjs  # focused manager tests
-```
-
-`node_modules/` exists purely so the editor can resolve
-`@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui`. Keep the dependency
-versions in step with the installed Pi (`pi --version`), otherwise the types describe a
-different API than the runtime.
-
-Smoke-test a single extension without loading the others:
+## Development and authoring
 
 ```bash
-pi --no-extensions -e ./claude-auth.ts --help
+npm ci                         # install shared development dependencies
+npm run typecheck              # all active entry points and nested production source
+npm test                       # all module-local test suites
+npm test -- pipeline           # focused module, at any test nesting depth
+npm test -- projects           # existing projects suites, unchanged
+npm test -- extension-manager
+npm test -- scripts            # tooling and isolated normal Pi discovery checks
 ```
 
-## Not tracked
+- Each migrated extension owns `<name>/index.ts`, implementation files, and
+  `<name>/tests/`. Small extensions may keep their implementation in `index.ts`;
+  larger ones may retain internal source/layer folders. Do not add root shims.
+- Pi discovers only immediate folder entry points, not nested source or tests.
+  Shared package tooling lives under `scripts/`; there is no global `tests/`.
+- The test runner recursively discovers `*.test.cjs` under each module's `tests/`,
+  skips dependencies/helpers, and checks the suite identity inventory in
+  [scripts/test-inventory.json](scripts/test-inventory.json). Update that inventory
+  when intentionally adding/removing suites. Identities are relative to `tests/`
+  so relocating a suite with its extension preserves the migration check.
+- Typechecking excludes tests, dependencies, mockups, external loaders, and the
+  disabled files. Dependencies are shared; extensions are not separate packages.
+- Keep SDK/TUI dependency versions compatible with the installed Pi. To check
+  native discovery against another installed SDK, set `PI_MIGRATION_SDK_ENTRY`
+  to its `dist/index.js` path when running `npm test -- scripts`.
 
-- `guardrails.json` — local state of the `pi-guardrails` package (machine paths, onboarding timestamps).
-- `pi-chat.ts` — symlink into `~/.pi/agent/git/pi-chat`, which is its own repo.
+Direct loading is an additional smoke test, not proof of automatic discovery:
+
+```bash
+pi --no-extensions -e ./pi-open/index.ts --help
+```
+
+`guardrails.json` is ignored local package state. External loaders/symlinks not
+tracked here are outside this migration.

@@ -154,7 +154,7 @@ test('linked worktrees share approval but never share preparation success', asyn
 
 test('tool schema exposes optional preparation, guidance, and visible blocking status', async () => {
   const Type = (await import('typebox')).Type, tools = {};
-  const { default: extension } = load('pipeline.ts', {
+  const { default: extension } = load('pipeline/index.ts', {
     typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() },
   });
   extension({ registerTool(spec) { tools[spec.name] = spec; }, registerCommand() {}, on() {} });
@@ -173,7 +173,7 @@ test('tool schema exposes optional preparation, guidance, and visible blocking s
 
 test('preparation failure is a structured tool error with suites still blocked', async t => {
   const f = await fixture(t), Type = (await import('typebox')).Type, tools = {};
-  const { default: extension } = load('pipeline.ts', {
+  const { default: extension } = load('pipeline/index.ts', {
     typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() },
   });
   extension({ registerTool(spec) { tools[spec.name] = spec; }, registerCommand() {}, on() {} });

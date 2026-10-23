@@ -19,7 +19,7 @@ async function createDriver(t, options = {}) {
   const menus = [];
   let command;
   const selfPath = path.join(agentDir, 'extensions', options.folderSelf ? 'extension-manager/index.ts' : 'extension-manager.ts');
-  const file = path.resolve(__dirname, '../../../extension-manager.ts');
+  const file = path.resolve(__dirname, '../../index.ts');
   const source = fs.readFileSync(file, 'utf8')
     .replaceAll('import.meta.filename', JSON.stringify(selfPath))
     .replaceAll('import.meta.url', JSON.stringify(pathToFileURL(selfPath).href));

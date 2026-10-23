@@ -9,6 +9,7 @@
   "calendar.test.cjs",
   "discovery.test.cjs",
   "git-status.test.cjs",
+  "layout.test.cjs",
   "manager.test.cjs",
   "pi-open.test.cjs",
   "pipeline-api-integration.test.cjs",
