@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load, fixture } = require('./pipeline-helpers.cjs');
+const { load, fixture, waitFor } = require('./pipeline-helpers.cjs');
 
 async function driver(t, Reader) {
   const f = await fixture(t);
@@ -22,6 +22,7 @@ test('remote-only project exposes status via tool, command and widget using a sh
   class Reader { constructor() { instances++; } async read() { return remote; } stop() { stopped++; } }
   const d = await driver(t, Reader);
   await d.events.session_start({}, d.ctx);
+  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('Tests running')));
   assert.match(d.widgets.at(-1).join('\n'), /## GitHub\n› Tests running/);
   const result = await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(result.details.configured, false);
@@ -35,6 +36,25 @@ test('remote-only project exposes status via tool, command and widget using a sh
   await d.events.session_shutdown({}, d.ctx);
   assert.equal(d.widgets.at(-1), undefined);
   assert.equal(stopped, 1);
+});
+
+test('session startup completes while GitHub is pending and the widget appears afterward', async t => {
+  let resolveRead, started = false;
+  class Reader {
+    read() { return new Promise(resolve => { resolveRead = resolve; }); }
+    stop() { resolveRead?.(undefined); }
+  }
+  const d = await driver(t, Reader);
+  const starting = d.events.session_start({}, d.ctx).then(() => { started = true; });
+  await waitFor(() => resolveRead);
+  // No network response has arrived: startup must already be free to finish.
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(started, true, 'session startup must not wait for GitHub status');
+  assert.equal(d.widgets.length, 0);
+  resolveRead(remote);
+  await starting;
+  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('Tests running')));
+  assert.match(d.widgets.at(-1).join('\n'), /## GitHub\n› Tests running/);
 });
 
 test('shutdown cancels an awaited remote refresh and cannot resurrect the widget', async t => {

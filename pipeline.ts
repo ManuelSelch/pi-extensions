@@ -146,7 +146,9 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 			run: status => start(p, ctx, "all", undefined, { automatic: true, expectedSourceFingerprint: status.sourceFingerprint, expectedConfigFingerprint: status.configFingerprint }),
 			cancel: () => { const job = active.get(p.root); if (job?.automatic) job.controller.abort(); },
 		});
-		await monitor.start();
+		// Status scans and GitHub requests must not hold up opening a session.
+		// The monitor owns its pending refresh; stop() still awaits/cancels cleanup.
+		void monitor.start().catch(() => { /* Background widget failures stay silent; explicit status exposes errors. */ });
 	});
 	pi.on("agent_start", async () => { monitor?.agentStarted(); });
 	pi.on("agent_settled", async () => { await monitor?.agentSettled(); });

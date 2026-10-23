@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { load, fixture, config, approve } = require('./pipeline-helpers.cjs');
+const { load, fixture, config, approve, waitFor } = require('./pipeline-helpers.cjs');
 const plain = { fg: (_color, text) => text };
 const now = Date.parse('2026-10-14T12:00:00Z');
 const result = (outcome, minutes = 3, stale = false) => ({ outcome, stale, startedAt: new Date(now - minutes * 60000).toISOString(), finishedAt: new Date(now - minutes * 60000).toISOString() });
@@ -143,6 +143,7 @@ test('extension restores persisted results, refreshes stale code and clears hidd
   const ctx = { cwd: f.root, mode: 'rpc', hasUI: true, isIdle: () => true, ui: { theme: plain, setWidget: (_key, content) => widgets.push(content) } };
   t.after(() => events.session_shutdown({}, ctx));
   await events.session_start({}, ctx);
+  await waitFor(() => widgets.at(-1)?.some(line => line.includes('✓ unit')));
   assert.match(widgets.at(-1).join('\n'), /✓ unit/);
   await fs.writeFile(path.join(f.root, 'source.txt'), 'changed');
   await events.tool_execution_end({ toolName: 'write' }, ctx);
@@ -163,6 +164,7 @@ test('TUI widget factory uses current theme and terminal width; non-UI sessions 
   const ctx = { cwd: f.root, mode: 'tui', hasUI: true, isIdle: () => true, ui: { theme: plain, setWidget: (_key, value) => widgets.push(value) } };
   t.after(() => events.session_shutdown({}, ctx));
   await events.session_start({}, ctx);
+  await waitFor(() => typeof widgets.at(-1) === 'function');
   const factory = widgets.at(-1); assert.equal(typeof factory, 'function');
   let colors = [];
   const component = factory({}, { fg: (color, text) => { colors.push(color); return text; } });
