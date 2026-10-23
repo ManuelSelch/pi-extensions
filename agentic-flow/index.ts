@@ -9,7 +9,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { getTodoStateFromBranch, summary as todoSummary, TODO_SNAPSHOT_ENTRY, todoSnapshot, type TodoState } from "./todo.ts";
+import { getTodoStateFromBranch, summary as todoSummary, TODO_SNAPSHOT_ENTRY, todoSnapshot, type TodoState } from "../todo/index.ts";
 
 const EXT_ID = "agentic-flow";
 

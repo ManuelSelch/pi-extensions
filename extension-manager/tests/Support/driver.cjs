@@ -112,6 +112,10 @@ async function createDriver(t, options = {}) {
       }
     },
     thenDefault(id, enabled) { assert.equal(JSON.parse(fs.readFileSync(configPath)).defaults[id], enabled); },
+    thenConfigIncludes(expected) {
+      const actual = JSON.parse(fs.readFileSync(configPath));
+      for (const [key, value] of Object.entries(expected)) assert.deepEqual(actual[key], value);
+    },
     thenSeen(id) { assert.ok(JSON.parse(fs.readFileSync(configPath)).seen.includes(id)); },
     async thenNativeEnabled(file, enabled) {
       const settingsManager = sdk.SettingsManager.inMemory(readSettings('user'), { projectTrusted: true });

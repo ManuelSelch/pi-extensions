@@ -164,6 +164,39 @@ test('default-for-new enable respects explicit settings exclusions on first disc
   manager.thenDefault('user:extensions/single.ts', false);
 });
 
+test('migrated disabled modules retain native exclusions and false defaults without changing unrelated configuration', async t => {
+  const manager = await createDriver(t, { folderSelf: true });
+  const names = ['agentic-flow', 'claude-auth', 'dot-clean', 'pdf', 'session-cleanup', 'thinking-toggle'];
+  const entries = names.map(name => manager.addExtension(name + '/index.ts', 'user', 'throw new Error("must remain disabled");'));
+  const ids = names.map(name => 'user:extensions/' + name + '/index.ts');
+  const settings = { theme: 'dark', skills: ['mine'], extensions: names.map(name => '-extensions/' + name + '/index.ts') };
+  manager.configure('user', settings);
+  manager.configure('project', { custom: 42 });
+  manager.setDefaults({
+    defaults: { 'historical.ts': true, ...Object.fromEntries(ids.map(id => [id, false])) },
+    seen: ['historical.ts', ...ids], disabledPackages: ['npm:saved'], defaultForNew: 'enable',
+  });
+  await manager.start();
+  await manager.act('Enable / disable extensions');
+  for (let i = 0; i < names.length; i++) {
+    manager.thenMenuIncludes('[ ] ' + ids[i]);
+    manager.thenDefault(ids[i], false);
+    manager.thenSeen(ids[i]);
+    await manager.thenNativeEnabled(entries[i], false);
+  }
+  manager.thenSettings('user', settings);
+  await manager.act('Enable / disable extensions', 'user:extensions/pdf/index.ts');
+  await manager.thenNativeEnabled(entries[3], true);
+  await manager.act('Apply defaults now');
+  for (const entry of entries) await manager.thenNativeEnabled(entry, false);
+  manager.thenSettings('user', { ...settings, extensions: [...settings.extensions.filter(entry => !entry.includes('/pdf/')), '-extensions/pdf/index.ts'] });
+  manager.thenSettings('project', { custom: 42 });
+  manager.thenDefault('historical.ts', true);
+  manager.thenConfigIncludes({ disabledPackages: ['npm:saved'], defaultForNew: 'enable' });
+  manager.thenSeen('historical.ts');
+  manager.thenSourcesUnchanged();
+});
+
 test('package toggling remains separate from local extension exclusions', async t => {
   const manager = await createDriver(t);
   manager.configure('user', { packages: ['npm:example'], theme: 'dark' });

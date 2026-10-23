@@ -24,12 +24,38 @@ entry points directly through jiti; there is no build step.
 | [readonly-mode/index.ts](readonly-mode/index.ts) | `/readonly` — block write/edit tools and destructive bash. |
 | [todo/index.ts](todo/index.ts) | `todo`, `/todos` — session task tracking. |
 
-The six tracked files `agentic-flow.ts.disabled`, `claude-auth.ts.disabled`,
-`dot-clean.ts.disabled`, `pdf.ts.disabled`, `session-cleanup.ts.disabled`, and
-`thinking-toggle.ts.disabled` remain untouched and disabled. They are not native
-entry points and are not listed by `/extensions`. No personal settings are changed
-by this refactor. Absent/external extensions such as `workspace` are not part of
-this repository's migration.
+## Disabled extensions
+
+The following modules now have normal folder entry points but remain disabled by
+native agent settings: [agentic-flow](agentic-flow/index.ts),
+[claude-auth](claude-auth/index.ts), [dot-clean](dot-clean/index.ts),
+[pdf](pdf/index.ts), [session-cleanup](session-cleanup/index.ts), and
+[thinking-toggle](thinking-toggle/index.ts). `/extensions` lists them as disabled;
+their current manager defaults are false. There are no `.disabled` source files.
+
+Disablement is local configuration, not a property of the source folder. Before
+installing these modules into another agent directory, merge these exclusions
+into that agent's `settings.json` (preserve any existing entries):
+
+```json
+{
+  "extensions": [
+    "-extensions/agentic-flow/index.ts",
+    "-extensions/claude-auth/index.ts",
+    "-extensions/dot-clean/index.ts",
+    "-extensions/pdf/index.ts",
+    "-extensions/session-cleanup/index.ts",
+    "-extensions/thinking-toggle/index.ts"
+  ]
+}
+```
+
+The authorized one-time migration backs up and updates the user's settings and
+manager defaults before exposing these entry points. No runtime settings
+migration is added. Existing implementations are preserved; these disabled
+modules are excluded from the active-source typecheck and are not certified for
+intentional reactivation. Absent/external extensions such as `workspace` remain
+outside this repository's migration.
 
 ## Open the current directory in an app
 
@@ -95,7 +121,9 @@ npm test -- scripts            # tooling and isolated normal Pi discovery checks
   when intentionally adding/removing suites. Identities are relative to `tests/`
   so relocating a suite with its extension preserves the migration check.
 - Typechecking excludes tests, dependencies, mockups, external loaders, and the
-  disabled files. Dependencies are shared; extensions are not separate packages.
+  six explicitly listed disabled module folders in `tsconfig.json`. Review that
+  list and compatibility before intentionally reactivating a module. Dependencies
+  are shared; extensions are not separate packages.
 - Keep SDK/TUI dependency versions compatible with the installed Pi. To check
   native discovery against another installed SDK, set `PI_MIGRATION_SDK_ENTRY`
   to its `dist/index.js` path when running `npm test -- scripts`.
