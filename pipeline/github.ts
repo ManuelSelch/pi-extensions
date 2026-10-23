@@ -1,12 +1,16 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-export interface WorkflowStatus {
+export interface JobStatus {
 	name: string;
 	status: string;
 	conclusion?: string;
-	updatedAt?: string;
 	url?: string;
+}
+export interface WorkflowStatus extends JobStatus {
+	updatedAt?: string;
+	jobs?: JobStatus[];
+	jobsError?: string;
 }
 export interface GitHubStatus {
 	repository: string;
@@ -109,6 +113,16 @@ export class GitHubActions {
 							name: workflow.name, status: run.status, conclusion: run.conclusion ?? undefined,
 							updatedAt: run.updated_at ?? run.created_at, url: run.html_url,
 						} : { name: workflow.name, status: "never" };
+						if (run) {
+							try {
+								if (!Number.isSafeInteger(run.id) || !Number.isSafeInteger(run.run_attempt)) throw new Error("Missing run identity");
+								const jobPages = await api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`, true);
+								results[position].jobs = jobPages.flatMap((page: { jobs: { name: string; status: string; conclusion: string | null; html_url: string }[] }) =>
+									page.jobs.map(job => ({ name: job.name, status: job.status, conclusion: job.conclusion ?? undefined, url: job.html_url })));
+							} catch {
+								results[position].jobsError = "Jobs unavailable: check connection and repository access.";
+							}
+						}
 					}
 				} catch (error) { controller.abort(); throw error; }
 			}));

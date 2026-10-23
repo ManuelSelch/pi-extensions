@@ -10,7 +10,7 @@
 
 ## Decisions & Trade-offs
 - Read-only integration: never create workflows, run jobs, cancel jobs, request configuration approval or add setup/disable options.
-- No commit matching, stale-code warnings, persistent remote cache or job-detail expansion.
+- No commit matching, stale-code warnings or persistent remote cache. Job rows follow the approved extension below; individual step details remain out of scope.
 - Use bounded CLI timeouts and output. Remote errors never suppress local results. For a detected GitHub repository, report missing `gh`, authentication or fetch failures concisely; never prompt automatically or display cached results as a successful fresh fetch.
 - Stop session refreshes on shutdown/reload and prevent late remote responses from restoring the widget.
 
@@ -18,6 +18,13 @@
 - Deterministic tests with a fake CLI boundary cover remote detection, branch selection, latest-per-workflow selection, status mapping, no runs, errors, timeout and cache deduplication.
 - Cover remote-only widget visibility, local/remote independence, narrow rendering, branch switches and shutdown cleanup.
 - Run existing pipeline tests, full extension tests, typecheck and Pi loader smoke test. Document prerequisites and refresh behavior in the pipeline README.
+
+## Job Rows — Approved Extension
+- Extend the existing reader to fetch all pages of jobs for the selected run's explicit `run_attempt`, preserving job names and API order, including matrix jobs. Never mix attempts or infer jobs from workflow YAML.
+- Add optional job data and a job-fetch error to each workflow. Include direct job URLs in detailed status. If job loading fails, retain the workflow outcome and show an indented jobs-unavailable warning instead of hiding valid workflow/local state.
+- Reuse the outcome renderer for indented job rows underneath each workflow. Show passed/failed/running/queued/skipped/cancelled and unknown states explicitly; keep ages on workflow rows only.
+- Reuse the existing cache, bounded workers, timeouts and shutdown cancellation. No configuration, dependencies, CI mutations or step expansion.
+- Verify pagination, explicit attempt selection, matrix names, empty jobs, partial job-fetch errors, links, rendering, terminal sanitization and existing local/remote regressions.
 
 ## Open Questions
 None.

@@ -15,7 +15,7 @@ async function driver(t, Reader) {
   t.after(() => events.session_shutdown({}, ctx));
   return { tools, events, commands, widgets, notices, ctx };
 }
-const remote = { repository: 'owner/repo', branch: 'main', checkedAt: '2026-01-01T00:00:00Z', workflows: [{ name: 'Tests', status: 'in_progress', url: 'https://github.com/owner/repo/actions/runs/1' }] };
+const remote = { repository: 'owner/repo', branch: 'main', checkedAt: '2026-01-01T00:00:00Z', workflows: [{ name: 'Tests', status: 'in_progress', url: 'https://github.com/owner/repo/actions/runs/1', jobs: [{ name: 'e2e', status: 'completed', conclusion: 'failure', url: 'https://github.com/owner/repo/actions/runs/1/job/2' }] }] };
 
 test('remote-only project exposes status via tool, command and widget using a shared reader', async t => {
   let instances = 0, stopped = 0;
@@ -26,8 +26,11 @@ test('remote-only project exposes status via tool, command and widget using a sh
   const result = await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(result.details.configured, false);
   assert.equal(result.details.github.workflows[0].url, remote.workflows[0].url);
+  assert.equal(result.details.github.workflows[0].jobs[0].url, remote.workflows[0].jobs[0].url);
+  assert.match(d.widgets.at(-1).join('\n'), /\n  ✗ e2e failed/);
   await d.commands.pipeline.handler('status', d.ctx);
   assert.match(d.notices.at(-1), /GitHub · Tests running/);
+  assert.match(d.notices.at(-1), /\n  ✗ e2e failed/);
   assert.equal(instances, 1);
   await d.events.session_shutdown({}, d.ctx);
   assert.equal(d.widgets.at(-1), undefined);

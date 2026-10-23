@@ -44,6 +44,43 @@ test('remote errors do not hide local suites and unknown conclusions never use s
   }
 });
 
+test('jobs render below their workflow with status, matrix names and no repeated age', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  const colors = [];
+  const theme = { fg: (color, text) => { colors.push([color, text]); return text; } };
+  const jobs = [
+    { name: 'build (node 24)', status: 'completed', conclusion: 'success' },
+    { name: 'e2e', status: 'completed', conclusion: 'failure' },
+    { name: 'sonar', status: 'completed', conclusion: 'skipped' },
+    { name: 'unit', status: 'in_progress' },
+    { name: 'lint', status: 'queued' },
+    { name: 'unknown', status: 'completed', conclusion: 'future' },
+  ];
+  const status = { configured: false, suites: {}, github: { workflows: [
+    { name: 'Tests', status: 'completed', conclusion: 'failure', updatedAt: new Date(now - 60000).toISOString(), jobs },
+    { name: 'Deploy', status: 'queued', jobs: [] },
+  ] } };
+  const lines = renderWidget(status, theme, 120, now);
+  assert.equal(lines.join('\n'), '✗ GitHub · Tests failed 1m ago\n  ✓ build (node 24) passed\n  ✗ e2e failed\n  ○ sonar skipped\n  › unit running\n  ○ lint queued\n  ○ unknown future\n○ GitHub · Deploy queued');
+  assert.ok(colors.some(([color, text]) => color === 'error' && text.includes('e2e')));
+  assert.equal(colors.some(([color, text]) => color === 'success' && text.includes('unknown')), false);
+  jobs[0].name = 'build\x1b[31m\n漢字';
+  for (const width of [1, 5, 20, 80]) {
+    const rendered = renderWidget(status, plain, width, now);
+    assert.ok(rendered.every(line => require('@earendil-works/pi-tui').visibleWidth(line) <= width));
+    assert.ok(rendered.every(line => !/[\x00-\x1f\x7f-\x9f]/.test(require('node:util').stripVTControlCharacters(line))));
+    assert.ok(rendered.every(line => !line.includes('\x1b[31m')));
+  }
+});
+
+test('job-fetch warning keeps workflow status and local rows visible', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  const status = { configured: true, suites: { unit: result('passed') }, github: { workflows: [
+    { name: 'Tests', status: 'completed', conclusion: 'failure', jobsError: 'Jobs unavailable: check connection and repository access.' },
+  ] } };
+  assert.equal(renderWidget(status, plain, 120, now).join('\n'), '✓ unit 3m ago\n✗ GitHub · Tests failed\n  ⚠ Jobs unavailable: check connection and repository access.');
+});
+
 test('each suite gets its own line with age, outcome and stale previous pass', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: result('passed'), integration: result('failed', 12), e2e: { outcome: 'never', stale: false } } };
