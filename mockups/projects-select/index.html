@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projects · Native select preview</title><link rel="stylesheet" href="./styles.css"></head>
+<body><main>
+<header class="review-header"><div><p class="eyebrow">NATIVE SELECT · REVISION 1</p><h1>Projects, one menu at a time.</h1></div><nav aria-label="Preview interface"><a data-view="terminal" href="?view=terminal">Pi terminal</a><a data-view="chat" href="?view=chat">Pi Chat</a></nav></header>
+<p class="intro">The same title and string options, rendered by each host’s existing <code>ui.select()</code>.</p>
+<section id="workspace" class="workspace" aria-label="Simulated Pi interface">
+<header class="host-header"><strong id="host-name">Pi terminal</strong><span>extensions · feat-projects-status</span></header>
+<div class="conversation"><p class="who">YOU</p><p>Show me the projects and their pipelines.</p><p class="command">/projects browse</p><p class="muted">No tests are executed. Only registered project repositories are included.</p></div>
+<p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+<div class="editor"><input id="composer" aria-label="Message Pi" placeholder="Message Pi…"><button id="reopen">/projects browse</button></div>
+<div id="presentation" class="presentation"><section id="selector" class="selector" aria-labelledby="title" tabindex="-1">
+<header class="select-header"><h2 id="title"></h2><button class="chat-only close" id="x" aria-label="Cancel selection">×</button></header>
+<pre id="body" class="body" hidden></pre>
+<div class="options" id="options" role="listbox" tabindex="0" aria-labelledby="title"></div>
+<footer><span>↑↓ navigate · Enter select · Esc cancel</span><div class="chat-only actions"><button id="cancel">Cancel</button><button class="primary" id="ok">OK</button></div></footer>
+</section></div>
+</section>
+<section class="review-notes"><p id="platform-note"></p><p>Choose a project → repository → details. Refresh waits for the snapshot, then reopens the menu. Escape goes back; at Projects, it closes.</p><p><a data-state="populated" href="?state=populated">Populated</a> · <a data-state="empty" href="?state=empty">Empty catalogue</a> · <a data-state="error" href="?state=error">Checkout error</a></p><p class="muted">Fake data. No custom tree, toolbar, search, or live status updates. Native rendering is approximated in HTML.</p></section>
+</main><script type="module" src="./main.js"></script></body></html>
