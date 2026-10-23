@@ -25,9 +25,9 @@ export class ProjectStatus {
         const repo = repositories[index++];
         try {
           const status = await reader!.read(repo.path);
-          reports.set(repo.identity, renderRepositoryStatus(repo.name, repo.path, status));
+          reports.set(repo.identity, renderRepositoryStatus(repo.name, status));
         } catch (error) {
-          reports.set(repo.identity, renderRepositoryStatus(repo.name, repo.path, undefined,
+          reports.set(repo.identity, renderRepositoryStatus(repo.name, undefined,
             error instanceof Error ? error.message : String(error)));
         }
       }
