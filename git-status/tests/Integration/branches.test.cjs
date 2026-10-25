@@ -33,7 +33,7 @@ test('primary without upstream is explicit and current=primary is not duplicated
   const app = new GitStatusDriver(t);
   app.addBranch('feat/search');
   await app.start('main');
-  app.thenRows(['main  no upstream', 'feat/search  merged']);
+  app.thenRows(['main  no upstream', '1 merged branch']);
 });
 
 test('ordinary checkout uses its primary checked-out branch and preserves file status', async t => {

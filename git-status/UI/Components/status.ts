@@ -1,6 +1,6 @@
 import type { GitStatus, RepositoryStatus, BranchStatus } from "../../Domain/status.ts";
 
-export function formatGitStatus(status: GitStatus): string {
+export function formatGitStatus(status: GitStatus, includeDivergence = true): string {
 	const parts = [status.branch];
 	if (status.changed === 0) {
 		parts.push("clean");
@@ -10,8 +10,8 @@ export function formatGitStatus(status: GitStatus): string {
 		if (status.modified > 0) parts.push(`~${status.modified} modified`);
 		if (status.untracked > 0) parts.push(`?${status.untracked} untracked`);
 	}
-	if (status.ahead > 0) parts.push(`↑${status.ahead}`);
-	if (status.behind > 0) parts.push(`↓${status.behind}`);
+	if (includeDivergence && status.ahead > 0) parts.push(`↑${status.ahead}`);
+	if (includeDivergence && status.behind > 0) parts.push(`↓${status.behind}`);
 	return parts.join("  ");
 }
 
@@ -57,10 +57,19 @@ function formatBranch(status: BranchStatus): StatusRow {
 export function formatRepositoryStatus(snapshot: RepositoryStatus): StatusRow[] {
 	const label = formatRepositoryLabel(snapshot.repoName, snapshot.status.branch, snapshot.worktreeName);
 	const rows: StatusRow[] = [{
-		text: `${label}  ${formatGitStatus(snapshot.status)}`,
+		text: `${label}  ${formatGitStatus(snapshot.status, false)}`,
 		label,
 		color: snapshot.status.changed === 0 ? "success" : "warning",
 	}];
 	if (snapshot.primaryUnavailable) rows.push({ text: "primary branch unavailable", color: "warning" });
-	return [...rows, ...snapshot.branches.map(formatBranch)];
+	let merged = 0;
+	for (const branch of snapshot.branches) {
+		if (branch.kind === "feature" && branch.unmerged === 0 && branch.branch !== snapshot.status.branch) {
+			merged++;
+		} else {
+			rows.push(formatBranch(branch));
+		}
+	}
+	if (merged > 0) rows.push({ text: `${merged} merged ${merged === 1 ? "branch" : "branches"}`, color: "muted" });
+	return rows;
 }
