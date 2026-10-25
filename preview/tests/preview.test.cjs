@@ -30,10 +30,12 @@ function load(overrides = {}) {
 }
 const { previewWidgetLines } = load();
 
-test('active preview shows only a named Markdown link', () => {
+const oscLink = (name, url) => `\x1b]8;;${url}\x1b\\${name}\x1b]8;;\x1b\\`;
+
+test('active preview shows only a named OSC 8 link', () => {
   for (const status of ['starting', 'running']) {
     assert.deepEqual(Array.from(previewWidgetLines({ name: 'Frontend', url: 'http://localhost:5174', status })),
-      ['[Frontend](http://localhost:5174)']);
+      [oscLink('Frontend', 'http://localhost:5174')]);
   }
 });
 
@@ -44,9 +46,29 @@ test('inactive preview clears the widget', () => {
   }
 });
 
-test('escapes brackets in preview names', () => {
-  assert.equal(previewWidgetLines({ name: 'Frontend [dev]', url: 'http://localhost:5174', status: 'running' })[0],
-    '[Frontend \\[dev\\]](http://localhost:5174)');
+test('keeps brackets and backslashes literal in preview names', () => {
+  const name = 'Frontend [dev] \\ test';
+  const url = 'https://localhost:5174/path?q=(dev)';
+  const line = previewWidgetLines({ name, url, status: 'running' })[0];
+  assert.equal(line, oscLink(name, url));
+  const { stripTerminalSequences, visibleWidth, getOsc8LinkAtColumn } = require('@earendil-works/pi-tui');
+  assert.equal(stripTerminalSequences(line), name);
+  assert.equal(visibleWidth(line), name.length);
+  assert.equal(getOsc8LinkAtColumn(line, 0), url);
+  assert.equal(getOsc8LinkAtColumn(`${line} outside`, name.length + 1), undefined);
+});
+
+test('removes terminal controls and normalizes newlines in preview names', () => {
+  const line = previewWidgetLines({ name: 'Front\r\nend\x1b\x07\x9c', url: 'http://localhost:5174', status: 'running' })[0];
+  assert.equal(line, oscLink('Front end', 'http://localhost:5174'));
+});
+
+test('missing or unsafe URLs render plain names without terminal escapes', () => {
+  for (const url of [undefined, '', 'not a url', 'javascript:alert(1)', 'file:///tmp/test',
+    'http://user:secret@localhost:5174', 'http://localhost:5174/\x1b]8;;bad\x07',
+    'http://localhost:5174/\npath', 'http://localhost:5174/\x9c']) {
+    assert.equal(previewWidgetLines({ name: 'Frontend', url, status: 'running' })[0], 'Frontend');
+  }
 });
 
 function runtime(branches = new Map(), globals = {}) {
@@ -131,7 +153,7 @@ test('reload stops the old process and restores active configuration in a fresh 
   assert.equal(fresh.children[0].command, config.command);
   assert.equal(fresh.children[0].options.cwd, process.cwd());
   assert.equal(restored.widgets.at(-1).key, 'Preview');
-  assert.equal(restored.widgets.at(-1).lines[0], '[Frontend](http://localhost:5174)');
+  assert.equal(restored.widgets.at(-1).lines[0], oscLink('Frontend', 'http://localhost:5174'));
   await fresh.tool('preview_start', restored, config);
   assert.equal(fresh.children.length, 1, 'does not duplicate an active preview');
   await fresh.event('session_shutdown', restored, { reason: 'quit' });
@@ -285,7 +307,7 @@ test('real HTTP preview stops, reloads, and restarts with the same named widget'
     await fresh.handlers.get('session_start')({ reason: 'reload' }, ctx);
     await waitFor(true);
     assert.equal(widgets.at(-1).key, 'Preview');
-    assert.equal(widgets.at(-1).lines[0], `[Frontend](${url})`);
+    assert.equal(widgets.at(-1).lines[0], oscLink('Frontend', url));
     await fresh.tools.get('preview_manage').execute('', { action: 'stop' }, undefined, undefined, ctx);
     await waitFor(false);
   } finally {

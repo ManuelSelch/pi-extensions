@@ -49,8 +49,14 @@ export function replayPreview(branch: Iterable<unknown>): SavedPreview | undefin
 
 export function previewWidgetLines(current: Pick<Preview, "name" | "url" | "status"> | undefined): string[] | undefined {
   if (!current || (current.status !== "starting" && current.status !== "running")) return undefined;
-  const name = current.name.replace(/[\\\[\]]/g, "\\$&").replace(/[\r\n]+/g, " ");
-  return [`[${name}](${current.url})`];
+  const name = current.name.replace(/[\r\n]+/g, " ").replace(/[\x00-\x1f\x7f-\x9f]/g, "");
+  // Never allow a destination to terminate OSC 8 or inject terminal commands.
+  if (!current.url || /[\x00-\x1f\x7f-\x9f]/.test(current.url)) return [name];
+  try {
+    const url = new URL(current.url);
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) return [name];
+  } catch { return [name]; }
+  return [`\x1b]8;;${current.url}\x1b\\${name}\x1b]8;;\x1b\\`];
 }
 
 function paint(ctx: ExtensionContext, current?: Preview) {
