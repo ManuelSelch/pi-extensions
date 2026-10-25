@@ -90,7 +90,7 @@ function createDriver(t) {
       process.env.PI_CODING_AGENT_DIR = path.join(root, 'agent');
       t.after(() => { if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous; });
       const { loadExtensions } = await import('../../../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js');
-      const loaded = await loadExtensions([path.resolve(__dirname, '../../../../projects.ts')], root);
+      const loaded = await loadExtensions([path.resolve(__dirname, '../../../../projects/index.ts')], root);
       assert.deepEqual(loaded.errors, []);
       assert.equal(loaded.extensions.length, 1);
       command = loaded.extensions[0].commands.get('projects');

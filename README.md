@@ -20,7 +20,7 @@ entry points directly through jiti; there is no build step.
 | [pi-open/index.ts](pi-open/index.ts) | `/open <app>` — open the current directory in a configured app. |
 | [pipeline/index.ts](pipeline/index.ts) | `/pipeline`, `pipeline_configure`, `pipeline_run`, `pipeline_status` — approved local tests and GitHub Actions status. See [usage](docs/pipeline/README.md). |
 | [preview/index.ts](preview/index.ts) | `/preview`, `preview_start`, `preview_manage` — managed development previews. |
-| [projects.ts](projects.ts) | `/projects` — virtual repository collections, pipeline status and native `/projects browse` menus. See [usage](docs/projects/README.md). The loader and [projects/](projects/) layout remain outside the modular migration. |
+| [projects/index.ts](projects/index.ts) | `/projects` — virtual repository collections, pipeline status and native `/projects browse` menus. See [usage](docs/projects/README.md). |
 | [readonly-mode/index.ts](readonly-mode/index.ts) | `/readonly` — block write/edit tools and destructive bash. |
 | [todo/index.ts](todo/index.ts) | `todo`, `/todos` — session task tracking. |
 

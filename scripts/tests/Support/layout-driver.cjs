@@ -18,15 +18,15 @@ function createLayoutDriver(t) {
   let registrations;
   return {
     thenOwnedLayout() {
-      assert.deepEqual(fs.readdirSync(root).filter(name => /\.[tj]s$/.test(name)).sort(), ['projects.ts']);
+      assert.deepEqual(fs.readdirSync(root).filter(name => /\.[tj]s$/.test(name)).sort(), []);
       assert.equal(fs.existsSync(path.join(root, 'tests')), false);
       assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith('.disabled')), []);
-      for (const name of [...modules, ...disabled]) {
+      for (const name of [...modules, ...disabled, 'projects']) {
         assert.ok(fs.statSync(path.join(root, name, 'index.ts')).isFile(), name);
         assert.equal(fs.existsSync(path.join(root, name + '.ts')), false);
       }
       const discovered = fs.readdirSync(root).filter(name => fs.existsSync(path.join(root, name, 'index.ts'))).sort();
-      assert.deepEqual(discovered, [...modules, ...disabled].sort());
+      assert.deepEqual(discovered, [...modules, ...disabled, 'projects'].sort());
     },
     async loadWithNativeDiscovery() {
       const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'extensions-layout-')));
@@ -36,7 +36,7 @@ function createLayoutDriver(t) {
       const cwd = path.join(temporary, 'project');
       fs.mkdirSync(extensions, { recursive: true });
       fs.mkdirSync(cwd);
-      for (const name of [...modules, ...disabled, 'projects', 'projects.ts', 'scripts', 'package.json', '.gitignore']) {
+      for (const name of [...modules, ...disabled, 'projects', 'scripts', 'package.json', '.gitignore']) {
         fs.cpSync(path.join(root, name), path.join(extensions, name), { recursive: true });
       }
       const exclusions = disabled.map(name => '-extensions/' + name + '/index.ts');
@@ -54,7 +54,7 @@ function createLayoutDriver(t) {
           cwd, env: { ...process.env, PI_CODING_AGENT_DIR: agent }, timeout: 60000,
         });
       registrations = JSON.parse(stdout);
-      const expectedEntries = [...modules.map(name => name + '/index.ts'), 'projects.ts'].sort();
+      const expectedEntries = [...modules.map(name => name + '/index.ts'), 'projects/index.ts'].sort();
       assert.deepEqual(registrations.entries, expectedEntries);
       assert.equal(registrations.loaded, expectedEntries.length);
       assert.deepEqual(registrations.disabled, disabled.map(name => name + '/index.ts').sort());
