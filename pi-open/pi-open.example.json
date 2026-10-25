@@ -11,6 +11,10 @@
     "code": {
       "command": "code",
       "args": ["{cwd}"]
+    },
+    "code-primary": {
+      "command": "code",
+      "args": ["{primaryRepo}"]
     }
   }
 }

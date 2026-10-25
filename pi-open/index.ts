@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,34 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 type App = { command: string; args: string[] };
 type Config = { apps: Record<string, App> };
+type Placeholders = { cwd: string; primaryRepo: string };
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "pi-open.json");
+const CWD_TOKEN = "{cwd}";
+const PRIMARY_REPO_TOKEN = "{primaryRepo}";
+
+function git(cwd: string, args: string[]): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile("git", args, { cwd, timeout: 5000, maxBuffer: 1024 * 1024 }, (error, stdout) => {
+      resolve(error ? undefined : stdout);
+    });
+  });
+}
+
+async function resolvePrimaryRepo(cwd: string): Promise<string | undefined> {
+  const root = (await git(cwd, ["rev-parse", "--show-toplevel"]))?.trim();
+  if (!root) return undefined;
+  const listing = await git(root, ["worktree", "list", "--porcelain"]);
+  const primary = listing
+    ?.split(/\r?\n/)
+    .find((line) => line.startsWith("worktree "))
+    ?.slice("worktree ".length)
+    .trim();
+  return primary || root;
+}
+
+function substitute(arg: string, placeholders: Placeholders): string {
+  return arg.replaceAll(CWD_TOKEN, placeholders.cwd).replaceAll(PRIMARY_REPO_TOKEN, placeholders.primaryRepo);
+}
 
 function loadConfig(): Config {
   const value: unknown = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
@@ -53,9 +80,17 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`Unknown app "${name}". Configure it in ${CONFIG_PATH}.`, "error");
         return;
       }
+      const usesPrimaryRepo = app.args.some((arg) => arg.includes(PRIMARY_REPO_TOKEN));
+      const primaryRepo = usesPrimaryRepo ? await resolvePrimaryRepo(ctx.cwd) : undefined;
+      if (usesPrimaryRepo && !primaryRepo) {
+        ctx.ui.notify(`Could not resolve the primary repository from ${ctx.cwd}.`, "error");
+        return;
+      }
+      const placeholders: Placeholders = { cwd: ctx.cwd, primaryRepo: primaryRepo ?? ctx.cwd };
+      const spawnCwd = usesPrimaryRepo ? primaryRepo! : ctx.cwd;
       try {
-        const child = spawn(app.command, app.args.map((arg) => arg.replaceAll("{cwd}", ctx.cwd)), {
-          cwd: ctx.cwd,
+        const child = spawn(app.command, app.args.map((arg) => substitute(arg, placeholders)), {
+          cwd: spawnCwd,
           detached: true,
           stdio: "ignore",
           shell: false,

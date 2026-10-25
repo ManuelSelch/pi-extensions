@@ -62,12 +62,16 @@ outside this repository's migration.
 `/open <app>` reads `~/.pi/agent/pi-open.json`. Copy the
 [example](pi-open/pi-open.example.json) there and customize it. The JSON `apps`
 object maps names to an executable `command` and `args` array. `{cwd}` is
-substituted within each argument; the process also starts in that directory. No
-shell is used. Configuration locations have not changed.
+substituted within each argument; the process also starts in that directory. The
+special `{primaryRepo}` placeholder resolves to the primary worktree root (the
+first `git worktree list` entry) and is useful for a `code-primary` app when the
+current session is on a feature branch. No shell is used. Configuration
+locations have not changed.
 
 The example targets macOS: Finder and Apple Terminal use `open`; VS Code uses
-`code`, which must be on `PATH`. Reload/restart Pi after changing the app list to
-refresh completion.
+`code`, which must be on `PATH`. The included `code-primary` app opens the main
+repo instead of the current worktree branch. Reload/restart Pi after changing the
+app list to refresh completion.
 
 ## Enable or disable extensions
 
