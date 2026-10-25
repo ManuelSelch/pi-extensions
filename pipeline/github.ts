@@ -12,12 +12,16 @@ export interface WorkflowStatus extends JobStatus {
 	jobs?: JobStatus[];
 	jobsError?: string;
 }
+export type GitHubErrorKind = "timeout" | "authentication" | "access" | "missing-cli" | "connection" | "unknown";
 export interface GitHubStatus {
 	repository: string;
 	branch: string;
 	checkedAt: string;
 	workflows: WorkflowStatus[];
 	error?: string;
+	errorKind?: GitHubErrorKind;
+	stale?: boolean;
+	lastSuccessfulAt?: string;
 }
 type Execute = (file: string, args: string[], cwd: string, signal: AbortSignal) => Promise<string>;
 const exec = promisify(execFile);
@@ -25,6 +29,24 @@ const execute: Execute = async (file, args, cwd, signal) => (await exec(file, ar
 	cwd, signal, timeout: 10000, maxBuffer: 2 * 1024 * 1024,
 	env: { ...process.env, GH_PROMPT_DISABLED: "1", GH_PAGER: "cat" },
 })).stdout;
+
+// Inspect diagnostics only for classification; never expose raw CLI output.
+function errorKind(error: unknown): GitHubErrorKind {
+	const detail = error as { code?: string; killed?: boolean; signal?: string; stderr?: string; message?: string } | undefined;
+	if (detail?.code === "ENOENT") return "missing-cli";
+	if (detail?.code === "ETIMEDOUT" || (detail?.killed && detail.signal === "SIGTERM")) return "timeout";
+	const text = `${detail?.stderr ?? ""}\n${detail?.message ?? ""}`;
+	if (/HTTP 401|gh auth login|not logged into|authentication required/i.test(text)) return "authentication";
+	if (/HTTP (403|404)/i.test(text)) return "access";
+	if (/^(ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ENETUNREACH)$/.test(detail?.code ?? "") || /error connecting to|no such host|TLS handshake|network is unreachable|connection (reset|refused)/i.test(text)) return "connection";
+	if (/timeout|timed out|deadline exceeded/i.test(text)) return "timeout";
+	return "unknown";
+}
+const errorMessages: Record<GitHubErrorKind, string> = {
+	timeout: "request timed out.", authentication: "run gh auth login.",
+	access: "check repository access or API limits.", "missing-cli": "install gh.",
+	connection: "check connection.", unknown: "refresh failed.",
+};
 
 /** github.com only; never send credentials to an arbitrary Git remote host. */
 function repository(remotes: string): string | undefined {
@@ -73,10 +95,16 @@ export class GitHubActions {
 		if (this.pending) return this.pending;
 		if (this.now() < this.expires) return this.cached;
 		const controller = this.controller;
-		const deadline = setTimeout(() => controller.abort(), 15000);
+		const deadline = setTimeout(() => controller.abort(Object.assign(new Error("GitHub request timed out"), { code: "ETIMEDOUT" })), 15000);
 		deadline.unref();
 		const request = this.fetch(repo, branch, controller).then(status => {
 			if (this.stopped || this.key !== key) return undefined;
+			if (!status.error) status.lastSuccessfulAt = new Date(this.now()).toISOString();
+			else if (this.cached?.lastSuccessfulAt) {
+				status.stale = true;
+				status.lastSuccessfulAt = this.cached.lastSuccessfulAt;
+				status.workflows = this.cached.workflows;
+			}
 			this.cached = status;
 			this.expires = this.now() + 60000;
 			return status;
@@ -103,7 +131,8 @@ export class GitHubActions {
 			// Four bounded workers avoid starting a process for every workflow at once.
 			let index = 0;
 			const results: WorkflowStatus[] = new Array(workflows.length);
-			const workers = await Promise.allSettled(Array.from({ length: Math.min(4, workflows.length) }, async () => {
+			let failure: { error: unknown } | undefined;
+			await Promise.allSettled(Array.from({ length: Math.min(4, workflows.length) }, async () => {
 				try {
 					while (index < workflows.length && !signal.aborted) {
 						const position = index++, workflow = workflows[position];
@@ -124,17 +153,15 @@ export class GitHubActions {
 							}
 						}
 					}
-				} catch (error) { controller.abort(); throw error; }
+				} catch (error) { failure ??= { error }; controller.abort(); throw error; }
 			}));
-			const failure = workers.find(worker => worker.status === "rejected");
-			if (failure?.status === "rejected") throw failure.reason;
+			if (failure) throw failure.error;
 			if (signal.aborted) throw new Error("GitHub request cancelled or timed out");
 			status.workflows = results;
 		} catch (error) {
+			status.errorKind = errorKind(signal.aborted && errorKind(signal.reason) === "timeout" ? signal.reason : error);
 			controller.abort();
-			status.error = (error as NodeJS.ErrnoException).code === "ENOENT"
-				? "GitHub Actions unavailable: install gh and run gh auth login."
-				: "GitHub Actions unavailable: check connection, repository access and gh auth login.";
+			status.error = `GitHub Actions unavailable: ${errorMessages[status.errorKind]}`;
 		}
 		return status;
 	}

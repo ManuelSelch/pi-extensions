@@ -8,7 +8,7 @@ function driver(options = {}) {
   const execute = async (file, args, _cwd, signal) => {
     calls.push([file, args]);
     if (file === 'git') return args[0] === 'remote' ? (options.remotes ?? 'origin\tgit@github.com:owner/repo.git (fetch)\n') : branch;
-    if (options.error) throw Object.assign(new Error('secret diagnostic'), { code: options.error });
+    if (options.error) throw typeof options.error === 'string' ? Object.assign(new Error('secret diagnostic'), { code: options.error }) : options.error;
     if (args.some(arg => arg.includes('/actions/workflows?'))) return JSON.stringify([{ workflows: options.workflows ?? [{ id: 1, name: 'Tests' }, { id: 2, name: 'Lint' }] }]);
     if (args.some(arg => arg.includes('/jobs?'))) {
       if (options.jobsError) throw new Error('private job fetch error');
@@ -104,7 +104,7 @@ test('no workflows is empty; missing CLI and fetch errors are concise and cached
   for (const error of ['ENOENT', 'EFAIL']) {
     const d = driver({ error });
     const status = await d.reader.read();
-    assert.match(status.error, error === 'ENOENT' ? /install gh/i : /gh auth login/i);
+    assert.match(status.error, error === 'ENOENT' ? /install gh/i : /unavailable/i);
     assert.doesNotMatch(status.error, /secret/);
     await d.reader.read(); assert.equal(d.queries().length, 1);
   }
@@ -126,15 +126,68 @@ test('concurrent refreshes share a request and shutdown aborts pending reads', a
   assert.equal(await d.reader.read(), undefined);
 });
 
-test('a failed refresh replaces prior success, then recovers on the next refresh', async () => {
-  const options = {};
+test('failed refreshes retain the last successful snapshot and timestamp until recovery', async () => {
+  const options = { jobPages: [{ jobs: [{ name: 'unit', status: 'completed', conclusion: 'success' }] }] };
   const d = driver(options);
-  assert.equal((await d.reader.read()).workflows[0].conclusion, 'success');
+  const success = await d.reader.read();
+  assert.equal(success.lastSuccessfulAt, new Date(0).toISOString());
   options.error = 'ETIMEDOUT'; d.advance(60000);
   const failed = await d.reader.read();
-  assert.ok(failed.error); assert.equal(failed.workflows.length, 0);
+  assert.ok(failed.error);
+  assert.equal(failed.stale, true);
+  assert.equal(failed.errorKind, 'timeout');
+  assert.deepEqual(failed.workflows, success.workflows);
+  assert.equal(failed.lastSuccessfulAt, success.lastSuccessfulAt);
+  assert.equal(failed.checkedAt, new Date(60000).toISOString());
+  const count = d.queries().length;
+  assert.equal(await d.reader.read(), failed);
+  assert.equal(d.queries().length, count);
+  d.advance(60000);
+  assert.equal((await d.reader.read()).lastSuccessfulAt, success.lastSuccessfulAt);
   delete options.error; d.advance(60000);
-  assert.equal((await d.reader.read()).workflows[0].conclusion, 'success');
+  const recovered = await d.reader.read();
+  assert.equal(recovered.workflows[0].conclusion, 'success');
+  assert.equal(recovered.error, undefined);
+  assert.equal(recovered.stale, undefined);
+  assert.equal(recovered.errorKind, undefined);
+  assert.equal(recovered.lastSuccessfulAt, new Date(180000).toISOString());
+});
+
+test('initial failures have no stale snapshot; errors use bounded categories without raw diagnostics', async () => {
+  for (const [error, kind] of [
+    [{ code: 'ETIMEDOUT' }, 'timeout'], [{ killed: true, signal: 'SIGTERM' }, 'timeout'],
+    [{ code: 'ENOENT' }, 'missing-cli'], [{ stderr: 'gh: Bad credentials (HTTP 401) secret' }, 'authentication'],
+    [{ stderr: 'To get started with GitHub CLI, please run: gh auth login' }, 'authentication'],
+    [{ stderr: 'gh: Not Found (HTTP 404) secret' }, 'access'],
+    [{ stderr: 'gh: API rate limit exceeded (HTTP 403) secret' }, 'access'],
+    [{ stderr: 'error connecting to api.github.com secret' }, 'connection'],
+    [{ code: 'EFAIL', message: 'secret' }, 'unknown'],
+  ]) {
+    const status = await driver({ error }).reader.read();
+    assert.equal(status.errorKind, kind);
+    assert.equal(status.stale, undefined);
+    assert.equal(status.lastSuccessfulAt, undefined);
+    assert.equal(status.workflows.length, 0);
+    assert.doesNotMatch(JSON.stringify(status), /secret/);
+    if (kind !== 'authentication') assert.doesNotMatch(status.error, /gh auth login/);
+  }
+});
+
+test('branch and repository changes never reuse another selection\'s successful snapshot', async () => {
+  const options = {};
+  const d = driver(options);
+  await d.reader.read();
+  options.error = 'ETIMEDOUT'; d.branch('main');
+  const branch = await d.reader.read();
+  assert.equal(branch.stale, undefined);
+  assert.equal(branch.workflows.length, 0);
+  delete options.error;
+  d.advance(60000); await d.reader.read();
+  options.error = 'ETIMEDOUT'; options.remotes = 'origin\thttps://github.com/other/repo.git (fetch)';
+  const repo = await d.reader.read();
+  assert.equal(repo.repository, 'other/repo');
+  assert.equal(repo.stale, undefined);
+  assert.equal(repo.workflows.length, 0);
 });
 
 test('switching branches aborts previous fetches and discards their late results', async () => {

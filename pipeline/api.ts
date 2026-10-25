@@ -2,7 +2,7 @@ import { Pipeline, projectRoot, type PipelineStatus } from "./core.ts";
 import { GitHubActions } from "./github.ts";
 
 export type { PipelineStatus, SuiteStatus, RunResult, Config, Suite, Prepare } from "./core.ts";
-export type { GitHubStatus, WorkflowStatus, JobStatus } from "./github.ts";
+export type { GitHubStatus, GitHubErrorKind, WorkflowStatus, JobStatus } from "./github.ts";
 
 /**
  * Read-only local and GitHub status for arbitrary checkout paths.

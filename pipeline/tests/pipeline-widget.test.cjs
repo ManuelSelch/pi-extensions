@@ -129,6 +129,33 @@ test('jobs render below their workflow with status, matrix names and no repeated
   }
 });
 
+test('stale GitHub heading uses successful-fetch age and dims cached workflows and jobs', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  const styled = [];
+  const theme = { fg: (color, text) => { styled.push([color, text]); return text; } };
+  const status = { configured: true, suites: { unit: result('passed') }, github: {
+    stale: true, lastSuccessfulAt: new Date(now - 180000).toISOString(), checkedAt: new Date(now).toISOString(),
+    error: 'GitHub Actions unavailable: request timed out.', errorKind: 'timeout',
+    workflows: [{ name: 'Tests', status: 'completed', conclusion: 'success', updatedAt: new Date(now - 3600000).toISOString(),
+      jobs: [{ name: 'unit', status: 'completed', conclusion: 'failure' }] }],
+  } };
+  const lines = Array.from(renderWidget(status, theme, 120, now));
+  assert.deepEqual(lines, ['Local', '✓ unit 3m ago', '⚠ GitHub · stale 3m · timeout', '✓ Tests passed 1h ago', '  └─ ✗ unit failed']);
+  assert.ok(styled.some(([color, text]) => color === 'warning' && text === lines[2]));
+  for (const line of lines.slice(3)) assert.ok(styled.some(([color, text]) => color === 'muted' && text === line));
+  assert.ok(renderWidget(status, plain, 120, now + 60000).includes('⚠ GitHub · stale 4m · timeout'));
+  for (const width of [1, 5, 20]) assert.ok(renderWidget(status, theme, width, now).every(line => require('@earendil-works/pi-tui').visibleWidth(line) <= width));
+  delete status.github.error; delete status.github.stale; delete status.github.errorKind;
+  assert.ok(renderWidget(status, plain, 120, now).includes('GitHub'));
+  assert.doesNotMatch(renderWidget(status, plain, 120, now).join('\n'), /stale|timeout/);
+});
+
+test('initial classified GitHub errors use a compact unavailable heading without stale rows', () => {
+  const { renderWidget } = load('pipeline/widget.ts');
+  const status = { configured: false, suites: {}, github: { workflows: [], error: 'Request timed out.', errorKind: 'timeout' } };
+  assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), ['⚠ GitHub · unavailable · timeout']);
+});
+
 test('job-fetch warning keeps workflow status and local rows visible', () => {
   const { renderWidget } = load('pipeline/widget.ts');
   const status = { configured: true, suites: { unit: result('passed') }, github: { workflows: [
