@@ -1,30 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
-const vm = require('node:vm');
-const ts = require('typescript');
-
-function load() {
-  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8');
-  const code = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-  const module = { exports: {} };
-  vm.runInNewContext(code, {
-    module,
-    exports: module.exports,
-    require(id) {
-      if (id === '@earendil-works/pi-coding-agent') return {};
-      return require(id);
-    },
-    process,
-    console,
-  });
-  return module.exports;
-}
-
-const { parseGitStatus, formatGitStatus, formatRepositoryLabel } = load();
+const { loader } = require('./load.cjs');
+const { parseGitStatus, formatGitStatus, formatRepositoryLabel } = loader()(join(__dirname, '..', 'index.ts'));
 
 test('parses branch and staged, modified, and untracked files', () => {
   const status = parseGitStatus([

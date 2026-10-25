@@ -1,5 +1,7 @@
 [
   "Domain/catalogue.test.cjs",
+  "Domain/status.test.cjs",
+  "Integration/branches.test.cjs",
   "Integration/browse-lifecycle.test.cjs",
   "Integration/browse.test.cjs",
   "Integration/commands.test.cjs",
@@ -7,6 +9,7 @@
   "Integration/loader.test.cjs",
   "Integration/status.test.cjs",
   "UI/Components/browse.test.cjs",
+  "UI/Components/git-status.test.cjs",
   "UI/Components/status.test.cjs",
   "agent-defaults-filter.test.cjs",
   "calendar.test.cjs",

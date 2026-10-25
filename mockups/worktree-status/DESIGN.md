@@ -1,9 +1,9 @@
 # Worktree-aware status mockup
 
 - Goal: Make unmerged worktree branches and unpushed primary-branch commits hard to overlook.
-- Scope: A static, compact representation of Pi's existing footer status widget with a current-checkout row, a primary-branch push row, and one row per linked worktree.
-- Revision: 3
-- Decisions: Match the existing plain text/TUI widget style: colored inline status text, no message bubble, Markdown layout, buttons, or interactive controls. Row one explicitly identifies the current checkout. Row two explicitly names the primary branch and shows its push state plus worktree branches not merged into it. Worktree summary is intended to remain visible from any checkout when linked worktrees exist.
+- Scope: A static, compact representation of Pi's existing footer status widget with a current-checkout row and additional branch status rows.
+- Revision: 7
+- Decisions: Match the existing plain text/TUI widget style: colored inline status text, no message bubble, Markdown layout, buttons, or interactive controls. Omit primary/worktree classifications; identify rows by branch name. No current marker: the first row implicitly describes the active checkout. Keep its repository, branch and file status on the first row; show merge status on separate branch rows to avoid an overly long line. Below the checkout row, show the primary branch first, the current feature branch second, then other branches sorted by name. When the current branch is primary, show it only once. Omit merge-target text (`→ main`) to reduce noise; keep push status separate. This is a display simplification, not a change to which branch is used for merge comparison. Branch summary remains visible from any checkout when linked worktrees exist. Narrow layouts wrap inline text.
 - Simulated: Repository name, branch, counts, and colors are illustrative. Here Pi is in `feature/search`, while `main` is the primary worktree branch; `feature/search` has three commits not merged into `main`, and `main` has two commits to push. No live Git state or actions.
 - Outstanding: How to keep the widget compact when a repository has many linked worktrees; widget width/truncation in narrow terminals.
-- Review status: in review.
+- Review status: approved. User approved revision 7 with ordering clarification: “primary will always be first, and the currenet branch will always be second. implelment it”. Checkout summary remains above the ordered branch rows.

@@ -1,140 +1,12 @@
-import { execFile } from "node:child_process";
-import { basename, dirname, resolve } from "node:path";
-import { promisify } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { readGitStatus } from "./Infra/git.ts";
+import { formatRepositoryStatus } from "./UI/Components/status.ts";
 
-const execFileAsync = promisify(execFile);
+export { parseGitStatus } from "./Domain/status.ts";
+export type { GitStatus } from "./Domain/status.ts";
+export { formatGitStatus, formatRepositoryLabel } from "./UI/Components/status.ts";
+
 const REFRESH_TOOLS = new Set(["write", "edit", "bash"]);
-
-export interface GitStatus {
-	branch: string;
-	ahead: number;
-	behind: number;
-	changed: number;
-	staged: number;
-	modified: number;
-	untracked: number;
-}
-
-function parseBranch(header: string): string {
-	const value = header.slice(3).trim();
-	if (value.startsWith("HEAD (")) return "detached";
-	if (value.startsWith("No commits yet on ")) return value.slice("No commits yet on ".length);
-
-	const upstreamSeparator = value.indexOf("...");
-	return (upstreamSeparator >= 0 ? value.slice(0, upstreamSeparator) : value) || "detached";
-}
-
-function parseDivergence(header: string): { ahead: number; behind: number } {
-	const ahead = header.match(/ahead (\d+)/)?.[1];
-	const behind = header.match(/behind (\d+)/)?.[1];
-	return { ahead: ahead ? Number(ahead) : 0, behind: behind ? Number(behind) : 0 };
-}
-
-export function parseGitStatus(output: string): GitStatus {
-	const lines = output.split(/\r?\n/).filter(Boolean);
-	const header = lines.find((line) => line.startsWith("## ")) ?? "## detached";
-	const divergence = parseDivergence(header);
-	let staged = 0;
-	let modified = 0;
-	let untracked = 0;
-	let changed = 0;
-
-	for (const line of lines) {
-		if (line.startsWith("## ") || line.length < 2) continue;
-		const index = line[0];
-		const worktree = line[1];
-		changed++;
-		if (index === "?" && worktree === "?") {
-			untracked++;
-			continue;
-		}
-		if (index !== " ") staged++;
-		if (worktree !== " ") modified++;
-	}
-
-	return {
-		branch: parseBranch(header),
-		...divergence,
-		changed,
-		staged,
-		modified,
-		untracked,
-	};
-}
-
-export function formatGitStatus(status: GitStatus): string {
-	const parts = [status.branch];
-	if (status.changed === 0) {
-		parts.push("clean");
-	} else {
-		parts.push(`${status.changed} changed`);
-		if (status.staged > 0) parts.push(`+${status.staged} staged`);
-		if (status.modified > 0) parts.push(`~${status.modified} modified`);
-		if (status.untracked > 0) parts.push(`?${status.untracked} untracked`);
-	}
-	if (status.ahead > 0) parts.push(`↑${status.ahead}`);
-	if (status.behind > 0) parts.push(`↓${status.behind}`);
-	return parts.join("  ");
-}
-
-async function readGitStatus(
-	cwd: string,
-): Promise<{ repoName: string; worktreeName?: string; status: GitStatus } | undefined> {
-	try {
-		const rootResult = await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd });
-		const repoRoot = rootResult.stdout.trim();
-		if (!repoRoot) return undefined;
-
-		// In a linked worktree, --show-toplevel is the worktree directory while
-		// --git-common-dir points back to the main repository's .git directory.
-		const commonDirResult = await execFileAsync("git", ["rev-parse", "--git-common-dir"], {
-			cwd: repoRoot,
-		});
-		const commonRoot = dirname(resolve(repoRoot, commonDirResult.stdout.trim()));
-		const repoName = basename(commonRoot);
-		const worktreeName = commonRoot === resolve(repoRoot) ? undefined : basename(repoRoot);
-
-		const statusResult = await execFileAsync(
-			"git",
-			["status", "--porcelain=v1", "--branch", "--untracked-files=normal"],
-			{ cwd: repoRoot },
-		);
-		return {
-			repoName,
-			worktreeName,
-			status: parseGitStatus(statusResult.stdout),
-		};
-	} catch {
-		return undefined;
-	}
-}
-
-export function formatRepositoryLabel(repoName: string, branch: string, worktreeName?: string): string {
-	if (!worktreeName) return repoName;
-
-	// Worktree directories are commonly named after the branch with slashes
-	// replaced by hyphens (for example fix-exit-worktree for fix/exit-worktree).
-	// Showing both would repeat the same identity in the widget.
-	const branchDirectoryName = branch.replaceAll("/", "-");
-	return worktreeName === branch || worktreeName === branchDirectoryName
-		? repoName
-		: `${repoName}/${worktreeName}`;
-}
-
-function renderStatus(
-	ctx: ExtensionContext,
-	repoName: string,
-	status: GitStatus,
-	worktreeName?: string,
-): string {
-	const theme = ctx.ui.theme;
-	const label = formatRepositoryLabel(repoName, status.branch, worktreeName);
-	const repo = theme.fg("accent", label);
-	const details = formatGitStatus(status);
-	if (status.changed === 0) return `${repo}  ${theme.fg("success", details)}`;
-	return `${repo}  ${theme.fg("warning", details)}`;
-}
 
 export default function gitStatusExtension(pi: ExtensionAPI): void {
 	let refreshInFlight: Promise<void> | undefined;
@@ -153,7 +25,11 @@ export default function gitStatusExtension(pi: ExtensionAPI): void {
 				if (!result) {
 					ctx.ui.setWidget("git-status", undefined);
 				} else {
-					ctx.ui.setWidget("git-status", [renderStatus(ctx, result.repoName, result.status, result.worktreeName)]);
+					ctx.ui.setWidget("git-status", formatRepositoryStatus(result).map(row =>
+							row.label
+								? ctx.ui.theme.fg("accent", row.label) + ctx.ui.theme.fg(row.color, row.text.slice(row.label.length))
+								: ctx.ui.theme.fg(row.color, row.text),
+						));
 				}
 			} while (refreshRequested);
 		})();
