@@ -3,12 +3,11 @@ import type { GitStatus, RepositoryStatus, BranchStatus } from "../../Domain/sta
 export function formatGitStatus(status: GitStatus, includeDivergence = true): string {
 	const parts = [status.branch];
 	if (status.changed === 0) {
-		parts.push("clean");
+		parts.push("✓");
 	} else {
-		parts.push(`${status.changed} changed`);
-		if (status.staged > 0) parts.push(`+${status.staged} staged`);
-		if (status.modified > 0) parts.push(`~${status.modified} modified`);
-		if (status.untracked > 0) parts.push(`?${status.untracked} untracked`);
+		if (status.staged > 0) parts.push(`+${status.staged}`);
+		if (status.modified > 0) parts.push(`~${status.modified}`);
+		if (status.untracked > 0) parts.push(`?${status.untracked}`);
 	}
 	if (includeDivergence && status.ahead > 0) parts.push(`↑${status.ahead}`);
 	if (includeDivergence && status.behind > 0) parts.push(`↓${status.behind}`);
@@ -37,7 +36,7 @@ export interface StatusRow {
 function formatBranch(status: BranchStatus): StatusRow {
 	if (status.kind === "feature") {
 		const text = status.unmerged === undefined ? "merge unknown"
-			: status.unmerged === 0 ? "merged" : `+${status.unmerged} unmerged`;
+			: status.unmerged === 0 ? "✓" : `●${status.unmerged}`;
 		return { text: `${status.branch}  ${text}`, label: status.branch, color: status.unmerged === 0 ? "muted" : "warning" };
 	}
 	let detail: string;
@@ -46,9 +45,9 @@ function formatBranch(status: BranchStatus): StatusRow {
 	else if (status.ahead === undefined || status.behind === undefined) detail = "upstream unknown";
 	else {
 		const parts: string[] = [];
-		if (status.ahead > 0) parts.push(`↑${status.ahead} to push`);
-		if (status.behind > 0) parts.push(`↓${status.behind} behind`);
-		detail = parts.join("  ") || "up to date";
+		if (status.ahead > 0) parts.push(`↑${status.ahead}`);
+		if (status.behind > 0) parts.push(`↓${status.behind}`);
+		detail = parts.join("  ") || "✓";
 		if (!parts.length) color = "success";
 	}
 	return { text: `${status.branch}  ${detail}`, label: status.branch, color };
@@ -57,7 +56,7 @@ function formatBranch(status: BranchStatus): StatusRow {
 export function formatRepositoryStatus(snapshot: RepositoryStatus): StatusRow[] {
 	const label = formatRepositoryLabel(snapshot.repoName, snapshot.status.branch, snapshot.worktreeName);
 	const rows: StatusRow[] = [{
-		text: `${label}  ${formatGitStatus(snapshot.status, false)}`,
+		text: `${label} · ${formatGitStatus(snapshot.status, false)}`,
 		label,
 		color: snapshot.status.changed === 0 ? "success" : "warning",
 	}];
@@ -70,6 +69,6 @@ export function formatRepositoryStatus(snapshot: RepositoryStatus): StatusRow[] 
 			rows.push(formatBranch(branch));
 		}
 	}
-	if (merged > 0) rows.push({ text: `${merged} merged ${merged === 1 ? "branch" : "branches"}`, color: "muted" });
+	if (merged > 0) rows.push({ text: `✓ ${merged} ${merged === 1 ? "branch" : "branches"}`, color: "muted" });
 	return rows;
 }

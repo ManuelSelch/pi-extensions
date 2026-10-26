@@ -35,14 +35,14 @@ test('counts conflicts in both staged and modified buckets', () => {
 test('formats a clean branch with ahead and behind counts', () => {
   assert.equal(
     formatGitStatus({ branch: 'main', ahead: 2, behind: 1, changed: 0, staged: 0, modified: 0, untracked: 0 }),
-    'main  clean  ↑2  ↓1',
+    'main  ✓  ↑2  ↓1',
   );
 });
 
 test('formats changed files without zero-valued categories', () => {
   assert.equal(
     formatGitStatus({ branch: 'feature', ahead: 0, behind: 0, changed: 3, staged: 1, modified: 1, untracked: 1 }),
-    'feature  3 changed  +1 staged  ~1 modified  ?1 untracked',
+    'feature  +1  ~1  ?1',
   );
 });
 

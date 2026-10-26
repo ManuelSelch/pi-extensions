@@ -23,17 +23,17 @@ test('merging updates the widget and shows primary commits to push', async t => 
   app.addBranch('feat/search');
   app.commit('feat/search');
   await app.start('feat/search');
-  app.thenRows(['main  up to date', 'feat/search  +1 unmerged']);
+  app.thenRows(['main  ✓', 'feat/search  ●1']);
   app.merge('feat/search');
   await app.refresh();
-  app.thenRows(['main  ↑1 to push', 'feat/search  merged']);
+  app.thenRows(['main  ↑1', 'feat/search  ✓']);
 });
 
 test('primary without upstream is explicit and current=primary is not duplicated', async t => {
   const app = new GitStatusDriver(t);
   app.addBranch('feat/search');
   await app.start('main');
-  app.thenRows(['main  no upstream', '1 merged branch']);
+  app.thenRows(['main  no upstream', '✓ 1 branch']);
 });
 
 test('ordinary checkout uses its primary checked-out branch and preserves file status', async t => {
@@ -97,5 +97,5 @@ test('primary branch name is discovered, not hardcoded to main', async t => {
   app.addBranch('feat/search');
   app.commit('feat/search');
   await app.start('feat/search');
-  app.thenRows(['develop  no upstream', 'feat/search  +1 unmerged']);
+  app.thenRows(['develop  no upstream', 'feat/search  ●1']);
 });

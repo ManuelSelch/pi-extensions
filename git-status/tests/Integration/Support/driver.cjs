@@ -61,7 +61,7 @@ class GitStatusDriver {
   }
   async refresh() { await this.handlers.get('tool_execution_end')({ toolName: 'bash' }, this.ctx); }
   thenRows(expected) { assert.deepEqual(this.widgets.at(-1).slice(1), expected); }
-  thenCheckoutVisible() { assert.match(this.widgets.at(-1)[0], /clean/); }
+  thenCheckoutVisible() { assert.match(this.widgets.at(-1)[0], /✓/); }
   thenCleared() { assert.equal(this.widgets.at(-1), undefined); }
   async startOutside() { this.paths.set('outside', this.root); await this.start('outside'); }
 }
