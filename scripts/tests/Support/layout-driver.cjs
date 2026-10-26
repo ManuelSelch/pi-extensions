@@ -7,10 +7,10 @@ const execFile = promisify(require('node:child_process').execFile);
 const root = path.resolve(__dirname, '../../..');
 const modules = ['agent-defaults', 'ask-user', 'calendar', 'context-badge', 'extension-manager',
   'git-status', 'manual-updates', 'minimal-tui', 'model-filter', 'pi-open', 'pipeline',
-  'preview', 'readonly-mode', 'todo'];
+  'preview', 'readonly-mode', 'todo', 'workflow'];
 const disabled = ['agentic-flow', 'claude-auth', 'dot-clean', 'pdf', 'session-cleanup', 'thinking-toggle'];
 const commands = ['defaults', 'extensions', 'models-add', 'models-filter', 'models-remove',
-  'open', 'pipeline', 'preview', 'projects', 'readonly', 'todos', 'update'];
+  'open', 'pipeline', 'preview', 'projects', 'readonly', 'todos', 'update', 'workflow'];
 const tools = ['ask_user', 'calendar_list', 'calendar_read', 'pipeline_configure',
   'pipeline_run', 'pipeline_status', 'preview_manage', 'preview_start', 'todo'];
 

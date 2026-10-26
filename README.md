@@ -23,6 +23,7 @@ entry points directly through jiti; there is no build step.
 | [projects/index.ts](projects/index.ts) | `/projects` — virtual repository collections, pipeline status and native `/projects browse` menus. See [usage](docs/projects/README.md). |
 | [readonly-mode/index.ts](readonly-mode/index.ts) | `/readonly` — block write/edit tools and destructive bash. |
 | [todo/index.ts](todo/index.ts) | `todo`, `/todos` — session task tracking. |
+| [workflow/index.ts](workflow/index.ts) | `/workflow`, `/workflow global` — select enabled mock/plan/design/commit prompts and native skills. See [usage](docs/workflow/README.md). |
 
 ## Disabled extensions
 

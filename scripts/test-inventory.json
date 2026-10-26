@@ -29,5 +29,9 @@
   "pipeline-widget.test.cjs",
   "pipeline.test.cjs",
   "preview.test.cjs",
-  "todo.test.cjs"
+  "todo.test.cjs",
+  "domain/config.test.cjs",
+  "infra/store.test.cjs",
+  "integration/native-workflow.test.cjs",
+  "integration/workflow.test.cjs"
 ]
