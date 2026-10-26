@@ -4,7 +4,7 @@ This changes files outside the extensions repository and needs explicit user app
 
 ## Proposed changes
 1. Back up the source skill directories, developer skill, global workflow files if present, and workflow-related memory preferences under `<agent-dir>/backups/workflow-<timestamp>/`. Record each original location and keep a restore manifest. Refuse to overwrite an existing destination.
-2. Install editable copies of the four repository [prompt templates](../../workflow/assets/prompts/) under `<agent-dir>/workflow/prompts/`. Create a global `workflow.json` enabling all four steps, without a version field.
+2. Install editable copies of the four repository [prompt templates](../../workflow/assets/prompts/) under `<agent-dir>/workflow/prompts/`. Create a global `workflow.json` from [workflow.default.json](../../workflow/workflow.default.json), with explicit enabled states and prompt/skill paths, without a version field. Fill omitted fields only when migrating an existing global configuration.
 3. Move whole skill directories out of automatic scanning:
    - `skills/mockup-first/` → `workflow/skills/mockup-first/`
    - `skills/roles/analyst/` → `workflow/skills/roles/analyst/`
@@ -26,6 +26,8 @@ This changes files outside the extensions repository and needs explicit user app
 Applied with explicit confirmation. The backup and restore manifest are at `<agent-dir>/backups/workflow-20261026-075751/manifest.json`. The three skills were moved, developer/design cross-step gates were separated, the four prompts were installed, all steps were enabled globally, and only workflow mandates were removed from always-loaded memory preferences. Global `AGENTS.md` and unrelated settings were unchanged.
 
 Native Pi 1.4.0 checks using isolated copies of the installed personal assets passed for default all-on, all-off, and each step alone. Managed skill metadata loaded without diagnostics and moved skill references resolve. These are structural/discovery checks, not a guarantee of model obedience. The current conversation still retains old instructions; use a fresh session.
+
+A separately approved defaults migration replaced TypeScript mappings with shipped `workflow/workflow.default.json` and expanded the existing global JSON without changing its selections. Its pre-expansion backup is `<agent-dir>/backups/workflow-json-defaults-20261026-081536/workflow.json`. Prompt/skill files were not moved or changed by this follow-up.
 
 ## Restore
 After stopping edits/sessions, restore original directories and developer/memory content from the manifest, remove only migration-created workflow files, and reload/start a fresh session. Do not delete unrelated files added after migration.

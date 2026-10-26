@@ -20,6 +20,45 @@ test('defaults point outside scanned skills and all steps are enabled', async t=
  assert.equal(s.resolved.design.skills[0],path.join(agent,'workflow/skills/roles/design-writing/SKILL.md'));
  assert.ok(Object.values(s.resolved).every(v=>v.enabled));
 });
+test('rereads JSON-owned defaults and anchors template paths to the agent directory',async t=>{
+ const {agent,cwd,write}=await fixture(t);
+ const defaultsFile=path.join(agent,'templates/workflow.default.json');
+ const config={steps:Object.fromEntries(['mock','plan','design','commit'].map(s=>[s,{enabled:true,prompt:null,skills:[]}]))};
+ config.steps.mock={enabled:false,prompt:'custom.md',skills:['custom/SKILL.md']};
+ await write(defaultsFile,config);
+ const store=new WorkflowStore(agent,defaultsFile);
+ const initial=await store.load(cwd,true);
+ assert.equal(initial.resolved.mock.enabled,false);
+ assert.equal(initial.resolved.mock.prompt,path.join(agent,'custom.md'));
+ assert.deepEqual(plain(initial.resolved.mock.skills),[path.join(agent,'custom/SKILL.md')]);
+ assert.equal(initial.resolved.mock.sources.skills,defaultsFile);
+ config.steps.mock={enabled:true,prompt:'changed.md',skills:[]};await write(defaultsFile,config);
+ const changed=await store.load(cwd,true);
+ assert.equal(changed.resolved.mock.enabled,true);
+ assert.equal(changed.resolved.mock.prompt,path.join(agent,'changed.md'));
+ assert.deepEqual(plain(changed.resolved.mock.skills),[]);
+ await write(path.join(agent,'workflow.json'),{steps:{mock:{enabled:false,prompt:null,skills:[]}}});
+ const overridden=await store.load(cwd,true);
+ assert.equal(overridden.resolved.mock.enabled,false);assert.equal(overridden.resolved.mock.prompt,null);
+ assert.equal(overridden.resolved.mock.sources.enabled,path.join(agent,'workflow.json'));
+});
+test('missing, malformed or incomplete shipped defaults never fall back to TypeScript values',async t=>{
+ const {agent,cwd,write}=await fixture(t);const file=path.join(agent,'workflow.default.json');
+ const store=new WorkflowStore(agent,file);
+ await assert.rejects(store.load(cwd,true),/workflow.default.json/);
+ await write(file,{steps:{mock:{enabled:true}}});
+ await assert.rejects(store.load(cwd,true),/workflow.default.json/);
+ await fs.writeFile(file,'{broken');
+ await assert.rejects(store.load(cwd,true),/workflow.default.json/);
+});
+test('global popup saves retain fully explicit mappings and unrelated values',async t=>{
+ const {agent,cwd,store,write}=await fixture(t);
+ const file=path.join(agent,'workflow.json');
+ const config={note:'keep',steps:{mock:{enabled:false,prompt:null,skills:[]},plan:{enabled:true,prompt:'mine.md',skills:['mine/SKILL.md']}}};
+ await write(file,config);await store.save(await store.load(cwd,true,'global'),{plan:false});
+ config.steps.plan.enabled=false;
+ assert.deepEqual(JSON.parse(await fs.readFile(file,'utf8')),config);
+});
 test('resolves inherited paths at their declaring file and never reads untrusted project config',async t=>{
  const {store,cwd,agent,write}=await fixture(t);
  await write(path.join(agent,'workflow.json'),{steps:{mock:{prompt:'global.md',enabled:false}}});

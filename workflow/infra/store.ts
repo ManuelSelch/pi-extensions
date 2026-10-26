@@ -1,8 +1,9 @@
 import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
-import { composePrompts, resolveSteps, steps, validateConfig } from "../domain/config.ts";
-import type { Defaults, Patch, Resolved, Step, WorkflowConfig } from "../domain/config.ts";
+import { fileURLToPath } from "node:url";
+import { composePrompts, resolveSteps, steps, validateConfig, validateDefaults } from "../domain/config.ts";
+import type { Patch, Resolved, Step, WorkflowConfig } from "../domain/config.ts";
 
 export interface Snapshot {
 	file: string;
@@ -16,10 +17,10 @@ export interface Resources { prompt: string; skillPaths: string[] }
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT";
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-async function readConfig(file: string): Promise<{ config: WorkflowConfig; text: string | undefined }> {
+async function readConfig(file: string, required = false): Promise<{ config: WorkflowConfig; text: string | undefined }> {
 	let text: string;
 	try { text = await readFile(file, "utf8"); }
-	catch (error) { if (missing(error)) return { config: {}, text: undefined }; throw new Error(`${file}: ${message(error)}`); }
+	catch (error) { if (!required && missing(error)) return { config: {}, text: undefined }; throw new Error(`${file}: ${message(error)}`); }
 	try { return { config: validateConfig(JSON.parse(text), file), text }; }
 	catch (error) { throw new Error(`${file}: ${message(error)}`); }
 }
@@ -39,24 +40,22 @@ function normalize(config: WorkflowConfig, file: string): WorkflowConfig {
 
 export class WorkflowStore {
 	readonly globalFile: string;
-	readonly defaults: Defaults;
-	constructor(agentDir: string) {
+	constructor(agentDir: string, readonly defaultsFile = fileURLToPath(new URL("../workflow.default.json", import.meta.url))) {
 		this.globalFile = resolve(agentDir, "workflow.json");
-		this.defaults = Object.fromEntries(steps.map(s => [s, {
-			enabled: true, prompt: resolve(agentDir, "workflow/prompts", `${s}.md`),
-			skills: s === "commit" ? [] : [resolve(agentDir, "workflow/skills", s === "mock" ? "mockup-first/SKILL.md" : `roles/${s === "plan" ? "analyst" : "design-writing"}/SKILL.md`)],
-		}])) as Defaults;
 	}
 	async load(cwd: string, trusted: boolean, scope: "project" | "global" = "project", requireWrite = false): Promise<Snapshot> {
 		if (requireWrite && scope === "project" && !trusted) throw new Error("Project workflow editing requires project trust.");
+		const template = await readConfig(this.defaultsFile, true);
+		// The shipped JSON is a global installation template, based at the agent directory.
+		const defaults = validateDefaults(normalize(template.config, this.globalFile), this.defaultsFile);
 		const global = await readConfig(this.globalFile);
 		const projectFile = join(cwd, ".pi", "workflow.json");
 		const project = scope === "project" && trusted ? await readConfig(projectFile) : { config: {} };
-		const inherited = resolveSteps(this.defaults, scope === "project" ? normalize(global.config, this.globalFile) : {}, {}, this.globalFile);
+		const inherited = resolveSteps(defaults, scope === "project" ? normalize(global.config, this.globalFile) : {}, {}, this.globalFile, projectFile, this.defaultsFile);
 		return {
 			file: scope === "global" ? this.globalFile : projectFile,
 			config: scope === "global" ? global.config : project.config,
-			resolved: resolveSteps(this.defaults, normalize(global.config, this.globalFile), normalize(project.config, projectFile), this.globalFile, projectFile),
+			resolved: resolveSteps(defaults, normalize(global.config, this.globalFile), normalize(project.config, projectFile), this.globalFile, projectFile, this.defaultsFile),
 			inherited, scope, writable: scope === "global" || trusted,
 		};
 	}

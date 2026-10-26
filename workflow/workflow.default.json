@@ -1,0 +1,24 @@
+{
+  "steps": {
+    "mock": {
+      "enabled": true,
+      "prompt": "workflow/prompts/mock.md",
+      "skills": ["workflow/skills/mockup-first/SKILL.md"]
+    },
+    "plan": {
+      "enabled": true,
+      "prompt": "workflow/prompts/plan.md",
+      "skills": ["workflow/skills/roles/analyst/SKILL.md"]
+    },
+    "design": {
+      "enabled": true,
+      "prompt": "workflow/prompts/design.md",
+      "skills": ["workflow/skills/roles/design-writing/SKILL.md"]
+    },
+    "commit": {
+      "enabled": true,
+      "prompt": "workflow/prompts/commit.md",
+      "skills": []
+    }
+  }
+}

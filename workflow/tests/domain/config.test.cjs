@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { load, plain } = require('../support/load.cjs');
-const { steps, validateConfig, resolveSteps, composePrompts, WorkflowDraft, parseCommand } = load('domain/config.ts');
+const { steps, validateConfig, validateDefaults, resolveSteps, composePrompts, WorkflowDraft, parseCommand } = load('domain/config.ts');
 const defaults = Object.fromEntries(['mock','plan','design','commit'].map(s => [s, { enabled:true, prompt:s+'.md', skills:[s] }]));
 
 test('inherits fields independently, retaining false, null, empty lists and provenance', () => {
@@ -20,6 +20,17 @@ test('validates the unversioned current shape without mutating unknown fields', 
   for(const value of [null, [], {steps:[]}, {steps:{typo:{}}}, {steps:{mock:{enabled:'yes'}}}, {steps:{mock:{prompt:''}}}, {steps:{mock:{skills:[1]}}}]) {
     assert.throws(() => validateConfig(value, 'config.json'), /config.json/);
   }
+});
+test('shipped defaults require every field for every step, including disabled steps', () => {
+  assert.deepEqual(plain(validateDefaults({steps:defaults}, 'defaults.json')), defaults);
+  for (const step of steps) for (const field of ['enabled','prompt','skills']) {
+    const config = {steps:JSON.parse(JSON.stringify(defaults))};
+    delete config.steps[step][field];
+    assert.throws(() => validateDefaults(config, 'defaults.json'), /defaults.json/);
+  }
+  const config = {steps:JSON.parse(JSON.stringify(defaults))};
+  config.steps.mock={enabled:false,prompt:null,skills:[]};
+  assert.deepEqual(plain(validateDefaults(config, 'defaults.json').mock), config.steps.mock);
 });
 test('composes prompts once in fixed order, not input order', () => {
   assert.equal(composePrompts({commit:'commit',mock:'mock',design:'design'}), '## mock\nmock\n\n## design\ndesign\n\n## commit\ncommit');

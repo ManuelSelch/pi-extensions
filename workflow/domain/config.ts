@@ -34,9 +34,20 @@ export function validateConfig(value: unknown, source: string): WorkflowConfig {
 	return value as WorkflowConfig;
 }
 
-export function resolveSteps(defaults: Defaults, global: WorkflowConfig = {}, project: WorkflowConfig = {}, globalSource = "global", projectSource = "project"): Resolved {
+export function validateDefaults(value: unknown, source: string): Defaults {
+	const config = validateConfig(value, source);
 	return Object.fromEntries(steps.map(step => {
-		const value = { ...defaults[step], sources: { enabled: "default", prompt: "default", skills: "default" } };
+		const entry = config.steps?.[step];
+		if (entry?.enabled === undefined || entry.prompt === undefined || entry.skills === undefined) {
+			throw new Error(`${source}: defaults require enabled, prompt and skills for ${step}`);
+		}
+		return [step, { enabled: entry.enabled, prompt: entry.prompt, skills: [...entry.skills] }];
+	})) as Defaults;
+}
+
+export function resolveSteps(defaults: Defaults, global: WorkflowConfig = {}, project: WorkflowConfig = {}, globalSource = "global", projectSource = "project", defaultSource = "default"): Resolved {
+	return Object.fromEntries(steps.map(step => {
+		const value = { ...defaults[step], sources: { enabled: defaultSource, prompt: defaultSource, skills: defaultSource } };
 		for (const [config, source] of [[global, globalSource], [project, projectSource]] as const) {
 			const entry = config.steps?.[step];
 			if (!entry) continue;
