@@ -6,7 +6,6 @@ export interface Editing {
  snapshot: Snapshot;
  draft: WorkflowDraft;
 }
-export const contextWarning = "Prompts refresh on the next run. Previously read instructions remain in context; start a fresh session for a clean reset.";
 const samePaths = (a: string[], b: string[]) => {
  const sorted = [...b].sort();
  return a.length === b.length && [...a].sort().every((p, i) => p === sorted[i]);
@@ -31,7 +30,7 @@ export class WorkflowController {
  }
  async save(editing: Editing): Promise<string> {
   const changed = await this.store.save(editing.snapshot, editing.draft.patch());
-  return changed ? `Saved ${editing.snapshot.scope} workflow: ${editing.snapshot.file}\nSkill selection changes require /reload. ${contextWarning}` : "No workflow changes.";
+  return changed ? `Saved: ${displayPath(editing.snapshot.file)}` : "No workflow changes.";
  }
  async status(cwd: string, trusted: boolean): Promise<string> {
   const snapshot = await this.store.load(cwd, trusted);

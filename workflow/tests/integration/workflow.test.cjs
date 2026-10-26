@@ -28,9 +28,15 @@ test('status preserves disabled states and absent resources',async t=>{
  await app.setProject({steps:{mock:{enabled:false,prompt:null,skills:[]}}});
  await app.status();app.thenNotificationContains('mock: off\n  prompt: none\n  skills: none');
 });
-test('save retains its context advisory',async t=>{
- const app=await createWorkflowDriver(t);await app.choose(['mock','Save']);
- app.thenNotificationContains('Prompts refresh on the next run. Previously read instructions remain in context; start a fresh session for a clean reset.');
+test('successful saves report only the abbreviated destination',async t=>{
+ for(const [scope,destination] of [['','~/project/.pi/workflow.json'],['global','~/agent/workflow.json']]){
+  const app=await createWorkflowDriver(t);await app.choose(['mock','Save'],scope);
+  app.thenNotificationEquals('Saved: '+destination);
+ }
+});
+test('unchanged saves retain the no-op message',async t=>{
+ const app=await createWorkflowDriver(t);await app.choose(['Save']);
+ app.thenNotificationEquals('No workflow changes.');
 });
 test('untrusted status retains its warning',async t=>{
  const app=await createWorkflowDriver(t);app.setTrusted(false);await app.status();

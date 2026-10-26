@@ -38,6 +38,7 @@ async function createWorkflowDriver(t) {
   thenOtherSectionPreserved(){assert.equal(lastEvent.systemPromptOptions.sections.other,'preserved');},
   thenDiscoveredCount(count){assert.equal(discovered.skillPaths.length,count);},
   thenNotificationContains(text){assert.ok(notifications.some(n=>n.text.includes(text)),JSON.stringify(notifications));},
+  thenNotificationEquals(text){assert.equal(notifications.at(-1).text,text);},
   thenNoDialog(){assert.equal(dialogs.length,0);},
   thenInitialChecks(values){for(const [step,value]of Object.entries(values))assert.ok(dialogs[0].options.includes('['+(value?'x':' ')+'] '+step));},
   thenScopeLabel(scope){
