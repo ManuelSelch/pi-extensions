@@ -72,24 +72,20 @@ try {
 No setup or pipeline configuration is needed. In a checkout with a `github.com` Git remote, the extension uses the installed `gh` CLI and its existing authentication (`gh auth login`). Prefer `origin` when multiple GitHub remotes exist; HTTPS, SCP-style SSH and `ssh://git@github.com/` URLs are supported. GitHub Enterprise hosts and detached HEAD checkouts are not supported in this minimal version.
 
 ```text
-## Local
-✓ unit 3m ago
-## GitHub
-✓ Server package passed 32m ago
-✗ Tests failed 29m ago
-  ├─ ✓ build passed
-  ├─ ✓ unit passed
+✓ Local 1/1 · 3m ago
+✓ GitHub Server package · 2/2 · 32m ago
+✗ GitHub Tests · 2/4 · 29m ago
   ├─ ✗ e2e failed
   └─ ○ sonar skipped
-› Deploy running 1m ago
+◐ GitHub Deploy · running · 1m ago
 ```
 
 - Show the latest run **per workflow on the current branch**, even if it tested an older commit. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
-- Rows are grouped under one `## Local` and one `## GitHub` heading; empty sections are hidden. Tree-nested job rows (`├─` / `└─`) show all jobs from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
+- The widget uses one local summary and one summary per GitHub workflow, with passing/total counts (completed/total while a workflow is active). Only non-successful jobs expand beneath their workflow; `/pipeline status` retains all jobs and local suites. Tree-nested job rows (`├─` / `└─`) come from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
 - Remote rows also appear when `.pi/pipeline.json` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
 - The initial monitor refresh runs in the background: opening a session does not wait for source scanning or GitHub requests. The widget appears when status is ready; shutdown still cancels pending remote requests.
 - While a UI session is open, the existing monitor refreshes remote data at most once per 60 seconds. Branch/repository changes invalidate that cache. Status commands/tools share the same session cache; they do not force a network fetch within its lifetime.
-- A failed refresh keeps the last successful snapshot, dimmed under `⚠ GitHub · stale <age> · <reason>`. The age is the last **successful** fetch, not the workflow run's age; the reason is a bounded category (`timeout`, `auth`, `access`, `gh missing`, `connection`, `refresh failed`) and never raw CLI output. Without a successful snapshot the row reads `⚠ GitHub · unavailable · <reason>` and no results are invented. The next successful refresh clears the warning; repository/branch changes never reuse another selection's snapshot.
+- A failed refresh keeps the last successful snapshot, dimmed with `stale <age> · <reason>` on each workflow summary. The age is the last **successful** fetch, not the workflow run's age; the reason is a bounded category (`timeout`, `auth`, `access`, `gh missing`, `connection`, `refresh failed`) and never raw CLI output. Without a successful snapshot the row reads `⚠ GitHub · unavailable · <reason>` and no results are invented. The next successful refresh clears the warning; repository/branch changes never reuse another selection's snapshot.
 - Authentication failures are the only category that suggests `gh auth login`. Local suite rows stay visible in every case. Requests use a 10-second per-process timeout, 15-second overall remote-fetch deadline and bounded output.
 - Data stays in session memory. Shutdown/reload cancels pending requests and clears polling; nothing is written to the project or remote repository. `pipeline_run` remains local-only. No workflow creation, reruns, cancellation, filtering or remote configuration fields are added.
 
@@ -102,25 +98,26 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 - Failure, timeout or cancellation blocks every selected suite and does not mark the worktree prepared. An explicit subsequent run retries preparation. Automatic runs do not repeatedly retry an unchanged failed preparation; changed source/config can make a later automatic attempt eligible after cooldown.
 - **No invalidation:** manifest/lockfile edits, a different preparation command, deleted dependencies, or removing/readding `prepare` do not clear prior success. Dependency maintenance afterward is manual. A successful flag is scoped to the cached worktree path, not a Git branch name; reusing the same checkout path reuses its cache.
 - Preparation is optional; existing configurations without it behave as before and retain their exact approval fingerprints. Adding/changing it requires native approval, even if preparation already succeeded.
-- `pipeline_status` exposes `prepare` separately from suite outcomes; the widget adds a preparation row only when configured. A run that performs preparation includes its result before suite results. Failed preparation is a tool error with bounded output and a full log reference.
+- `pipeline_status` exposes `prepare` separately from suite outcomes; the widget shows preparation only while running or after failure, cancellation or timeout; successful and never-run preparation stay hidden and are excluded from suite counts. A run that performs preparation includes its result before suite results. Failed preparation is a tool error with bounded output and a full log reference.
 - Put installation here, and keep ordinary compilation/build as a suite: editing source should not reinstall dependencies. Preparation is not a general suite dependency graph; ordinary suite failures still do not stop later suites.
 
 ## Widget and automatic execution
 
 ```text
-✓ unit 3m ago
-✗ integration 12m ago
-○ e2e never
+✗ Local 1/3 · 3m ago
+  ✗ integration 12m ago
+  ○ e2e never
 ```
 
 ```text
-⚠ unit stale (✓ 3m ago)
-› integration running 24s
+◐ Local 0/2 · stale · just now
+  ⚠ unit stale (✓ 3m ago)
+  › integration running 24s
 ```
 
 - No local config (or no suites) means no local rows and no setup reminder; GitHub rows remain independent. With neither local nor remote rows, the widget is hidden. Invalid/unreadable local configuration hides the widget; `/pipeline status` exposes the error.
 - The widget shows preparation/test state only, never approval messages. Previous stale passes are warning-colored, not green current-code results. Cancelled and timed-out runs remain distinct.
-- Each suite appears on its own line. Native TUI rendering truncates entries to fit narrow terminal widths. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
+- Passing fresh suites collapse into `✓ Local 5/5 · 2m ago`; the age is the latest suite result, never preparation. Only running, failed, cancelled, timed-out, never-run or stale suites get detail rows, in declaration order. Stale results are excluded from the fresh-pass count. `/pipeline status` stays fully expanded. Native TUI rendering truncates entries to fit narrow terminal widths. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
 - While a UI session is open, poll source/config/shared results every 5 seconds (1 second while a suite is running), with immediate refreshes after file tools and persisted run-state changes. No recursive file watchers.
 - Automation is opt-in per suite. It begins only after an `agent_settled` event, not on startup or reload. Wait for at least **2 seconds of quiet code** and a **60-second per-suite cooldown** after the previous result. Polls keep detecting edits while idle after that settled turn.
 - Never rerun an unchanged tested snapshot just because its age expired or it failed/cancelled/timed out. Use a manual run to retry unchanged code. Source/config changes or changes detected during a run make it eligible after cooldown.

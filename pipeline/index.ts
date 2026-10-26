@@ -1,7 +1,7 @@
 import { Type } from "typebox";
 import { withFileMutationQueue, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Pipeline, projectRoot, type Confirm, type RunResult, type PipelineStatus, type RunOptions } from "./core.ts";
-import { PipelineMonitor, renderWidget } from "./widget.ts";
+import { PipelineMonitor, renderWidget, renderStatus } from "./widget.ts";
 import { PipelineStatusReader } from "./api.ts";
 
 const SuiteSchema = Type.Object({
@@ -116,7 +116,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 					ctx.ui.notify(job ? "Pipeline cancellation requested." : "No pipeline running in this session.", "info");
 				} else if (action === "status") {
 					const current = await status(p);
-					const lines = renderWidget(current, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER);
+					const lines = renderStatus(current, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER);
 					ctx.ui.notify(lines.join("\n") || (!current.configured ? "No pipeline configuration or GitHub Actions runs." : "No pipeline suites configured."), "info");
 				} else throw new Error("Usage: /pipeline [status|run [suite|all]|cancel]");
 			} catch (error) { ctx.ui.notify(String(error), "error"); }

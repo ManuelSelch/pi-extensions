@@ -23,7 +23,7 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 }
 // Workflow names come from remote content; never emit terminal control sequences.
 const safeText = (value: string) => value.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
-function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, branch?: "├─" | "└─", stale = false): string {
+function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, branch?: "├─" | "└─", stale = false, compact = false, warning = ""): string {
 	const state = workflow.status === "completed" ? workflow.conclusion ?? "unknown" : workflow.status;
 	const states: Record<string, [string, Parameters<Theme["fg"]>[0], string]> = {
 		success: ["✓", "success", "passed"], failure: ["✗", "error", "failed"],
@@ -34,12 +34,20 @@ function githubText(workflow: import("./github.ts").WorkflowStatus, theme: Pick<
 	};
 	const [symbol, color, label] = Object.hasOwn(states, state) ? states[state] : ["○", "warning" as const, state.replace(/_/g, " ")];
 	const elapsed = workflow.updatedAt && Number.isFinite(Date.parse(workflow.updatedAt)) ? ` ${age(workflow.updatedAt, now)} ago` : "";
+	if (compact) {
+		const jobs = workflow.jobs ?? [];
+		const active = workflow.status !== "completed" && workflow.status !== "never";
+		const count = jobs.length ? `${jobs.filter(job => active ? job.status === "completed" : job.status === "completed" && job.conclusion === "success").length}/${jobs.length}${active ? " complete" : ""}` : label;
+		const needsWarning = warning || workflow.jobsError;
+		return theme.fg(stale ? "muted" : needsWarning ? "warning" : color,
+			`${needsWarning ? "⚠" : active ? "◐" : symbol} GitHub ${safeText(workflow.name)} · ${safeText(count)}${elapsed ? ` ·${elapsed}` : ""}${warning ? ` · ${warning}` : ""}`);
+	}
 	return theme.fg(stale ? "muted" : color, branch
 		? `  ${branch} ${symbol} ${safeText(workflow.name)} ${safeText(label)}`
 		: `${symbol} ${safeText(workflow.name)} ${safeText(label)}${elapsed}`);
 }
-/** One line per local suite / remote workflow, truncated to the available terminal width. */
-export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
+/** Expanded status for /pipeline; includes every preparation, suite and job. */
+export function renderStatus(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
 	if (!status || width <= 0) return [];
 	const entries: [string, SuiteStatus][] = [
 		...(status.prepare ? [["prepare", status.prepare] as [string, SuiteStatus]] : []),
@@ -65,6 +73,50 @@ export function renderWidget(status: PipelineStatus | undefined, theme: Pick<The
 			const jobs = workflow.jobs ?? [];
 			for (const [index, job] of jobs.entries()) {
 				lines.push(githubText(job, theme, now, index === jobs.length - 1 ? "└─" : "├─", status.github?.stale));
+			}
+		}
+	}
+	return lines.map(line => truncateToWidth(line, width));
+}
+
+/** Compact summaries with detail rows only for results needing attention. */
+export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
+	if (!status || width <= 0) return [];
+	const lines: string[] = [];
+	const suites = Object.entries(status.suites);
+	if (status.configured && suites.length) {
+		const entries: [string, SuiteStatus][] = [
+			...(status.prepare && status.prepare.outcome !== "passed" && status.prepare.outcome !== "never" ? [["prepare", status.prepare] as [string, SuiteStatus]] : []),
+			...suites,
+		];
+		const results = entries.map(([, result]) => result);
+		const failed = results.some(result => ["failed", "cancelled", "timed-out"].includes(result.outcome));
+		const running = results.some(result => result.outcome === "running");
+		const stale = results.some(result => result.stale);
+		const passed = suites.filter(([, result]) => result.outcome === "passed" && !result.stale).length;
+		const symbol = failed ? "✗" : running ? "◐" : stale ? "⚠" : passed === suites.length ? "✓" : "○";
+		const color = failed ? "error" : running ? "accent" : stale ? "warning" : passed === suites.length ? "success" : "muted";
+		// Preparation may be days old; summary age reflects the most recent suite result.
+		const timestamps = suites.flatMap(([, result]) => result.outcome === "never" ? [] : [Date.parse(result.finishedAt ?? result.startedAt)]).filter(Number.isFinite);
+		const latest = timestamps.length ? Math.max(...timestamps) : undefined;
+		const elapsed = latest === undefined ? "" : now - latest < 60000 ? " · just now" : ` · ${age(new Date(latest).toISOString(), now)} ago`;
+		lines.push(theme.fg(color, `${symbol} Local ${passed}/${suites.length}${stale ? " · stale" : ""}${elapsed}`));
+		for (const [name, result] of entries) {
+			if (result.outcome !== "passed" || result.stale) lines.push(`  ${suiteText(safeText(name), result, theme, now)}`);
+		}
+	}
+	const github = status.github;
+	if (github) {
+		const reason = github.errorKind ? { timeout: "timeout", authentication: "auth", access: "access", "missing-cli": "gh missing", connection: "connection", unknown: "refresh failed" }[github.errorKind] : safeText(github.error ?? "");
+		const warning = github.stale && github.lastSuccessfulAt ? `stale ${age(github.lastSuccessfulAt, now)}${reason ? ` · ${reason}` : ""}` : "";
+		const workflows = !github.error || github.stale ? github.workflows : [];
+		if (!workflows.length && (github.error || github.errorKind)) lines.push(theme.fg("warning", `⚠ GitHub · unavailable · ${reason}`));
+		for (const workflow of workflows) {
+			lines.push(githubText(workflow, theme, now, undefined, github.stale, true, warning));
+			if (workflow.jobsError) lines.push(theme.fg(github.stale ? "muted" : "warning", `  └─ ⚠ ${safeText(workflow.jobsError)}`));
+			else {
+				const jobs = (workflow.jobs ?? []).filter(job => job.status !== "completed" || job.conclusion !== "success");
+				for (const [index, job] of jobs.entries()) lines.push(githubText(job, theme, now, index === jobs.length - 1 ? "└─" : "├─", github.stale));
 			}
 		}
 	}

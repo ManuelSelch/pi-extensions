@@ -15,15 +15,16 @@ async function driver(t, Reader) {
   t.after(() => events.session_shutdown({}, ctx));
   return { tools, events, commands, widgets, notices, ctx };
 }
-const remote = { repository: 'owner/repo', branch: 'main', checkedAt: '2026-01-01T00:00:00Z', workflows: [{ name: 'Tests', status: 'in_progress', url: 'https://github.com/owner/repo/actions/runs/1', jobs: [{ name: 'e2e', status: 'completed', conclusion: 'failure', url: 'https://github.com/owner/repo/actions/runs/1/job/2' }] }] };
+const remote = { repository: 'owner/repo', branch: 'main', checkedAt: '2026-01-01T00:00:00Z', workflows: [{ name: 'Tests', status: 'in_progress', url: 'https://github.com/owner/repo/actions/runs/1', jobs: [{ name: 'e2e', status: 'completed', conclusion: 'failure', url: 'https://github.com/owner/repo/actions/runs/1/job/2' }, { name: 'unit', status: 'completed', conclusion: 'success' }] }] };
 
 test('remote-only project exposes status via tool, command and widget using a shared reader', async t => {
   let instances = 0, stopped = 0;
   class Reader { constructor() { instances++; } async read() { return remote; } stop() { stopped++; } }
   const d = await driver(t, Reader);
   await d.events.session_start({}, d.ctx);
-  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('Tests running')));
-  assert.match(d.widgets.at(-1).join('\n'), /GitHub\n› Tests running/);
+  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('◐ GitHub Tests')));
+  assert.match(d.widgets.at(-1).join('\n'), /◐ GitHub Tests · 2\/2 complete/);
+  assert.doesNotMatch(d.widgets.at(-1).join('\n'), /unit passed/);
   const result = await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(result.details.configured, false);
   assert.equal(result.details.github.workflows[0].url, remote.workflows[0].url);
@@ -31,7 +32,7 @@ test('remote-only project exposes status via tool, command and widget using a sh
   assert.match(d.widgets.at(-1).join('\n'), /\n  └─ ✗ e2e failed/);
   await d.commands.pipeline.handler('status', d.ctx);
   assert.match(d.notices.at(-1), /GitHub\n› Tests running/);
-  assert.match(d.notices.at(-1), /\n  └─ ✗ e2e failed/);
+  assert.match(d.notices.at(-1), /\n  ├─ ✗ e2e failed\n  └─ ✓ unit passed/);
   assert.equal(instances, 1);
   await d.events.session_shutdown({}, d.ctx);
   assert.equal(d.widgets.at(-1), undefined);
@@ -53,8 +54,8 @@ test('session startup completes while GitHub is pending and the widget appears a
   assert.equal(d.widgets.length, 0);
   resolveRead(remote);
   await starting;
-  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('Tests running')));
-  assert.match(d.widgets.at(-1).join('\n'), /GitHub\n› Tests running/);
+  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('◐ GitHub Tests')));
+  assert.match(d.widgets.at(-1).join('\n'), /◐ GitHub Tests · 2\/2 complete/);
 });
 
 test('shutdown cancels an awaited remote refresh and cannot resurrect the widget', async t => {
