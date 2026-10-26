@@ -7,14 +7,14 @@ A small `workflow/` extension resolves four configurable instruction bundles: sh
 | Package/module | Component | Change | Responsibility |
 |---|---|---|---|
 | `workflow/index.ts` | Native extension entry | New, proposed | Register `/workflow`, `resources_discover`, and `before_agent_start`; wire adapters |
-| `workflow/Domain/` | Configuration resolver and composer | New, proposed | Validate values, merge fields with provenance, parse commands, order prompt contributions; pure logic |
-| `workflow/App/` | Workflow controller | New, proposed | Coordinate reads/writes and own the runtime's last-discovered skill selection; reset on runtime replacement |
-| `workflow/Infra/` | Filesystem and Pi adapters | New, proposed | Resolve paths, read prompts/configuration, write safely, publish command output and native resources |
+| `workflow/domain/` | Configuration resolver and composer | New, proposed | Validate values, merge fields with provenance, parse commands, order prompt contributions; pure logic |
+| `workflow/app/` | Workflow controller | New, proposed | Coordinate reads/writes and own the runtime's last-discovered skill selection; reset on runtime replacement |
+| `workflow/infra/` | Filesystem and Pi adapters | New, proposed | Resolve paths, read prompts/configuration, write safely, publish command output and native resources |
 | Agent/project configuration | `workflow.json`, prompts, skill directories | New / moved, proposed | Durable user-owned settings and instruction content outside extension source |
 | Pi | Native resource loader and structured prompt builder | Reused | Advertise skills, expand `/skill:name`, load skill bodies on demand, track prompt changes |
 | Existing personal guidance | Mock/analyst/design skills, developer gates, memory preferences | Changed only after separate migration approval | Remove duplicate mandates while retaining non-workflow guidance |
 
-No custom UI, Middleware layer, filesystem watcher, or shared utility package is needed. Configuration is authoritative on disk; only discovery bookkeeping lives in memory. Domain has no filesystem or SDK dependencies. Tests mirror these layers under `workflow/tests/`, with integration drivers in a separate `Integration/Support/` directory, following the existing [test runner](../../scripts/test.cjs).
+No custom UI, Middleware layer, filesystem watcher, or shared utility package is needed. Configuration is authoritative on disk; only discovery bookkeeping lives in memory. Domain has no filesystem or SDK dependencies. Tests mirror these layers under `workflow/tests/`, with integration drivers in a separate `integration/support/` directory, following the existing [test runner](../../scripts/test.cjs).
 
 ## Runtime flow
 1. At `resources_discover`, the controller reads global configuration from `getAgentDir()` and, only when `ctx.isProjectTrusted()` is true, `.pi/workflow.json` directly beneath `ctx.cwd`. No Git or ancestor lookup occurs.
