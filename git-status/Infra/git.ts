@@ -8,11 +8,16 @@ const execFileAsync = promisify(execFile);
 
 async function git(cwd: string, args: string[]): Promise<string | undefined> {
 	try {
-		const result = await execFileAsync("git", args, { cwd, timeout: 5000, maxBuffer: 1024 * 1024 });
+		const result = await execFileAsync("git", ["--no-optional-locks", ...args], { cwd, timeout: 5000, maxBuffer: 1024 * 1024 });
 		return result.stdout;
 	} catch {
 		return undefined;
 	}
+}
+
+export async function readGitDirectories(cwd: string): Promise<string[]> {
+	const output = await git(cwd, ["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"]);
+	return output ? [...new Set(output.trim().split("\n").map(path => resolve(cwd, path)))] : [];
 }
 
 function count(value: string | undefined): number | undefined {

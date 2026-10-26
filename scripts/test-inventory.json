@@ -1,4 +1,8 @@
 [
+  "App/refresh.test.cjs",
+  "App/session.test.cjs",
+  "Infra/watch.test.cjs",
+  "Integration/watcher.test.cjs",
   "Domain/catalogue.test.cjs",
   "Domain/status.test.cjs",
   "Integration/branches.test.cjs",

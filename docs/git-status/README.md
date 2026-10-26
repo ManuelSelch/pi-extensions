@@ -16,4 +16,8 @@ Merge counts use commit ancestry against the local primary branch. Squash/rebase
 
 Upstream divergence uses local tracking refs; the widget does not fetch or run network operations. `no upstream` differs from `up to date` and `upstream unknown`.
 
-Refresh occurs at session startup and after agent `write`, `edit`, or `bash` tools. Changes made outside those triggers appear on the next refresh. Run `/reload` once to load an updated extension.
+Refresh occurs at session startup, after agent `write`, `edit`, or `bash` tools, and when local Git metadata changes. External staging, commits, merges, normal pushes, branch switches and linked-worktree changes update automatically (500 ms debounce, 2-second maximum wait during bursts). Watchers cover selected Git metadata directories only—not checkout files, objects, logs, `node_modules` or build output. There is no polling or network fetching.
+
+External unstaged edits and untracked files alone do not trigger refreshes; they appear on the next metadata/tool/startup refresh. Remote changes by other people become known only after fetch/pull. Watcher notifications are best effort, especially on network filesystems. A watcher failure warns once per session; tool-triggered refreshes remain available and `/reload` rebuilds watchers. Sessions started outside Git discover later repository initialization on a tool-triggered refresh or reload.
+
+Run `/reload` once to load an updated extension.
