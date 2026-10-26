@@ -1,0 +1,13 @@
+{
+  "steps": {
+    "mock": {
+      "enabled": false
+    },
+    "plan": {
+      "enabled": false
+    },
+    "design": {
+      "enabled": false
+    }
+  }
+}
