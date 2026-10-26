@@ -15,8 +15,30 @@ test('global popup ignores project overrides; restoration only removes enablemen
  const app=await createWorkflowDriver(t);await app.setProject({steps:{mock:{enabled:false,prompt:null,skills:[]}}});
  await app.choose(['commit','Save'],'global');app.thenInitialChecks({mock:true});app.thenScopeLabel('global');
  await app.thenGlobalConfig({steps:{commit:{enabled:false}}});
- await app.choose(['Restore inherited enablement','Save']);
+ await app.choose(['Restore','Save']);
  await app.thenProjectConfig({steps:{mock:{prompt:null,skills:[]}}});
+});
+test('status uses compact paths without provenance or informational footer',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.status();app.thenNotificationContains('Skill discovery pending: run /reload.');
+ await app.discover();await app.status();app.thenCompactStatus();
+});
+test('status preserves disabled states and absent resources',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.setProject({steps:{mock:{enabled:false,prompt:null,skills:[]}}});
+ await app.status();app.thenNotificationContains('mock: off\n  prompt: none\n  skills: none');
+});
+test('save retains its context advisory',async t=>{
+ const app=await createWorkflowDriver(t);await app.choose(['mock','Save']);
+ app.thenNotificationContains('Prompts refresh on the next run. Previously read instructions remain in context; start a fresh session for a clean reset.');
+});
+test('untrusted status retains its warning',async t=>{
+ const app=await createWorkflowDriver(t);app.setTrusted(false);await app.status();
+ app.thenNotificationContains('(untrusted; ignored)');
+});
+test('status retains resource errors',async t=>{
+ const app=await createWorkflowDriver(t);await app.deletePrompt('mock');await app.status();
+ app.thenNotificationContains('Workflow unavailable:');app.thenNotificationContains('mock.md');
 });
 test('all-off removes only workflow; prompt edits refresh without reload',async t=>{
  const app=await createWorkflowDriver(t);await app.run();app.thenPromptContains('mock instructions');

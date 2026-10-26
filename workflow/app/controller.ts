@@ -1,5 +1,6 @@
 import { enablement, steps, WorkflowDraft } from "../domain/config.ts";
 import type { Snapshot, WorkflowStore } from "../infra/store.ts";
+import { displayPath } from "./display-path.ts";
 
 export interface Editing {
  snapshot: Snapshot;
@@ -34,21 +35,19 @@ export class WorkflowController {
  }
  async status(cwd: string, trusted: boolean): Promise<string> {
   const snapshot = await this.store.load(cwd, trusted);
-  const lines = [`Workflow project: ${snapshot.file}${trusted ? "" : " (untrusted; ignored)"}`];
+  const lines = [`Workflow project: ${displayPath(snapshot.file)}${trusted ? "" : " (untrusted; ignored)"}`];
   for (const step of steps) {
    const value = snapshot.resolved[step];
-   lines.push(`${step}: ${value.enabled ? "on" : "off"} (enabled: ${value.sources.enabled})`,
-    `  prompt: ${value.prompt ?? "none"} (from ${value.sources.prompt})`,
-    `  skills: ${value.skills.join(", ") || "none"} (from ${value.sources.skills})`);
+   lines.push(`${step}: ${value.enabled ? "on" : "off"}`,
+    `  prompt: ${value.prompt === null ? "none" : displayPath(value.prompt)}`,
+    `  skills: ${value.skills.map(displayPath).join(", ") || "none"}`);
   }
   try {
    const desired = (await this.store.resources(snapshot.resolved)).skillPaths;
-   lines.push(`Configured workflow skills: ${desired.join(", ") || "none"}`);
-   lines.push(`Last submitted to Pi discovery: ${this.discovered?.join(", ") || "none"}`);
+   lines.push(`Configured workflow skills: ${desired.map(displayPath).join(", ") || "none"}`);
+   lines.push(`Last submitted to Pi discovery: ${this.discovered?.map(displayPath).join(", ") || "none"}`);
    if (!this.discovered || !samePaths(desired, this.discovered)) lines.push("Skill discovery pending: run /reload.");
-   else lines.push("Workflow skill selection submitted; native Pi diagnostics determine which skills loaded.");
   } catch (error) { lines.push(`Workflow unavailable: ${String(error)}`); }
-  lines.push(contextWarning);
   return lines.join("\n");
  }
 }

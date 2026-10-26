@@ -13,7 +13,7 @@ async function createWorkflowDriver(t) {
  for (const s of ['mockup-first','roles/analyst','roles/design-writing']) await write(path.join(agent,'workflow/skills',s,'SKILL.md'),'---\nname: '+s.split('/').at(-1)+'\ndescription: Example\n---\nSECRET SKILL BODY');
  const commands=new Map(),events=new Map(),notifications=[],dialogs=[];let choices=[],trusted=true,hasUI=true,lastEvent,discovered;
  const pi={registerCommand:(name,definition)=>commands.set(name,definition),on:(name,fn)=>events.set(name,fn)};
- load('index.ts',{'@earendil-works/pi-coding-agent':{getAgentDir:()=>agent}}).default(pi);
+ load('index.ts',{'@earendil-works/pi-coding-agent':{getAgentDir:()=>agent},'node:os':{...os,homedir:()=>dir}}).default(pi);
  const ctx=()=>({cwd,hasUI,isProjectTrusted:()=>trusted,ui:{notify:(text,type)=>notifications.push({text,type}),select:async(title,options)=>{
    dialogs.push({title,options:[...options]});
    const choice=choices.shift();
@@ -40,7 +40,25 @@ async function createWorkflowDriver(t) {
   thenNotificationContains(text){assert.ok(notifications.some(n=>n.text.includes(text)),JSON.stringify(notifications));},
   thenNoDialog(){assert.equal(dialogs.length,0);},
   thenInitialChecks(values){for(const [step,value]of Object.entries(values))assert.ok(dialogs[0].options.includes('['+(value?'x':' ')+'] '+step));},
-  thenScopeLabel(scope){assert.ok(dialogs.at(-1).title.includes(scope));},
+  thenScopeLabel(scope){
+   assert.equal(dialogs.at(-1).title,scope==='project'?'Workflow project: ~/project/.pi/workflow.json':'Workflow global: ~/agent/workflow.json');
+   assert.equal(dialogs.at(-1).options.includes('Restore'),scope==='project');
+   assert.ok(!dialogs.at(-1).options.includes('Restore inherited enablement'));
+  },
+  thenCompactStatus(){
+   const text=notifications.at(-1).text;
+   assert.ok(text.startsWith('Workflow project: ~/project/.pi/workflow.json'));
+   for(const step of ['mock','plan','design','commit']){
+    assert.ok(text.includes(step+': on\n'));
+    assert.ok(text.includes('  prompt: ~/agent/workflow/prompts/'+step+'.md'));
+   }
+   assert.ok(text.includes('  skills: ~/agent/workflow/skills/mockup-first/SKILL.md'));
+   assert.ok(text.includes('  skills: none'));
+   assert.ok(text.includes('Configured workflow skills: ~/agent/workflow/skills/'));
+   assert.ok(text.includes('Last submitted to Pi discovery: ~/agent/workflow/skills/'));
+   assert.ok(!text.includes(dir));
+   for(const removed of ['(enabled:','(from ','Workflow skill selection submitted;','Prompts refresh on the next run.','Previously read instructions remain in context;']) assert.ok(!text.includes(removed),text);
+  },
   async thenProjectConfig(value){assert.deepEqual(JSON.parse(await fs.readFile(path.join(cwd,'.pi/workflow.json'),'utf8')),value);},
   async thenGlobalConfig(value){assert.deepEqual(JSON.parse(await fs.readFile(path.join(agent,'workflow.json'),'utf8')),value);},
   async thenNoProjectConfig(){await assert.rejects(fs.stat(path.join(cwd,'.pi/workflow.json')),/ENOENT/);},

@@ -3,9 +3,9 @@
 ## Use
 - `/workflow` opens the project selection popup: select a row to toggle it, then Save. Cancel/Escape writes nothing.
 - `/workflow global` edits global defaults without project overrides.
-- `/workflow status` shows settings, provenance, resource paths, and pending skill discovery.
+- `/workflow status` shows settings, resource paths, and pending skill discovery, without source annotations or informational footer text. Popup and status paths use `~` for the home directory.
 - `/workflow preview` shows exactly the workflow prompt contribution, not full skill bodies.
-- Project popup: Restore inherited enablement removes local enabled fields without deleting custom prompts/skills; changes are staged until Save.
+- Project popup: Restore removes local enabled fields without deleting custom prompts/skills; changes are staged until Save.
 
 The shipped [workflow.default.json](../../workflow/workflow.default.json) defines all four steps' enabled states, prompt paths, and skill mappings. TypeScript contains no fallback mapping. Settings persist to `<agent-dir>/workflow.json` and `<session-cwd>/.pi/workflow.json`. There is no version field, ancestor lookup, Git-root lookup, or session-only state. Project configuration requires project trust. Scope is shown in the popup title.
 
