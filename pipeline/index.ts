@@ -8,7 +8,6 @@ const SuiteSchema = Type.Object({
 	command: Type.Array(Type.String(), { minItems: 1, description: "Executable followed by arguments; no shell interpolation or watch mode." }),
 	cwd: Type.Optional(Type.String({ description: "Project-relative working directory; defaults to the project root." })),
 	timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400 })),
-	staleAfterMinutes: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 525600 })),
 	auto: Type.Optional(Type.Union([Type.Literal("manual"), Type.Literal("after-agent")])),
 }, { additionalProperties: false });
 const PrepareSchema = Type.Object({

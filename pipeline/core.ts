@@ -17,7 +17,6 @@ export interface Prepare {
 	timeoutSeconds: number;
 }
 export interface Suite extends Prepare {
-	staleAfterMinutes: number;
 	auto: "manual" | "after-agent";
 }
 export interface Config { version: 1; suites: Record<string, Suite>; prepare?: Prepare }
@@ -100,20 +99,17 @@ export function validateConfig(input: unknown): Config {
 	for (const [name, inputSuite] of Object.entries(object(value.suites))) {
 		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error(`Invalid suite name: ${name}`);
 		const suite = object(inputSuite);
-		keys(suite, ["command", "cwd", "timeoutSeconds", "staleAfterMinutes", "auto"]);
+		keys(suite, ["command", "cwd", "timeoutSeconds", "auto"]);
 		if (!Array.isArray(suite.command) || !suite.command.length || suite.command.some(arg => typeof arg !== "string" || arg.includes("\0")) || !suite.command[0].trim()) {
 			throw new Error(`${name}: command must be a nonempty executable/argument array`);
 		}
 		const cwd = suite.cwd ?? ".";
 		if (typeof cwd !== "string" || !cwd || cwd.includes("\0") || isAbsolute(cwd) || !inside("/project", resolve("/project", cwd))) throw new Error(`${name}: cwd must remain inside the project`);
 		const timeoutSeconds = suite.timeoutSeconds ?? 300;
-		const staleAfterMinutes = suite.staleAfterMinutes ?? 30;
-		for (const [key, number] of Object.entries({ timeoutSeconds, staleAfterMinutes })) {
-			if (typeof number !== "number" || !Number.isFinite(number) || number <= 0 || number > (key === "timeoutSeconds" ? 86400 : 525600)) throw new Error(`${name}: invalid ${key}`);
-		}
+		if (typeof timeoutSeconds !== "number" || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0 || timeoutSeconds > 86400) throw new Error(`${name}: invalid timeoutSeconds`);
 		const auto = suite.auto ?? "manual";
 		if (auto !== "manual" && auto !== "after-agent") throw new Error(`${name}: invalid auto mode`);
-		suites[name] = { command: [...suite.command], cwd, timeoutSeconds: timeoutSeconds as number, staleAfterMinutes: staleAfterMinutes as number, auto };
+		suites[name] = { command: [...suite.command], cwd, timeoutSeconds, auto };
 	}
 	if (value.prepare === undefined) return { version: 1, suites }; // Preserve existing approval fingerprints.
 	const prepare = object(value.prepare);
@@ -265,9 +261,9 @@ export class Pipeline {
 		const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
 		const configFingerprint = digest(JSON.stringify(config));
 		const suites: Record<string, SuiteStatus> = Object.create(null);
-		for (const [name, suite] of Object.entries(config.suites)) {
+		for (const name of Object.keys(config.suites)) {
 			const result = results[name];
-			suites[name] = result ? { ...result, stale: result.changedDuringRun || result.sourceFingerprint !== fingerprint || result.configFingerprint !== configFingerprint || Date.now() - Date.parse(result.finishedAt ?? result.startedAt) > suite.staleAfterMinutes * 60000 } : { outcome: "never", stale: false };
+			suites[name] = result ? { ...result, stale: result.changedDuringRun || result.sourceFingerprint !== fingerprint || result.configFingerprint !== configFingerprint } : { outcome: "never", stale: false };
 		}
 		const preparation = config.prepare ? await this.preparation() : undefined;
 		return { configured: true, root: this.root, config, suites, sourceFingerprint: fingerprint, configFingerprint,

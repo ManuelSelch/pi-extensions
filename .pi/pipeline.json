@@ -8,7 +8,6 @@
       ],
       "cwd": ".",
       "timeoutSeconds": 120,
-      "staleAfterMinutes": 30,
       "auto": "after-agent"
     },
     "typecheck": {
@@ -19,7 +18,6 @@
       ],
       "cwd": ".",
       "timeoutSeconds": 60,
-      "staleAfterMinutes": 30,
       "auto": "after-agent"
     }
   }

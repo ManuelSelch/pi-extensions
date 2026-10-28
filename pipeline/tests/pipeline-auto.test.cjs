@@ -33,7 +33,7 @@ function finished(status, clock, outcome = 'passed') {
   status.suites.unit = { suite: 'unit', outcome, sourceFingerprint: status.sourceFingerprint, configFingerprint: status.configFingerprint, changedDuringRun: false, startedAt: new Date(clock.now()).toISOString(), finishedAt: new Date(clock.now()).toISOString(), stale: false };
 }
 
-test('only approved opt-in suites run automatically; unchanged outcomes are skipped even after time expiry', async t => {
+test('only approved opt-in suites run automatically; unchanged outcomes are skipped regardless of age', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
   const c = config('process.exit(1)'); c.suites.unit.auto = 'after-agent';
   c.suites.e2e = { command: [process.execPath, '-e', 'throw Error("must stay manual")'] };

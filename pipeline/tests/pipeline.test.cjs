@@ -7,12 +7,14 @@ const { load, fixture, config, approve, waitFor } = require('./pipeline-helpers.
 test('validates command arrays, names, relative cwd and unknown configuration fields', () => {
   const { validateConfig } = load();
   assert.equal(validateConfig(config()).suites.unit.auto, 'manual');
+  assert.equal(Object.hasOwn(validateConfig(config()).suites.unit, 'staleAfterMinutes'), false);
   for (const value of [
     { version: 2, suites: {} }, { version: 1, suites: { '../evil': { command: ['x'] } } },
     { version: 1, suites: { unit: { command: 'npm test' } } },
     { version: 1, suites: { unit: { command: ['x'], cwd: '../outside' } } },
     { version: 1, suites: { unit: { command: ['x'], timeoutSeconds: 0 } } },
     { version: 1, suites: { unit: { command: ['x'], typo: true } } },
+    { version: 1, suites: { unit: { command: ['x'], staleAfterMinutes: 30 } } },
   ]) assert.throws(() => validateConfig(value));
 });
 
@@ -169,14 +171,18 @@ test('refuses config changed during execution approval and invalid selections', 
   assert.equal(await p.isApproved(), false);
 });
 
-test('honours suite cwd, log retrieval and freshness expiry', async t => {
+test('honours suite cwd and log retrieval without expiring unchanged results', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
   await fs.mkdir(path.join(f.root, 'sub'));
-  const c = config('console.log(process.cwd())'); c.suites.unit.cwd = 'sub'; c.suites.unit.staleAfterMinutes = 0.000001;
+  const c = config('console.log(process.cwd())'); c.suites.unit.cwd = 'sub';
   await p.configure(c, approve); await p.run('unit');
   const logs = await p.logs('unit'); assert.match(logs.output, /\/sub/);
-  await new Promise(r => setTimeout(r, 10));
-  assert.equal((await p.status()).suites.unit.stale, true);
+  const resultsPath = path.join(p.storage, 'results.json');
+  const results = JSON.parse(await fs.readFile(resultsPath, 'utf8'));
+  results.unit.startedAt = results.unit.finishedAt = '2000-01-01T00:00:00.000Z';
+  await fs.writeFile(resultsPath, JSON.stringify(results));
+
+  assert.equal((await new Pipeline(f.root, f.cache).status()).suites.unit.stale, false);
   await assert.rejects(p.logs('missing'), /No run/);
 });
 

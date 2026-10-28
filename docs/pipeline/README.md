@@ -23,7 +23,6 @@ Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project
       "command": ["npm", "run", "test:integration"],
       "cwd": ".",
       "timeoutSeconds": 600,
-      "staleAfterMinutes": 30,
       "auto": "manual"
     }
   }
@@ -41,7 +40,7 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 - `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
-Defaults: `cwd: "."`, `timeoutSeconds: 300`, `staleAfterMinutes: 30`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
+Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
 
 ## TypeScript status API
 
@@ -120,7 +119,7 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 - Passing fresh suites collapse into `✓ Local 5/5 · 2m ago`; the age is the latest suite result, never preparation. Only running, failed, cancelled, timed-out, never-run or stale suites get detail rows, in declaration order. Stale results are excluded from the fresh-pass count. `/pipeline status` stays fully expanded. Native TUI rendering truncates entries to fit narrow terminal widths. RPC uses text-line widgets for clients such as Pi Chat. Theme changes use the current theme, not cached ANSI colors.
 - While a UI session is open, poll source/config/shared results every 5 seconds (1 second while a suite is running), with immediate refreshes after file tools and persisted run-state changes. No recursive file watchers.
 - Automation is opt-in per suite. It begins only after an `agent_settled` event, not on startup or reload. Wait for at least **2 seconds of quiet code** and a **60-second per-suite cooldown** after the previous result. Polls keep detecting edits while idle after that settled turn.
-- Never rerun an unchanged tested snapshot just because its age expired or it failed/cancelled/timed out. Use a manual run to retry unchanged code. Source/config changes or changes detected during a run make it eligible after cooldown.
+- Never rerun an unchanged tested snapshot just because it is old or it failed/cancelled/timed out. Use a manual run to retry unchanged code. Source/config changes or changes detected during a run make it eligible after cooldown.
 - Background runs **only refresh the widget**: no notifications, model messages or confirmation popups. Unapproved external commands stay paused until a manual run/configuration approval through the native popup. Busy worktree locks are retried quietly with a 5-second backoff.
 - A new agent turn cancels this session's automatic run and disarms scheduling until that turn settles. Manual runs are not cancelled on new turns. `/pipeline cancel` also disarms scheduling until the next settled turn.
 - Automatic selection, approval, source snapshots and persisted results are rechecked under the worktree lock, preventing duplicate execution across sessions. Source changes since the quiet snapshot defer execution.
@@ -146,7 +145,7 @@ New approvals live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/approvals
 
 Full logs are retained; returned output is bounded. Logs can contain secrets printed by tests; retention/pruning is not implemented yet.
 
-Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Any source change makes all completed suites stale. Changes detected between the start and end of a run also keep it stale, even if another run is fresh.
+Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Any source change makes all completed suites stale. Results do not expire with age; only source/configuration changes or changes detected during a run make them stale. The removed `staleAfterMinutes` field is rejected: remove it from existing configurations and approve the updated configuration before running again. Changes detected between the start and end of a run also keep it stale, even if another run is fresh.
 
 In git projects, source fingerprints use tracked and non-ignored untracked file contents, paths, symlink targets and file modes; deleted tracked files count. Outside git, source files are scanned recursively. Conventional generated directories (`node_modules`, `dist`, `build`, `coverage`, `.next`, `__pycache__`, `.venv`, `test-results`, `playwright-report`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.turbo`) plus git metadata, `.DS_Store` and the pipeline cache directory (even if placed inside the project) are excluded. Pipeline config is fingerprinted separately. Changes reverted between fingerprint samples cannot be detected; ignored source and files behind symlinks are not scanned.
 
