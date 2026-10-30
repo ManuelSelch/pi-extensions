@@ -22,7 +22,7 @@ test('prepare is optional, validates only command/cwd/timeout and remains in exa
     assert.throws(() => validateConfig({ ...config(), prepare }));
   }
   const f = await fixture(t), p = new Pipeline(f.root, f.cache);
-  await p.configure(preparedConfig(), async text => { assert.match(text, /prepare:/); return true; });
+  await p.configure(preparedConfig(), async text => { assert.match(text, /prepare\s+.*timeout 300s/s); return true; });
   const next = preparedConfig(); next.prepare.command = [process.execPath, '-e', ''];
   await fs.writeFile(f.configPath, require('yaml').stringify(next));
   await assert.rejects(p.run('unit'), /approval.*required/i);

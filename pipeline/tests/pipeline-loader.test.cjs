@@ -30,11 +30,12 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   const saved = await ext.tools.get('pipeline_configure').definition.execute('config', { config: c }, undefined, undefined, ctx);
   assert.equal(saved.details.saved, true);
   assert.equal(saved.details.configPath, f.configPath);
-  assert.match(reviews[0], /New configuration.*command: \[/s);
+  assert.match(reviews[0], /prepare\s+.*timeout 300s/s);
+  assert.doesNotMatch(reviews[0], /suites:|Suites with|Configuration \(/);
   c.suites.unit.timeoutSeconds = 120;
   await ext.tools.get('pipeline_configure').definition.execute('update', { config: c }, undefined, undefined, ctx);
-  assert.match(reviews[1], /suites.unit/);
-  assert.match(reviews[1], /-.*timeoutSeconds: 300\n\+.*timeoutSeconds: 120/);
+  assert.match(reviews[1], /\n\nunit\n/);
+  assert.match(reviews[1], /- timeout: 300s\n\+ timeout: 120s/);
   assert.doesNotMatch(reviews[1], /command:|Before:|After:/);
   await event('agent_start'); await event('agent_settled');
   await waitFor(() => widgets.some(lines => lines?.join('\n').includes('✓ Local 1/1')));

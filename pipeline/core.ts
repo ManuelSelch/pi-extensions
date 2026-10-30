@@ -8,7 +8,8 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type { GitHubStatus } from "./github.ts";
-import { parseConfigYaml, formatConfigYaml, configurationReview } from "./infra/config-format.ts";
+import { parseConfigYaml, formatConfigYaml } from "./infra/config-format.ts";
+import { configurationReview, executionSummary } from "./ui/components/approval.ts";
 
 const exec = promisify(execFile);
 export type Confirm = (description: string) => Promise<boolean>;
@@ -182,6 +183,11 @@ export class Pipeline {
 		this.configPath = join(root, ".pi", "pipeline.yaml");
 		this.storage = join(cacheRoot, digest(root));
 	}
+	private displayRoot(): string {
+		const home = homedir();
+		const path = this.root === home ? "~" : this.root.startsWith(`${home}${sep}`) ? `~${this.root.slice(home.length)}` : this.root;
+		return /[\x00-\x1f\x7f]/.test(path) ? JSON.stringify(path) : path;
+	}
 	async config(): Promise<Config | undefined> {
 		const text = await optionalText(this.configPath);
 		return text === undefined ? undefined : validateConfig(parseConfigYaml(text));
@@ -213,7 +219,7 @@ export class Pipeline {
 		const identity = commonDir === undefined ? await realpath(this.root) : await realpath(resolve(this.root, commonDir));
 		return {
 			directory: join(this.cacheRoot, "approvals", digest(JSON.stringify([commonDir === undefined ? "directory" : "git", identity]))),
-			description: commonDir === undefined ? `Approval applies only to this project directory: ${identity}.` : `Approval applies to identical configurations in all worktrees of this repository (Git common directory: ${identity}).`,
+			description: commonDir === undefined ? "Scope: this project directory only" : "Scope: all worktrees of this repository",
 		};
 	}
 	async isApproved(config?: Config): Promise<boolean> {
@@ -241,7 +247,7 @@ export class Pipeline {
 		const release = await this.acquire();
 		try {
 			const before = await optionalText(this.configPath);
-			if (!await confirm(`Project: ${this.root}\n${(await this.approvalScope()).description}\n${configurationReview(before === undefined ? undefined : validateConfig(parseConfigYaml(before)), proposal)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown. Saving does not immediately run tests.`)) return false;
+			if (!await confirm(`Project: ${this.displayRoot()}\n${(await this.approvalScope()).description}\n\n${configurationReview(before === undefined ? undefined : validateConfig(parseConfigYaml(before)), proposal)}`)) return false;
 			if (await optionalText(this.configPath) !== before) throw new Error("Configuration changed during review; request fresh approval");
 			await mkdir(join(this.root, ".pi"), { recursive: true });
 			if (!inside(this.root, await realpath(join(this.root, ".pi")))) throw new Error("Configuration directory is outside the project");
@@ -411,7 +417,7 @@ export class Pipeline {
 		if (await this.isApproved(config)) return;
 		if (!confirm) throw new Error("User approval required: no interactive confirmation channel");
 		const before = await optionalText(this.configPath);
-		if (!await confirm(`Approve pipeline execution for ${this.root}?\n${(await this.approvalScope()).description}\nConfiguration (.pi/pipeline.yaml):\n${formatConfigYaml(config)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown.`)) throw new Error("Pipeline execution approval rejected");
+		if (!await confirm(`Project: ${this.displayRoot()}\n${(await this.approvalScope()).description}\n\n${executionSummary(config)}`)) throw new Error("Pipeline execution approval rejected");
 		if (await optionalText(this.configPath) !== before || JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed during review; request fresh approval");
 		await this.approve(config);
 	}

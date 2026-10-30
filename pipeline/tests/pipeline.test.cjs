@@ -21,14 +21,14 @@ test('uses versionless YAML, refuses duplicate keys and does not load legacy JSO
   await assert.rejects(p.config(), /Unknown field: version/);
 });
 
-test('approval shows initial YAML then focused normalized changes with named suites', async t => {
+test('approval shows compact creation then focused field changes with named suites', async t => {
   const f = await fixture(t);
   const { Pipeline } = load();
   const p = new Pipeline(f.root, f.cache);
   const initial = { suites: { tests: { command: ['npm', 'test'], timeoutSeconds: 120 }, unchanged: { command: ['do-not-show'] } } };
   await p.configure(initial, async text => {
-    assert.match(text, /New configuration/);
-    assert.match(text, /command: \[npm, test\]/);
+    assert.match(text, /tests\s+npm test\s+timeout 120s/);
+    assert.doesNotMatch(text, /suites:|timeoutSeconds:|auto:|Suites with/);
     assert.doesNotMatch(text, /version:|Before:|After:/);
     return true;
   });
@@ -39,9 +39,9 @@ test('approval shows initial YAML then focused normalized changes with named sui
   const changed = structuredClone(initial);
   changed.suites.tests.timeoutSeconds = 180;
   await p.configure(changed, async text => {
-    assert.match(text, /suites.tests/);
-    assert.match(text, /-.*timeoutSeconds: 120/);
-    assert.match(text, /\+.*timeoutSeconds: 180/);
+    assert.match(text, /\n\ntests\n/);
+    assert.match(text, /- timeout: 120s/);
+    assert.match(text, /\+ timeout: 180s/);
     assert.doesNotMatch(text, /unchanged|do-not-show|Before:|After:/);
     return false;
   });
@@ -95,7 +95,7 @@ test('configured suite order is preserved for manual runs, automatic runs and st
 
 test('confirmation rejection leaves absent/existing config unchanged; acceptance persists local approval', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
-  assert.equal(await p.configure(config(), async text => { assert.match(text, /New configuration/s); return false; }), false);
+  assert.equal(await p.configure(config(), async text => { assert.match(text, /unit\s+.*timeout 300s/s); return false; }), false);
   await assert.rejects(fs.readFile(f.configPath), { code: 'ENOENT' });
   await p.configure(config(), approve);
   const before = await fs.readFile(f.configPath, 'utf8');
@@ -180,6 +180,22 @@ test('runs suites serially, preserves full logs and bounded output, and persists
   assert.equal(status.suites.unit.outcome, 'passed');
   assert.equal(status.suites.unit.stale, false);
   assert.ok(status.suites.unit.durationMs >= 0);
+});
+
+test('execution approval uses compact rows and a short scope without duplicated headings or footer', async t => {
+  const f = await fixture(t);
+  const { Pipeline } = load();
+  const p = new Pipeline(f.root, f.cache);
+  await fs.mkdir(path.dirname(f.configPath));
+  await fs.writeFile(f.configPath, require('yaml').stringify({ suites: { tests: {
+    command: ['npm', 'test'], timeoutSeconds: 120, auto: 'after-agent',
+  } } }));
+
+  await assert.rejects(p.run('tests', { confirm: async text => {
+    assert.equal(text, `Project: ${f.root}\nScope: this project directory only\n\ntests  npm test  timeout 120s`);
+    return false;
+  } }), /rejected/i);
+  assert.equal(await p.isApproved(), false);
 });
 
 test('requires execution approval for external commands and refuses rejected changes', async t => {
@@ -329,7 +345,9 @@ test('extension registers tools and command, uses native approval, and shuts dow
   const c = config('setTimeout(() => {}, 10000)');
   const saved = await tools.pipeline_configure.execute('id', { config: c }, undefined, undefined, ctx);
   assert.equal(saved.details.saved, true); assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0][1], /New configuration.*suites:/s);
+  assert.equal(confirmations[0][0], 'Approve pipeline changes?');
+  assert.match(confirmations[0][1], /Project: .*\nScope: this project directory only\n\nunit\s+/);
+  assert.doesNotMatch(confirmations[0][1], /suites:|Suites with|Git common directory|Both run|Both may/);
   await commands.pipeline.handler('run unit', ctx);
   await waitFor(async () => (await tools.pipeline_status.execute('id', {}, undefined, undefined, ctx)).details.suites.unit.outcome === 'running');
   await events.session_shutdown({}, ctx);
@@ -364,6 +382,8 @@ test('shutdown dismisses a pending execution approval popup', async t => {
   await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, require('yaml').stringify(config()));
   let popupSignal;
   const ctx = { cwd: f.root, hasUI: true, ui: { notify() {}, confirm: (_title, _text, opts) => {
+    assert.equal(_title, 'Approve pipeline execution?');
+    assert.doesNotMatch(_text, /Approve pipeline execution for|Configuration \(|Suites with/);
     popupSignal = opts?.signal;
     assert.ok(popupSignal, 'approval dialog must receive cancellation signal');
     return new Promise(resolve => popupSignal.addEventListener('abort', () => resolve(false), { once: true }));

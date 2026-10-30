@@ -17,8 +17,8 @@ const PrepareSchema = Type.Object({
 }, { additionalProperties: false });
 const ConfigSchema = Type.Object({ suites: Type.Record(Type.String(), SuiteSchema), prepare: Type.Optional(PrepareSchema) }, { additionalProperties: false });
 const selectionSchema = Type.Object({ suite: Type.Optional(Type.String({ description: "Suite name or all (default)." })) });
-const confirmation = (ctx: ExtensionContext, signal?: AbortSignal): Confirm | undefined => ctx.hasUI
-	? text => ctx.ui.confirm("Approve pipeline changes / execution?", text, { signal })
+const confirmation = (ctx: ExtensionContext, signal?: AbortSignal, title = "Approve pipeline execution?"): Confirm | undefined => ctx.hasUI
+	? text => ctx.ui.confirm(title, text, { signal })
 	: undefined;
 const response = (data: unknown, isError = false) => {
 	const text = JSON.stringify(data, null, 2);
@@ -67,7 +67,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		parameters: Type.Object({ config: ConfigSchema }),
 		async execute(_id, params, signal, _update, ctx) {
 			const p = await pipeline(ctx);
-			const confirm = confirmation(ctx, signal);
+			const confirm = confirmation(ctx, signal, "Approve pipeline changes?");
 			const saved = await withFileMutationQueue(p.configPath, () => p.configure(params.config, confirm ? async text => {
 				if (signal?.aborted) return false;
 				const accepted = await confirm(text);
