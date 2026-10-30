@@ -99,7 +99,8 @@ export function validateConfig(input: unknown): Config {
 	for (const [name, inputSuite] of Object.entries(object(value.suites))) {
 		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error(`Invalid suite name: ${name}`);
 		const suite = object(inputSuite);
-		keys(suite, ["command", "cwd", "timeoutSeconds", "auto"]);
+		// Accept but discard the removed age-expiry option in existing suite configs.
+		keys(suite, ["command", "cwd", "timeoutSeconds", "auto", "staleAfterMinutes"]);
 		if (!Array.isArray(suite.command) || !suite.command.length || suite.command.some(arg => typeof arg !== "string" || arg.includes("\0")) || !suite.command[0].trim()) {
 			throw new Error(`${name}: command must be a nonempty executable/argument array`);
 		}

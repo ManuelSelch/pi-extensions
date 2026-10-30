@@ -14,8 +14,22 @@ test('validates command arrays, names, relative cwd and unknown configuration fi
     { version: 1, suites: { unit: { command: ['x'], cwd: '../outside' } } },
     { version: 1, suites: { unit: { command: ['x'], timeoutSeconds: 0 } } },
     { version: 1, suites: { unit: { command: ['x'], typo: true } } },
-    { version: 1, suites: { unit: { command: ['x'], staleAfterMinutes: 30 } } },
   ]) assert.throws(() => validateConfig(value));
+});
+
+test('ignores legacy suite staleAfterMinutes without retaining it or changing fingerprints', () => {
+  const { validateConfig, digest } = load();
+  const expected = validateConfig(config());
+  for (const value of [30, 0, null, 'obsolete', { ignored: true }]) {
+    const legacy = config();
+    legacy.suites.unit.staleAfterMinutes = value;
+
+    const normalized = validateConfig(legacy);
+
+    assert.deepEqual(normalized, expected);
+    assert.equal(digest(JSON.stringify(normalized)), digest(JSON.stringify(expected)));
+    assert.equal(legacy.suites.unit.staleAfterMinutes, value);
+  }
 });
 
 test('configured suite order is preserved for manual runs, automatic runs and status', async t => {
@@ -182,7 +196,13 @@ test('honours suite cwd and log retrieval without expiring unchanged results', a
   results.unit.startedAt = results.unit.finishedAt = '2000-01-01T00:00:00.000Z';
   await fs.writeFile(resultsPath, JSON.stringify(results));
 
-  assert.equal((await new Pipeline(f.root, f.cache).status()).suites.unit.stale, false);
+  c.suites.unit.staleAfterMinutes = 1;
+  await fs.writeFile(f.configPath, JSON.stringify(c));
+  const status = await new Pipeline(f.root, f.cache).status();
+
+  assert.equal(status.suites.unit.stale, false);
+  assert.equal(Object.hasOwn(status.config.suites.unit, 'staleAfterMinutes'), false);
+  assert.equal(await p.isApproved(), true);
   await assert.rejects(p.logs('missing'), /No run/);
 });
 
