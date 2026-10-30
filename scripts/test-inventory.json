@@ -34,6 +34,7 @@
   "pipeline.test.cjs",
   "preview.test.cjs",
   "todo.test.cjs",
+  "quiz.test.cjs",
   "app/display-path.test.cjs",
   "domain/config.test.cjs",
   "infra/store.test.cjs",

@@ -21,6 +21,7 @@ entry points directly through jiti; there is no build step.
 | [pipeline/index.ts](pipeline/index.ts) | `/pipeline`, `pipeline_configure`, `pipeline_run`, `pipeline_status` — approved local tests and GitHub Actions status. See [usage](docs/pipeline/README.md). |
 | [preview/index.ts](preview/index.ts) | `/preview`, `preview_start`, `preview_manage` — managed development previews. |
 | [projects/index.ts](projects/index.ts) | `/projects` — virtual repository collections, pipeline status and native `/projects browse` menus. See [usage](docs/projects/README.md). |
+| [quiz/index.ts](quiz/index.ts) | `quiz` — one multiple-choice check and written reasoning, using native select/editor dialogs. See [usage](docs/quiz/README.md). |
 | [readonly-mode/index.ts](readonly-mode/index.ts) | `/readonly` — block write/edit tools and destructive bash. |
 | [todo/index.ts](todo/index.ts) | `todo`, `/todos` — session task tracking. |
 | [workflow/index.ts](workflow/index.ts) | `/workflow`, `/workflow global` — select enabled mock/plan/design/commit prompts and native skills. See [usage](docs/workflow/README.md). |
