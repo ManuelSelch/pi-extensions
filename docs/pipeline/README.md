@@ -4,34 +4,28 @@ Provides native-confirmed local test configuration, manual execution, persisted 
 
 ## Usage
 
-Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the before/after popup. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
+Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the native popup: complete YAML for creation, a focused diff for updates. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
 
-```json
-{
-  "version": 1,
-  "prepare": {
-    "command": ["npm", "ci"],
-    "timeoutSeconds": 300
-  },
-  "suites": {
-    "unit": {
-      "command": ["npm", "run", "test:unit"],
-      "timeoutSeconds": 120,
-      "auto": "after-agent"
-    },
-    "integration": {
-      "command": ["npm", "run", "test:integration"],
-      "cwd": ".",
-      "timeoutSeconds": 600,
-      "auto": "manual"
-    }
-  }
-}
+```yaml
+prepare:
+  command: [npm, ci]
+  timeoutSeconds: 300
+
+suites:
+  unit:
+    command: [npm, run, test:unit]
+    timeoutSeconds: 120
+    auto: after-agent
+  integration:
+    command: [npm, run, test:integration]
+    cwd: .
+    timeoutSeconds: 600
+    auto: manual
 ```
 
 Suite declaration order controls serial execution and widget order; suites are not alphabetically sorted. Use descriptive suite names (JavaScript enumerates integer-only names numerically). Reorder suites via `pipeline_configure` to review and approve the new configuration.
 
-Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's cwd outside git. Starting Pi in a git subdirectory still uses the worktree root. Commit the configuration if you want to share it; approvals and results are never stored in that file.
+Configuration is stored in `.pi/pipeline.yaml` (no `version` key) at the git worktree root, or Pi's cwd outside git. Starting Pi in a git subdirectory still uses the worktree root. Commit the configuration if you want to share it; approvals and results are never stored in that file.
 
 - `pipeline_configure({config: ...})`: validate and save after approval.
 - `pipeline_run({suite: "unit"})`: wait for a suite's results; omit suite or use `all` to run all suites serially. Non-passing results are tool errors carrying outcome/output/log paths. Aborting the tool cancels execution.
@@ -41,6 +35,15 @@ Configuration is stored in `.pi/pipeline.json` at the git worktree root, or Pi's
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
 Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
+
+## YAML migration and review
+
+- Only `.pi/pipeline.yaml` is loaded; `.pi/pipeline.json` is not a fallback. To migrate another project, convert its JSON to YAML, remove the top-level `version` key, and remove the old file explicitly. This repository's config is already converted.
+- `pipeline_configure` still accepts a structured object, now without `version`; callers do not send YAML text. Saving emits stable YAML with inline argv arrays and explicit defaults. Comments and custom formatting are not preserved when saving.
+- YAML duplicate keys, custom tags, aliases and multiple documents are rejected, alongside the existing strict field/command validation.
+- Update popups compare normalized configurations, so comments, whitespace and omitted defaults do not produce noise. Each changed suite/preparation section has a unified diff labeled with its path, minimal context, and complete additions/removals. Suite execution-order changes are shown separately. Unrelated suite definitions are omitted. Unchanged proposals say “No configuration changes.”
+- Initial creation and manual execution of an unapproved config show the complete normalized YAML. Every popup retains project/scope details and automation warnings; edits during review are still refused. Saving never immediately runs tests.
+- Removing `version` changes normalized fingerprints: old JSON approvals are **not** silently transferred. Approve the new config explicitly before execution/automation; old results become stale. Preparation's once-per-worktree success flag remains unchanged.
 
 ## TypeScript status API
 
@@ -81,7 +84,7 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 
 - Show the latest run **per workflow on the current branch**, even if it tested an older commit. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
 - The widget uses one local summary and one summary per GitHub workflow, with passing/total counts (completed/total while a workflow is active). Only non-successful jobs expand beneath their workflow; `/pipeline status` retains all jobs and local suites. Tree-nested job rows (`├─` / `└─`) come from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
-- Remote rows also appear when `.pi/pipeline.json` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
+- Remote rows also appear when `.pi/pipeline.yaml` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
 - The initial monitor refresh runs in the background: opening a session does not wait for source scanning or GitHub requests. The widget appears when status is ready; shutdown still cancels pending remote requests.
 - While a UI session is open, the existing monitor refreshes remote data at most once per 60 seconds. Branch/repository changes invalidate that cache. Status commands/tools share the same session cache; they do not force a network fetch within its lifetime.
 - A failed refresh keeps the last successful snapshot, dimmed with `stale <age> · <reason>` on each workflow summary. The age is the last **successful** fetch, not the workflow run's age; the reason is a bounded category (`timeout`, `auth`, `access`, `gh missing`, `connection`, `refresh failed`) and never raw CLI output. Without a successful snapshot the row reads `⚠ GitHub · unavailable · <reason>` and no results are invented. The next successful refresh clears the warning; repository/branch changes never reuse another selection's snapshot.
@@ -96,7 +99,7 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 - Persist success in the worktree-local cache's `prepare.json`. Once successful, skip it across sessions/reloads and all future runs in that worktree. Shared repository approvals do **not** share preparation success.
 - Failure, timeout or cancellation blocks every selected suite and does not mark the worktree prepared. An explicit subsequent run retries preparation. Automatic runs do not repeatedly retry an unchanged failed preparation; changed source/config can make a later automatic attempt eligible after cooldown.
 - **No invalidation:** manifest/lockfile edits, a different preparation command, deleted dependencies, or removing/readding `prepare` do not clear prior success. Dependency maintenance afterward is manual. A successful flag is scoped to the cached worktree path, not a Git branch name; reusing the same checkout path reuses its cache.
-- Preparation is optional; existing configurations without it behave as before and retain their exact approval fingerprints. Adding/changing it requires native approval, even if preparation already succeeded.
+- Preparation is optional; configurations without it skip preparation. Adding/changing it requires native approval, even if preparation already succeeded.
 - `pipeline_status` exposes `prepare` separately from suite outcomes; the widget shows preparation only while running or after failure, cancellation or timeout; successful and never-run preparation stay hidden and are excluded from suite counts. A run that performs preparation includes its result before suite results. Failed preparation is a tool error with bounded output and a full log reference.
 - Put installation here, and keep ordinary compilation/build as a suite: editing source should not reinstall dependencies. Preparation is not a general suite dependency graph; ordinary suite failures still do not stop later suites.
 

@@ -319,7 +319,7 @@ test('extension restores persisted results, refreshes stale code and clears hidd
 
 test('TUI widget factory uses current theme and terminal width; non-UI sessions stay inactive', async t => {
   const f = await fixture(t); const Type = (await import('typebox')).Type;
-  await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, JSON.stringify(config()));
+  await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, require('yaml').stringify(config()));
   const { default: extension } = load('pipeline/index.ts', { typebox: { Type }, '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_p, fn) => fn() } });
   const events = {}, widgets = [];
   extension({ registerTool() {}, registerCommand() {}, on(name, fn) { events[name] = fn; } });

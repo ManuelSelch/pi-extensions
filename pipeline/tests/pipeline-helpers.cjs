@@ -18,9 +18,9 @@ async function fixture(t) {
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const root = path.join(dir, 'project with spaces');
   await fs.mkdir(root);
-  return { root, cache: path.join(dir, 'cache'), configPath: path.join(root, '.pi', 'pipeline.json') };
+  return { root, cache: path.join(dir, 'cache'), configPath: path.join(root, '.pi', 'pipeline.yaml') };
 }
-const config = (script = 'console.log("passed")') => ({ version: 1, suites: { unit: { command: [process.execPath, '-e', script] } } });
+const config = (script = 'console.log("passed")') => ({ suites: { unit: { command: [process.execPath, '-e', script] } } });
 const approve = async () => true;
 async function waitFor(predicate) {
   for (let i = 0; i < 300; i++) { if (await predicate()) return; await new Promise(r => setTimeout(r, 10)); }

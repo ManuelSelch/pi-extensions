@@ -29,7 +29,7 @@ async function createApiDriver(t) {
     async configureLocalSuite() {
       await fs.mkdir(path.dirname(f.configPath), { recursive: true });
       // If status mistakenly executes a command, this creates an observable marker.
-      await fs.writeFile(f.configPath, JSON.stringify({ version: 1, suites: { unit: {
+      await fs.writeFile(f.configPath, require('yaml').stringify({ suites: { unit: {
         command: [process.execPath, '-e', 'require("node:fs").writeFileSync("UNEXPECTED-RUN", "ran")'],
       } } }));
     },

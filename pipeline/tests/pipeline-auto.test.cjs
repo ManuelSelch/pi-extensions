@@ -46,7 +46,7 @@ test('only approved opt-in suites run automatically; unchanged outcomes are skip
   assert.equal((await p.run('all', { automatic: true })).length, 0, 'persisted cooldown suppresses immediate rerun');
   assert.equal((await p.run('all', { automatic: true, cooldownMs: 0 })).length, 1);
   c.suites.unit.command = [process.execPath, '-e', 'console.log("unapproved")'];
-  await fs.writeFile(f.configPath, JSON.stringify(c));
+  await fs.writeFile(f.configPath, require('yaml').stringify(c));
   let popups = 0;
   assert.equal((await p.run('all', { automatic: true, confirm: async () => { popups++; return true; } })).length, 0);
   assert.equal(popups, 0);

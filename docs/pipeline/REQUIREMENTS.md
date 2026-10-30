@@ -5,7 +5,7 @@ Make local test outcomes and freshness visible in Pi, so tests are not forgotten
 
 ## Scope
 ### In Scope
-- A global Pi extension with per-project `.pi/pipeline.json` configuration.
+- A global Pi extension with versionless per-project `.pi/pipeline.yaml` configuration; no JSON fallback.
 - Named suites such as unit, integration and e2e; manual execution and persistent results.
 - Agent tools to configure, run and inspect pipelines.
 - Compact widget and optional automatic execution while Pi is open.
@@ -20,7 +20,7 @@ Make local test outcomes and freshness visible in Pi, so tests are not forgotten
 - Show test status only: no approval-required text in the widget. Automatic-run progress and outcomes only refresh the widget; do not notify or send messages to the agent.
 - Any project source change marks all suite results stale in the first version; no per-suite input paths. Exclude generated results/logs and other non-source artifacts from source-change detection.
 - Configuration defines executable/arguments, optional project-relative working directory, timeout and automatic-run mode per suite; results never expire solely with age. Commands run once, not in watch mode.
-- `pipeline_configure` proposes suite additions, updates and removals, validates them and requests approval using Pi's native confirmation popup before writing. Show the exact changes, including automatic execution settings. Rejection changes nothing; saving does not run tests.
+- `pipeline_configure` proposes suite additions, updates and removals, validates them and requests approval using Pi's native confirmation popup before writing. Show complete YAML for creation; focused, normalized unified diffs for updates, with suite/preparation paths and execution-order changes. Ignore formatting/default-expansion noise; unchanged proposals say so. Retain scope and automation warnings. Rejection changes nothing; saving does not run tests.
 - Approval is local and tied to the exact project/configuration, not committed with configuration. If configuration changes during review, request fresh approval. External execution-affecting changes require confirmation before execution; automatic runs remain paused until approved, without repeatedly opening popups.
 - Without an interactive approval channel, refuse configuration changes or unapproved execution and return a clear tool error.
 - `pipeline_run` and `pipeline_status`, plus `/pipeline` actions for run, details/logs and cancellation, use the same runner and state.
@@ -37,7 +37,7 @@ Make local test outcomes and freshness visible in Pi, so tests are not forgotten
 
 ## Implementation Plan
 ### 1. Configuration and approval
-Description: Define and validate `.pi/pipeline.json`; implement `pipeline_configure` and local approval tracking with the native confirmation popup. Verify acceptance, rejection, external changes and concurrent edits without executing tests.
+Description: Define and validate versionless `.pi/pipeline.yaml`; implement `pipeline_configure` and local approval tracking with the native confirmation popup. Verify acceptance, rejection, external changes and concurrent edits without executing tests.
 
 ### 2. Manual runner and results
 Description: Add `pipeline_run`, `pipeline_status` and `/pipeline` run/log/cancel actions using approved configuration. Persist worktree-isolated outcomes/logs and source fingerprints, with locking, timeouts and process cleanup. Verify passing, failing, cancelled, timed-out and duplicate runs using fixture commands.

@@ -16,6 +16,8 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@manuelselch/pi-sdk": "file:vendor/pi-sdk-0.1.1-prompts-5b747dd.tgz"
+    "@manuelselch/pi-sdk": "file:vendor/pi-sdk-0.1.1-prompts-5b747dd.tgz",
+    "diff": "^9.0.0",
+    "yaml": "^2.9.1"
   }
 }

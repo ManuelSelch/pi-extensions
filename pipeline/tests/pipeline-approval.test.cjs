@@ -19,7 +19,7 @@ async function repository(t) {
 }
 async function writeConfig(root, c) {
   await fs.mkdir(path.join(root, '.pi'), { recursive: true });
-  await fs.writeFile(path.join(root, '.pi', 'pipeline.json'), JSON.stringify(c));
+  await fs.writeFile(path.join(root, '.pi', 'pipeline.yaml'), require('yaml').stringify(c));
 }
 
 test('repository approval enables linked-worktree automation while results, logs and locks stay isolated', async t => {
@@ -74,6 +74,22 @@ test('simultaneous worktree approvals retain both configuration fingerprints', a
   await writeConfig(f.other, config('console.log("a")'));
   assert.equal(await a.isApproved(), true);
   assert.equal(await b.isApproved(), true);
+});
+
+test('removing the config version never silently transfers old JSON approvals', async t => {
+  const f = await fixture(t);
+  const { Pipeline, validateConfig } = load();
+  const p = new Pipeline(f.root, f.cache);
+  await writeConfig(f.root, config());
+  const oldConfig = { version: 1, ...validateConfig(config()) };
+  const fingerprint = createHash('sha256').update(JSON.stringify(oldConfig)).digest('hex');
+  await fs.mkdir(p.storage, { recursive: true });
+  await fs.writeFile(path.join(p.storage, 'approval.json'), JSON.stringify({ fingerprint }));
+
+  assert.equal(await p.isApproved(), false);
+  await assert.rejects(p.run(), /approval.*required/i);
+  await p.configure(config(), async text => { assert.match(text, /No configuration changes/); return true; });
+  assert.equal(await p.isApproved(), true);
 });
 
 test('legacy worktree approvals remain valid locally without silently broadening trust', async t => {

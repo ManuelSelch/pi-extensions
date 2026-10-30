@@ -4,16 +4,63 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { load, fixture, config, approve, waitFor } = require('./pipeline-helpers.cjs');
 
+test('uses versionless YAML, refuses duplicate keys and does not load legacy JSON files', async t => {
+  const f = await fixture(t);
+  const { Pipeline } = load();
+  const p = new Pipeline(f.root, f.cache);
+  await fs.mkdir(path.join(f.root, '.pi'));
+  await fs.writeFile(path.join(f.root, '.pi', 'pipeline.json'), JSON.stringify({ version: 1, ...config() }));
+  assert.equal(await p.config(), undefined);
+
+  assert.equal(p.configPath, path.join(f.root, '.pi', 'pipeline.yaml'));
+  await fs.writeFile(p.configPath, 'suites:\n  unit:\n    command: [npm, test]\n');
+  assert.deepEqual(Array.from((await p.config()).suites.unit.command), ['npm', 'test']);
+  await fs.writeFile(p.configPath, 'suites: {}\nsuites: {}\n');
+  await assert.rejects(p.config(), /unique|duplicate/i);
+  await fs.writeFile(p.configPath, 'version: 1\nsuites: {}\n');
+  await assert.rejects(p.config(), /Unknown field: version/);
+});
+
+test('approval shows initial YAML then focused normalized changes with named suites', async t => {
+  const f = await fixture(t);
+  const { Pipeline } = load();
+  const p = new Pipeline(f.root, f.cache);
+  const initial = { suites: { tests: { command: ['npm', 'test'], timeoutSeconds: 120 }, unchanged: { command: ['do-not-show'] } } };
+  await p.configure(initial, async text => {
+    assert.match(text, /New configuration/);
+    assert.match(text, /command: \[npm, test\]/);
+    assert.doesNotMatch(text, /version:|Before:|After:/);
+    return true;
+  });
+  const yaml = await fs.readFile(p.configPath, 'utf8');
+  assert.match(yaml, /^suites:/);
+  assert.doesNotMatch(yaml, /version/);
+
+  const changed = structuredClone(initial);
+  changed.suites.tests.timeoutSeconds = 180;
+  await p.configure(changed, async text => {
+    assert.match(text, /suites.tests/);
+    assert.match(text, /-.*timeoutSeconds: 120/);
+    assert.match(text, /\+.*timeoutSeconds: 180/);
+    assert.doesNotMatch(text, /unchanged|do-not-show|Before:|After:/);
+    return false;
+  });
+  assert.equal(await fs.readFile(p.configPath, 'utf8'), yaml);
+
+  await fs.writeFile(p.configPath, '# formatting only\n' + yaml);
+  await p.configure(initial, async text => { assert.match(text, /No configuration changes/); return true; });
+});
+
 test('validates command arrays, names, relative cwd and unknown configuration fields', () => {
   const { validateConfig } = load();
   assert.equal(validateConfig(config()).suites.unit.auto, 'manual');
   assert.equal(Object.hasOwn(validateConfig(config()).suites.unit, 'staleAfterMinutes'), false);
   for (const value of [
-    { version: 2, suites: {} }, { version: 1, suites: { '../evil': { command: ['x'] } } },
-    { version: 1, suites: { unit: { command: 'npm test' } } },
-    { version: 1, suites: { unit: { command: ['x'], cwd: '../outside' } } },
-    { version: 1, suites: { unit: { command: ['x'], timeoutSeconds: 0 } } },
-    { version: 1, suites: { unit: { command: ['x'], typo: true } } },
+    { version: 1, suites: {} }, { suites: { '../evil': { command: ['x'] } } },
+    { suites: { unit: { command: 'npm test' } } },
+    { suites: { unit: { command: ['x'], cwd: '../outside' } } },
+    { suites: { unit: { command: ['x'], timeoutSeconds: 0 } } },
+    { suites: { unit: { command: ['x'], typo: true } } },
   ]) assert.throws(() => validateConfig(value));
 });
 
@@ -34,7 +81,7 @@ test('ignores legacy suite staleAfterMinutes without retaining it or changing fi
 
 test('configured suite order is preserved for manual runs, automatic runs and status', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
-  const c = { version: 1, suites: {
+  const c = { suites: {
     typecheck: { command: [process.execPath, '-e', ''], auto: 'after-agent' },
     tests: { command: [process.execPath, '-e', ''], auto: 'after-agent' },
   } };
@@ -48,14 +95,14 @@ test('configured suite order is preserved for manual runs, automatic runs and st
 
 test('confirmation rejection leaves absent/existing config unchanged; acceptance persists local approval', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
-  assert.equal(await p.configure(config(), async text => { assert.match(text, /Before:.*none/s); return false; }), false);
+  assert.equal(await p.configure(config(), async text => { assert.match(text, /New configuration/s); return false; }), false);
   await assert.rejects(fs.readFile(f.configPath), { code: 'ENOENT' });
   await p.configure(config(), approve);
   const before = await fs.readFile(f.configPath, 'utf8');
   assert.equal(await p.configure(config('process.exit(1)'), async () => false), false);
   assert.equal(await fs.readFile(f.configPath, 'utf8'), before);
   assert.equal(await new Pipeline(f.root, f.cache).isApproved(), true);
-  await fs.writeFile(f.configPath, JSON.stringify(config('process.exit(2)')));
+  await fs.writeFile(f.configPath, require('yaml').stringify(config('process.exit(2)')));
   assert.equal(await p.isApproved(), false);
 });
 
@@ -64,9 +111,49 @@ test('requires UI and never approves a file modified during confirmation', async
   await assert.rejects(p.configure(config()), /approval.*required/i);
   await p.configure(config(), approve);
   await assert.rejects(p.configure(config('process.exit(1)'), async () => {
-    await fs.writeFile(f.configPath, JSON.stringify(config('process.exit(2)'))); return true;
+    await fs.writeFile(f.configPath, require('yaml').stringify(config('process.exit(2)'))); return true;
   }), /changed.*review/i);
   assert.equal(await p.isApproved(), false);
+});
+
+test('formatting-only YAML changes preserve approval and freshness; semantic changes do not', async t => {
+  const f = await fixture(t);
+  const { Pipeline } = load();
+  const p = new Pipeline(f.root, f.cache);
+  await p.configure(config(''), approve);
+  await p.run();
+  const yaml = await fs.readFile(p.configPath, 'utf8');
+  const original = await p.status();
+
+  await fs.writeFile(p.configPath, '# comment\n' + yaml.replace('    cwd: .\n', ''));
+  const formatted = await p.status();
+  assert.equal(await p.isApproved(), true);
+  assert.equal(formatted.configFingerprint, original.configFingerprint);
+  assert.equal(formatted.sourceFingerprint, original.sourceFingerprint);
+  assert.equal(formatted.suites.unit.stale, false);
+
+  await fs.writeFile(p.configPath, yaml.replace('timeoutSeconds: 300', 'timeoutSeconds: 120'));
+  assert.equal(await p.isApproved(), false);
+  assert.equal((await p.status()).suites.unit.stale, true);
+});
+
+test('even formatting edits during review are refused and malformed YAML cannot be silently replaced', async t => {
+  const f = await fixture(t);
+  const { Pipeline } = load();
+  const p = new Pipeline(f.root, f.cache);
+  await p.configure(config(''), approve);
+  const yaml = await fs.readFile(p.configPath, 'utf8');
+
+  await assert.rejects(p.configure(config('changed'), async () => {
+    await fs.writeFile(p.configPath, '# concurrent edit\n' + yaml);
+    return true;
+  }), /changed.*review/i);
+  assert.equal(await p.isApproved(), true);
+  await fs.writeFile(p.configPath, 'suites: [');
+  let prompted = false;
+  await assert.rejects(p.configure(config(), async () => { prompted = true; return true; }), /Invalid pipeline YAML/);
+  assert.equal(prompted, false);
+  assert.equal(await fs.readFile(p.configPath, 'utf8'), 'suites: [');
 });
 
 test('working-directory symlinks cannot escape the project', async t => {
@@ -98,7 +185,7 @@ test('runs suites serially, preserves full logs and bounded output, and persists
 test('requires execution approval for external commands and refuses rejected changes', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
   await p.configure(config(), approve);
-  const next = config('console.log("new")'); await fs.writeFile(f.configPath, JSON.stringify(next));
+  const next = config('console.log("new")'); await fs.writeFile(f.configPath, require('yaml').stringify(next));
   await assert.rejects(p.run('unit'), /approval.*required/i);
   await assert.rejects(p.run('unit', { confirm: async () => false }), /rejected/i);
   assert.equal((await p.run('unit', { confirm: approve }))[0].outcome, 'passed');
@@ -177,9 +264,9 @@ test('already-aborted runs do not ask for approval or execute commands', async t
 test('refuses config changed during execution approval and invalid selections', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
   await p.configure(config(), approve);
-  await fs.writeFile(f.configPath, JSON.stringify(config('process.exit(1)')));
+  await fs.writeFile(f.configPath, require('yaml').stringify(config('process.exit(1)')));
   await assert.rejects(p.run('unit', { confirm: async () => {
-    await fs.writeFile(f.configPath, JSON.stringify(config('process.exit(2)'))); return true;
+    await fs.writeFile(f.configPath, require('yaml').stringify(config('process.exit(2)'))); return true;
   } }), /changed.*review/);
   await assert.rejects(p.run('missing'), /Unknown/);
   assert.equal(await p.isApproved(), false);
@@ -197,7 +284,7 @@ test('honours suite cwd and log retrieval without expiring unchanged results', a
   await fs.writeFile(resultsPath, JSON.stringify(results));
 
   c.suites.unit.staleAfterMinutes = 1;
-  await fs.writeFile(f.configPath, JSON.stringify(c));
+  await fs.writeFile(f.configPath, require('yaml').stringify(c));
   const status = await new Pipeline(f.root, f.cache).status();
 
   assert.equal(status.suites.unit.stale, false);
@@ -242,7 +329,7 @@ test('extension registers tools and command, uses native approval, and shuts dow
   const c = config('setTimeout(() => {}, 10000)');
   const saved = await tools.pipeline_configure.execute('id', { config: c }, undefined, undefined, ctx);
   assert.equal(saved.details.saved, true); assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0][1], /Before:.*After:/s);
+  assert.match(confirmations[0][1], /New configuration.*suites:/s);
   await commands.pipeline.handler('run unit', ctx);
   await waitFor(async () => (await tools.pipeline_status.execute('id', {}, undefined, undefined, ctx)).details.suites.unit.outcome === 'running');
   await events.session_shutdown({}, ctx);
@@ -274,7 +361,7 @@ test('shutdown dismisses a pending execution approval popup', async t => {
   extension({ registerTool() {}, registerCommand(name, spec) { commands[name] = spec; }, on(name, fn) { events[name] = fn; } });
   const before = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = f.cache;
   t.after(() => { if (before === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = before; });
-  await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, JSON.stringify(config()));
+  await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, require('yaml').stringify(config()));
   let popupSignal;
   const ctx = { cwd: f.root, hasUI: true, ui: { notify() {}, confirm: (_title, _text, opts) => {
     popupSignal = opts?.signal;

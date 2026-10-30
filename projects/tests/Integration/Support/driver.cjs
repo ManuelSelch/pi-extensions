@@ -49,7 +49,7 @@ function createDriver(t) {
     async thenMissingCheckoutFails() { await assert.rejects(pipeline.read(path.join(root, 'missing')), /ENOENT/); },
     async thenConfiguredSuiteNeverRan() {
       fs.mkdirSync(path.join(repo, '.pi'));
-      fs.writeFileSync(path.join(repo, '.pi/pipeline.json'), JSON.stringify({ version: 1, suites: { test: { command: ['do-not-execute'] } } }));
+      fs.writeFileSync(path.join(repo, '.pi/pipeline.yaml'), require('yaml').stringify({ suites: { test: { command: ['do-not-execute'] } } }));
       const result = await pipeline.read(repo);
       assert.equal(result.configured, true); assert.equal(result.suites.test.outcome, 'never');
     },

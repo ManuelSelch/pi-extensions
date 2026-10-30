@@ -22,6 +22,7 @@
   "layout.test.cjs",
   "manager.test.cjs",
   "pi-open.test.cjs",
+  "infra/config-format.test.cjs",
   "pipeline-api-integration.test.cjs",
   "pipeline-api.test.cjs",
   "pipeline-approval.test.cjs",

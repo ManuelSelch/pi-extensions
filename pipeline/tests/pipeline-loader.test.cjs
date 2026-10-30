@@ -14,9 +14,13 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   assert.deepEqual([...ext.tools.keys()].sort(), ['pipeline_configure', 'pipeline_run', 'pipeline_status']);
   assert.ok(ext.commands.has('pipeline'));
   let confirmations = 0, notifications = 0;
+  const reviews = [];
+  const schema = ext.tools.get('pipeline_configure').definition.parameters.properties.config;
+  assert.equal(schema.properties.version, undefined);
+  assert.equal(schema.additionalProperties, false);
   const ctx = { cwd: f.root, mode: 'rpc', hasUI: true, isIdle: () => true, ui: {
     theme: { fg: (_color, text) => text }, setWidget: (_key, content) => widgets.push(content),
-    confirm: async () => { confirmations++; return true; }, notify: () => { notifications++; },
+    confirm: async (_title, text) => { confirmations++; reviews.push(text); return true; }, notify: () => { notifications++; },
   } };
   async function event(name) { for (const handler of ext.handlers.get(name) ?? []) await handler({ type: name }, ctx); }
   t.after(() => event('session_shutdown'));
@@ -25,6 +29,13 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   c.prepare = { command: [process.execPath, '-e', 'console.log("actual Pi loader preparation passed")'] };
   const saved = await ext.tools.get('pipeline_configure').definition.execute('config', { config: c }, undefined, undefined, ctx);
   assert.equal(saved.details.saved, true);
+  assert.equal(saved.details.configPath, f.configPath);
+  assert.match(reviews[0], /New configuration.*command: \[/s);
+  c.suites.unit.timeoutSeconds = 120;
+  await ext.tools.get('pipeline_configure').definition.execute('update', { config: c }, undefined, undefined, ctx);
+  assert.match(reviews[1], /suites.unit/);
+  assert.match(reviews[1], /-.*timeoutSeconds: 300\n\+.*timeoutSeconds: 120/);
+  assert.doesNotMatch(reviews[1], /command:|Before:|After:/);
   await event('agent_start'); await event('agent_settled');
   await waitFor(() => widgets.some(lines => lines?.join('\n').includes('✓ Local 1/1')));
   const status = await ext.tools.get('pipeline_status').definition.execute('status', {}, undefined, undefined, ctx);
@@ -34,6 +45,6 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   const rerun = await ext.tools.get('pipeline_run').definition.execute('run', { suite: 'unit' }, undefined, undefined, ctx);
   assert.equal(rerun.isError, false);
   assert.deepEqual(rerun.details.map(result => result.suite), ['unit']);
-  assert.equal(confirmations, 1); assert.equal(notifications, 0);
+  assert.equal(confirmations, 2); assert.equal(notifications, 0);
   await event('session_shutdown'); assert.equal(widgets.at(-1), undefined);
 });

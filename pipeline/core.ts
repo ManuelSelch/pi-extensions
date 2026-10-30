@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type { GitHubStatus } from "./github.ts";
+import { parseConfigYaml, formatConfigYaml, configurationReview } from "./infra/config-format.ts";
 
 const exec = promisify(execFile);
 export type Confirm = (description: string) => Promise<boolean>;
@@ -19,7 +20,7 @@ export interface Prepare {
 export interface Suite extends Prepare {
 	auto: "manual" | "after-agent";
 }
-export interface Config { version: 1; suites: Record<string, Suite>; prepare?: Prepare }
+export interface Config { suites: Record<string, Suite>; prepare?: Prepare }
 export interface RunResult {
 	suite: string;
 	outcome: "running" | "passed" | "failed" | "cancelled" | "timed-out";
@@ -78,7 +79,7 @@ const GENERATED = new Set([
 	".git", "node_modules", "dist", "build", "coverage", ".next", ".DS_Store", "__pycache__", ".venv",
 	"test-results", "playwright-report", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".turbo",
 ]);
-const sourcePath = (file: string) => file !== ".pi/pipeline.json" && !file.split(/[\\/]/).some(part => GENERATED.has(part));
+const sourcePath = (file: string) => file !== ".pi/pipeline.yaml" && !file.split(/[\\/]/).some(part => GENERATED.has(part));
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const inside = (root: string, path: string) => {
 	const rel = relative(root, path);
@@ -93,8 +94,7 @@ function keys(value: Record<string, unknown>, allowed: string[]) {
 }
 export function validateConfig(input: unknown): Config {
 	const value = object(input);
-	keys(value, ["version", "suites", "prepare"]);
-	if (value.version !== 1) throw new Error("Pipeline version must be 1");
+	keys(value, ["suites", "prepare"]);
 	const suites: Record<string, Suite> = Object.create(null);
 	for (const [name, inputSuite] of Object.entries(object(value.suites))) {
 		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error(`Invalid suite name: ${name}`);
@@ -112,11 +112,11 @@ export function validateConfig(input: unknown): Config {
 		if (auto !== "manual" && auto !== "after-agent") throw new Error(`${name}: invalid auto mode`);
 		suites[name] = { command: [...suite.command], cwd, timeoutSeconds, auto };
 	}
-	if (value.prepare === undefined) return { version: 1, suites }; // Preserve existing approval fingerprints.
+	if (value.prepare === undefined) return { suites };
 	const prepare = object(value.prepare);
 	keys(prepare, ["command", "cwd", "timeoutSeconds"]);
-	const normalized = validateConfig({ version: 1, suites: { prepare } }).suites.prepare;
-	return { version: 1, suites, prepare: { command: normalized.command, cwd: normalized.cwd, timeoutSeconds: normalized.timeoutSeconds } };
+	const normalized = validateConfig({ suites: { prepare } }).suites.prepare;
+	return { suites, prepare: { command: normalized.command, cwd: normalized.cwd, timeoutSeconds: normalized.timeoutSeconds } };
 }
 export async function projectRoot(cwd: string): Promise<string> {
 	try {
@@ -128,10 +128,13 @@ async function optionalText(file: string): Promise<string | undefined> {
 	try { return await readFile(file, "utf8"); }
 	catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
 }
-async function atomicJSON(file: string, value: unknown): Promise<void> {
+async function atomicText(file: string, text: string): Promise<void> {
 	const tmp = `${file}.${randomUUID()}.tmp`;
-	try { await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 }); await rename(tmp, file); }
+	try { await writeFile(tmp, text, { mode: 0o600 }); await rename(tmp, file); }
 	finally { await rm(tmp, { force: true }); }
+}
+async function atomicJSON(file: string, value: unknown): Promise<void> {
+	await atomicText(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export async function sourceFingerprint(root: string, excludedDirectories: string[] = []): Promise<string> {
@@ -176,12 +179,12 @@ export class Pipeline {
 	readonly configPath: string;
 	readonly storage: string;
 	constructor(readonly root: string, private readonly cacheRoot = join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "pipeline")) {
-		this.configPath = join(root, ".pi", "pipeline.json");
+		this.configPath = join(root, ".pi", "pipeline.yaml");
 		this.storage = join(cacheRoot, digest(root));
 	}
 	async config(): Promise<Config | undefined> {
 		const text = await optionalText(this.configPath);
-		return text === undefined ? undefined : validateConfig(JSON.parse(text));
+		return text === undefined ? undefined : validateConfig(parseConfigYaml(text));
 	}
 	async suiteCwd(suite: Prepare): Promise<string> {
 		const cwd = await realpath(resolve(this.root, suite.cwd));
@@ -238,11 +241,11 @@ export class Pipeline {
 		const release = await this.acquire();
 		try {
 			const before = await optionalText(this.configPath);
-			if (!await confirm(`Project: ${this.root}\n${(await this.approvalScope()).description}\nBefore: ${before ?? "(none)"}\nAfter: ${JSON.stringify(proposal, null, 2)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown. Saving does not immediately run tests.`)) return false;
+			if (!await confirm(`Project: ${this.root}\n${(await this.approvalScope()).description}\n${configurationReview(before === undefined ? undefined : validateConfig(parseConfigYaml(before)), proposal)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown. Saving does not immediately run tests.`)) return false;
 			if (await optionalText(this.configPath) !== before) throw new Error("Configuration changed during review; request fresh approval");
 			await mkdir(join(this.root, ".pi"), { recursive: true });
 			if (!inside(this.root, await realpath(join(this.root, ".pi")))) throw new Error("Configuration directory is outside the project");
-			await atomicJSON(this.configPath, proposal);
+			await atomicText(this.configPath, formatConfigYaml(proposal));
 			await this.approve(proposal);
 			return true;
 		} finally { await release(); }
@@ -408,7 +411,7 @@ export class Pipeline {
 		if (await this.isApproved(config)) return;
 		if (!confirm) throw new Error("User approval required: no interactive confirmation channel");
 		const before = await optionalText(this.configPath);
-		if (!await confirm(`Approve pipeline execution for ${this.root}?\n${(await this.approvalScope()).description}\n${JSON.stringify(config, null, 2)}`)) throw new Error("Pipeline execution approval rejected");
+		if (!await confirm(`Approve pipeline execution for ${this.root}?\n${(await this.approvalScope()).description}\nConfiguration (.pi/pipeline.yaml):\n${formatConfigYaml(config)}\nSuites with auto=after-agent may run after the next settled agent turn, once edits are quiet (2s), with a 60s cooldown.`)) throw new Error("Pipeline execution approval rejected");
 		if (await optionalText(this.configPath) !== before || JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed during review; request fresh approval");
 		await this.approve(config);
 	}

@@ -13,7 +13,7 @@ function preparedConfig() {
 
 test('prepare is optional, validates only command/cwd/timeout and remains in exact approval', async t => {
   const { validateConfig, Pipeline } = load();
-  assert.equal(Object.hasOwn(validateConfig(config()), 'prepare'), false, 'legacy approval fingerprints must not change');
+  assert.equal(Object.hasOwn(validateConfig(config()), 'prepare'), false, 'omitting preparation must not add a preparation field');
   const normalized = validateConfig(preparedConfig());
   assert.equal(normalized.prepare.cwd, '.'); assert.equal(normalized.prepare.timeoutSeconds, 300);
   for (const prepare of [null, {}, { command: 'npm ci' }, { command: ['npm', 'ci'], cwd: '../outside' },
@@ -22,9 +22,9 @@ test('prepare is optional, validates only command/cwd/timeout and remains in exa
     assert.throws(() => validateConfig({ ...config(), prepare }));
   }
   const f = await fixture(t), p = new Pipeline(f.root, f.cache);
-  await p.configure(preparedConfig(), async text => { assert.match(text, /"prepare"/); return true; });
+  await p.configure(preparedConfig(), async text => { assert.match(text, /prepare:/); return true; });
   const next = preparedConfig(); next.prepare.command = [process.execPath, '-e', ''];
-  await fs.writeFile(f.configPath, JSON.stringify(next));
+  await fs.writeFile(f.configPath, require('yaml').stringify(next));
   await assert.rejects(p.run('unit'), /approval.*required/i);
   assert.equal((await p.status()).prepare.outcome, 'never');
 });
@@ -83,7 +83,7 @@ test('automatic suites prepare first without repeating unchanged failed preparat
   await p.configure(c, approve);
   assert.equal((await p.run('all', { automatic: true, cooldownMs: 0 }))[0].outcome, 'failed');
   assert.equal((await p.run('all', { automatic: true, cooldownMs: 0 })).length, 0);
-  c.prepare = command(''); await fs.writeFile(f.configPath, JSON.stringify(c));
+  c.prepare = command(''); await fs.writeFile(f.configPath, require('yaml').stringify(c));
   assert.equal((await p.run('all', { automatic: true, cooldownMs: 0, confirm: () => { throw Error('no popup'); } })).length, 0);
   await p.configure(c, approve);
   assert.deepEqual(Array.from(await p.run('all', { automatic: true, cooldownMs: 0 }), r => r.suite), ['prepare', 'unit']);
@@ -111,7 +111,7 @@ test('automatic suites execute after preparation changes source inputs', async t
 test('preparation uses confined cwd and approval before execution; invalid selections cannot prepare', async t => {
   const f = await fixture(t), { Pipeline } = load(), p = new Pipeline(f.root, f.cache), c = preparedConfig();
   await fs.mkdir(path.join(f.root, 'sub')); c.prepare.cwd = 'sub';
-  await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, JSON.stringify(c));
+  await fs.mkdir(path.dirname(f.configPath)); await fs.writeFile(f.configPath, require('yaml').stringify(c));
   await assert.rejects(p.run('unit'), /approval.*required/i);
   await assert.rejects(p.run('missing', { confirm: approve }), /Unknown/);
   await assert.rejects(fs.readFile(path.join(f.root, 'sub', 'order.txt')), { code: 'ENOENT' });
@@ -128,7 +128,7 @@ test('configuration changed during preparation cannot launch a suite without fre
   const run = p.run('unit');
   await waitFor(async () => (await p.status()).prepare.outcome === 'running');
   c.suites.unit = command('throw Error("unapproved test")');
-  await fs.writeFile(f.configPath, JSON.stringify(c));
+  await fs.writeFile(f.configPath, require('yaml').stringify(c));
   await assert.rejects(run, /changed.*execution/i);
   assert.equal((await p.status()).suites.unit.outcome, 'never');
   assert.equal((await p.status()).prepare.outcome, 'passed', 'successful preparation is not invalidated');

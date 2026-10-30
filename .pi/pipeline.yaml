@@ -1,0 +1,11 @@
+suites:
+  tests:
+    command: [npm, test]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  typecheck:
+    command: [npm, run, typecheck]
+    cwd: .
+    timeoutSeconds: 60
+    auto: after-agent

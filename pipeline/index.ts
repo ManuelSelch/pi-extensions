@@ -15,7 +15,7 @@ const PrepareSchema = Type.Object({
 	cwd: Type.Optional(Type.String({ description: "Project-relative working directory; defaults to the project root." })),
 	timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400 })),
 }, { additionalProperties: false });
-const ConfigSchema = Type.Object({ version: Type.Literal(1), suites: Type.Record(Type.String(), SuiteSchema), prepare: Type.Optional(PrepareSchema) }, { additionalProperties: false });
+const ConfigSchema = Type.Object({ suites: Type.Record(Type.String(), SuiteSchema), prepare: Type.Optional(PrepareSchema) }, { additionalProperties: false });
 const selectionSchema = Type.Object({ suite: Type.Optional(Type.String({ description: "Suite name or all (default)." })) });
 const confirmation = (ctx: ExtensionContext, signal?: AbortSignal): Confirm | undefined => ctx.hasUI
 	? text => ctx.ui.confirm("Approve pipeline changes / execution?", text, { signal })
@@ -63,7 +63,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	}
 	pi.registerTool({
 		name: "pipeline_configure", label: "Configure pipeline",
-		description: "Create or replace this project's .pi/pipeline.json with native user confirmation. Read pipeline_status first when updating: include every suite to retain; omitted suites are removed. Inspect project instructions, scripts and lockfiles so this works in a fresh worktree. Add optional prepare for dependency installation (prefer npm ci for npm projects with a package-lock); omit it when unnecessary or already handled. Prepare runs once successfully per worktree before any selected suite; failure blocks suites. No dependency/configuration invalidation. Preserve prepare and all suites to retain; omitted fields are removed. Saving does not immediately execute commands. auto=after-agent opts a suite into quiet, cooldown-limited runs after the agent settles.",
+		description: "Create or replace this project's .pi/pipeline.yaml (no version key) with native user confirmation showing a focused configuration diff. Read pipeline_status first when updating: include every suite to retain; omitted suites are removed. Inspect project instructions, scripts and lockfiles so this works in a fresh worktree. Add optional prepare for dependency installation (prefer npm ci for npm projects with a package-lock); omit it when unnecessary or already handled. Prepare runs once successfully per worktree before any selected suite; failure blocks suites. No dependency/configuration invalidation. Preserve prepare and all suites to retain; omitted fields are removed. Saving does not immediately execute commands. auto=after-agent opts a suite into quiet, cooldown-limited runs after the agent settles.",
 		parameters: Type.Object({ config: ConfigSchema }),
 		async execute(_id, params, signal, _update, ctx) {
 			const p = await pipeline(ctx);
