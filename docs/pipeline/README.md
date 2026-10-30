@@ -4,7 +4,7 @@ Provides native-confirmed local test configuration, manual execution, persisted 
 
 ## Usage
 
-Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the native popup: compact command rows for creation, a focused field-level diff for updates. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
+Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the native popup: stacked plain-text entries for creation, a focused field-level diff for updates. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
 
 ```yaml
 prepare:
@@ -129,6 +129,19 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 - Shutdown/reload/session replacement cancels work, waits for cleanup and removes all polling/scheduling timers; late async reads cannot resurrect the widget. Non-UI/print sessions have no widget or automatic scheduler; approved manual tools remain usable.
 
 ## Approval and safety
+
+Creation and execution approvals use blank-line-separated plain-text entries, avoiding space-padded columns that misalign in proportional-font clients:
+
+```text
+build · timeout 300s
+npm run build
+
+e2e · timeout 600s
+npm run test:e2e
+cwd: web
+```
+
+Only non-root working directories get a `cwd:` line. Updates group changed fields under each suite/preparation name using literal `-`/`+` lines; additions/removals are labeled `(added)`/`(removed)`. Unchanged fields and suites are hidden. No Markdown rendering is required.
 
 Native confirmation covers the exact commands, directories, timeouts and automation settings. In Git repositories, approval applies to identical validated configurations across **all worktrees of that repository**, identified by the canonical Git common directory (`git rev-parse --git-common-dir`). Independent repositories/clones do not share approval, even with the same remote. Outside Git, approval remains scoped to the canonical project directory. The confirmation popup explicitly shows this scope.
 

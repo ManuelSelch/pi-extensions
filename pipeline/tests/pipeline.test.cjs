@@ -21,13 +21,13 @@ test('uses versionless YAML, refuses duplicate keys and does not load legacy JSO
   await assert.rejects(p.config(), /Unknown field: version/);
 });
 
-test('approval shows compact creation then focused field changes with named suites', async t => {
+test('approval shows stacked creation then focused field changes with named suites', async t => {
   const f = await fixture(t);
   const { Pipeline } = load();
   const p = new Pipeline(f.root, f.cache);
   const initial = { suites: { tests: { command: ['npm', 'test'], timeoutSeconds: 120 }, unchanged: { command: ['do-not-show'] } } };
   await p.configure(initial, async text => {
-    assert.match(text, /tests\s+npm test\s+timeout 120s/);
+    assert.match(text, /tests · timeout 120s\nnpm test\n\nunchanged · timeout 300s\ndo-not-show$/);
     assert.doesNotMatch(text, /suites:|timeoutSeconds:|auto:|Suites with/);
     assert.doesNotMatch(text, /version:|Before:|After:/);
     return true;
@@ -95,7 +95,7 @@ test('configured suite order is preserved for manual runs, automatic runs and st
 
 test('confirmation rejection leaves absent/existing config unchanged; acceptance persists local approval', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
-  assert.equal(await p.configure(config(), async text => { assert.match(text, /unit\s+.*timeout 300s/s); return false; }), false);
+  assert.equal(await p.configure(config(), async text => { assert.match(text, /unit · timeout 300s\n/); return false; }), false);
   await assert.rejects(fs.readFile(f.configPath), { code: 'ENOENT' });
   await p.configure(config(), approve);
   const before = await fs.readFile(f.configPath, 'utf8');
@@ -182,7 +182,7 @@ test('runs suites serially, preserves full logs and bounded output, and persists
   assert.ok(status.suites.unit.durationMs >= 0);
 });
 
-test('execution approval uses compact rows and a short scope without duplicated headings or footer', async t => {
+test('execution approval uses stacked entries and a short scope without duplicated headings or footer', async t => {
   const f = await fixture(t);
   const { Pipeline } = load();
   const p = new Pipeline(f.root, f.cache);
@@ -192,7 +192,7 @@ test('execution approval uses compact rows and a short scope without duplicated 
   } } }));
 
   await assert.rejects(p.run('tests', { confirm: async text => {
-    assert.equal(text, `Project: ${f.root}\nScope: this project directory only\n\ntests  npm test  timeout 120s`);
+    assert.equal(text, `Project: ${f.root}\nScope: this project directory only\n\ntests · timeout 120s\nnpm test`);
     return false;
   } }), /rejected/i);
   assert.equal(await p.isApproved(), false);
@@ -346,7 +346,7 @@ test('extension registers tools and command, uses native approval, and shuts dow
   const saved = await tools.pipeline_configure.execute('id', { config: c }, undefined, undefined, ctx);
   assert.equal(saved.details.saved, true); assert.equal(confirmations.length, 1);
   assert.equal(confirmations[0][0], 'Approve pipeline changes?');
-  assert.match(confirmations[0][1], /Project: .*\nScope: this project directory only\n\nunit\s+/);
+  assert.match(confirmations[0][1], /Project: .*\nScope: this project directory only\n\nunit · timeout 300s\n/);
   assert.doesNotMatch(confirmations[0][1], /suites:|Suites with|Git common directory|Both run|Both may/);
   await commands.pipeline.handler('run unit', ctx);
   await waitFor(async () => (await tools.pipeline_status.execute('id', {}, undefined, undefined, ctx)).details.suites.unit.outcome === 'running');

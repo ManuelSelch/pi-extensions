@@ -11,9 +11,7 @@ export function executionSummary(config: Config): string {
 		...(config.prepare ? [[label("prepare", true, collision), config.prepare] as const] : []),
 		...Object.entries(config.suites).map(([name, step]) => [label(name, false, collision), step] as const),
 	];
-	const nameWidth = Math.max(0, ...rows.map(([name]) => name.length));
-	const commandWidth = Math.max(0, ...rows.map(([, step]) => command(step).length));
-	return rows.map(([name, step]) => `${name.padEnd(nameWidth)}  ${command(step).padEnd(commandWidth)}  timeout ${step.timeoutSeconds}s${step.cwd !== "." ? `  cwd ${literal(step.cwd)}` : ""}`).join("\n") || "No suites configured.";
+	return rows.map(([name, step]) => `${name} · timeout ${step.timeoutSeconds}s\n${command(step)}${step.cwd !== "." ? `\ncwd: ${literal(step.cwd)}` : ""}`).join("\n\n") || "No suites configured.";
 }
 
 export function configurationReview(before: Config | undefined, after: Config): string {
@@ -36,7 +34,8 @@ export function configurationReview(before: Config | undefined, after: Config): 
 			if (oldValue !== undefined) lines.push(`- ${key}: ${oldValue}`);
 			if (newValue !== undefined) lines.push(`+ ${key}: ${newValue}`);
 		}
-		if (lines.length) sections.push(`${label(name, setup, collision)}\n${lines.join("\n")}`);
+		const change = !previous ? " (added)" : !next ? " (removed)" : "";
+		if (lines.length) sections.push(`${label(name, setup, collision)}${change}\n${lines.join("\n")}`);
 	};
 	section("prepare", before.prepare, after.prepare, true);
 	for (const name of new Set([...Object.keys(before.suites), ...Object.keys(after.suites)])) {
