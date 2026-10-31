@@ -49,6 +49,36 @@ test('widget text cannot inject terminal escapes or multiline rows', () => {
   assert.ok(lines.every(line => !/[\x00-\x1f\x7f-\x9f]/.test(line)));
 });
 
+test('widget truncates long titles without changing stored or full titles', () => {
+  const plan = state(1);
+  plan.plan.milestones[0].title = 'x'.repeat(160);
+  const before = structuredClone(plan);
+
+  assert.equal(widgetLines(plan)[1], '○ #1 ' + 'x'.repeat(39) + '…');
+  assert.deepEqual(plan, before);
+  assert.ok(fullPlan(plan).includes('x'.repeat(160)));
+});
+
+test('titles at the display limit remain unchanged', () => {
+  const plan = state(1);
+  plan.plan.milestones[0].title = 'x'.repeat(40);
+
+  assert.equal(widgetLines(plan)[1], '○ #1 ' + 'x'.repeat(40));
+});
+
+test('truncation respects wide characters and complete graphemes', () => {
+  const plan = state(3);
+  plan.plan.milestones[0].title = '界'.repeat(21);
+  plan.plan.milestones[1].title = 'e\u0301'.repeat(41);
+  plan.plan.milestones[2].title = '👩‍💻'.repeat(21);
+
+  assert.deepEqual(widgetLines(plan).slice(1), [
+    '○ #1 ' + '界'.repeat(19) + '…',
+    '○ #2 ' + 'e\u0301'.repeat(39) + '…',
+    '○ #3 ' + '👩‍💻'.repeat(19) + '…',
+  ]);
+});
+
 test('full details include criteria and evidence but compact widget omits them', () => {
   const plan = state(1);
   plan.plan.milestones[0].evidence = 'Independent transfer demonstrated.';

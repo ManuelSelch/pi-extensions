@@ -193,6 +193,19 @@ class LearningPlanDriver {
     await this.commands.get('learning-plan').handler('', this.context());
     assert.ok(this.notifications.at(-1).includes('Explain and transfer independently'));
   }
+  async expectConciseTitleGuidance() {
+    await this.boot();
+    const guidance = /3–6 words.*under 40 characters.*criterion/i;
+    assert.ok(this.tool.promptGuidelines.some(text => guidance.test(text)));
+    const fields = [
+      this.tool.parameters.properties.title,
+      this.tool.parameters.properties.milestones.items.properties.title,
+    ];
+    for (const field of fields) {
+      assert.match(field.description, guidance);
+      assert.equal(field.maxLength, 160);
+    }
+  }
   async expectTeachInstructions(expected) {
     // The installable skill is tracked so this suite works in a fresh checkout.
     const skill = fs.readFileSync(path.join(root, 'docs/learning-plan/teach/SKILL.md'), 'utf8');

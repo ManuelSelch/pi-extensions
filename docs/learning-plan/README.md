@@ -15,6 +15,12 @@ continues.
 above-editor widget shows compact rows, including demonstrated milestones.
 For plans over eight milestones, completed rows yield space first, the active
 milestone remains visible, and a hidden count points to the full command.
+Milestone titles are truncated to 40 display columns (including `…`) in the
+widget, without splitting graphemes. Full titles remain stored and visible in
+`/learning-plan` and tool results. This is a fixed display cap, not responsive
+to the browser widget width. The tool guides agents to use 3–6 words, ideally
+under 40 characters, and put detailed objectives in the criterion; the storage
+limit remains 160 characters.
 
 ```text
 TypeScript · 1/3

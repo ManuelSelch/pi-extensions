@@ -6,12 +6,13 @@ import { fullPlan, widgetLines } from "../ui/format.js";
 
 const enumString = (values: string[], description: string) =>
   Type.Unsafe<string>({ type: "string", enum: values, description });
+const titleGuidance = "Keep milestone titles short: aim for 3–6 words, ideally under 40 characters. Put detailed learning objectives in the criterion.";
 const parameters = Type.Object({
   action: enumString(["create", "get", "update", "add"], "Create a plan, get full details, update milestones atomically, or append a milestone."),
-  title: Type.Optional(Type.String({ description: "Plan title for create; milestone title for add.", maxLength: 160 })),
+  title: Type.Optional(Type.String({ description: `Plan title for create; milestone title for add. ${titleGuidance}`, maxLength: 160 })),
   criterion: Type.Optional(Type.String({ description: "Completion criterion for add.", maxLength: 1000 })),
   milestones: Type.Optional(Type.Array(Type.Object({
-    title: Type.String({ maxLength: 160 }),
+    title: Type.String({ description: titleGuidance, maxLength: 160 }),
     criterion: Type.String({ description: "What the learner must independently explain and apply.", maxLength: 1000 }),
   }), { minItems: 1, maxItems: 50 })),
   updates: Type.Optional(Type.Array(Type.Object({
@@ -46,6 +47,7 @@ export default function learningPlanExtension(pi: ExtensionAPI): void {
     executionMode: "sequential",
     promptSnippet: "Keep an evidence-based milestone plan while teaching",
     promptGuidelines: [
+      titleGuidance,
       "Use learning_plan for learning milestones, not todo. Retrieve it before creating or resuming a teaching plan.",
       "Activate the current milestone before teaching. After assessment and before the next question, update changed evidence or status.",
       "Mark demonstrated only after sound explanation and a materially different application without a revealing hint. Record assistance honestly.",

@@ -1,3 +1,4 @@
+import { stripTerminalSequences, truncateToWidth } from "@earendil-works/pi-tui";
 import type { State, Status } from "../domain/plan.js";
 const marks: Record<Status, string> = { pending: "○", active: "●", demonstrated: "✓" };
 const line = (value: string): string => value.replace(/[\x00-\x1f\x7f-\x9f]/g, " ").replace(/\s+/g, " ").trim();
@@ -20,7 +21,7 @@ export function widgetLines(state: State): string[] | undefined {
   const hidden = milestones.length - shown.length;
   return [
     `${line(title)} · ${done}/${milestones.length}`,
-    ...shown.map(m => `${marks[m.status]} #${m.id} ${line(m.title)}`),
+    ...shown.map(m => `${marks[m.status]} #${m.id} ${stripTerminalSequences(truncateToWidth(line(m.title), 40, "…"))}`),
     ...(hidden ? [`… ${hidden} more · /learning-plan for full details`] : []),
   ];
 }

@@ -81,6 +81,12 @@ test('sessions are isolated and full details are readable without UI', async t =
   await plan.expectFullPlanThroughCommand();
 });
 
+test('tool guides concise milestone titles without reducing the storage limit', async t => {
+  const plan = new LearningPlanDriver(t);
+
+  await plan.expectConciseTitleGuidance();
+});
+
 test('teach skill retrieves the plan and updates only assessed understanding', async t => {
   const plan = new LearningPlanDriver(t);
 
