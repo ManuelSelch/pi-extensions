@@ -44,5 +44,6 @@
   "domain/config.test.cjs",
   "infra/store.test.cjs",
   "integration/native-workflow.test.cjs",
-  "integration/workflow.test.cjs"
+  "integration/workflow.test.cjs",
+  "claude-rules.test.cjs"
 ]

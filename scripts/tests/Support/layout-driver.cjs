@@ -5,7 +5,7 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 const execFile = promisify(require('node:child_process').execFile);
 const root = path.resolve(__dirname, '../../..');
-const modules = ['agent-defaults', 'ask-user', 'calendar', 'context-badge', 'extension-manager',
+const modules = ['agent-defaults', 'ask-user', 'calendar', 'claude-rules', 'context-badge', 'extension-manager',
   'git-status', 'learning-plan', 'manual-updates', 'minimal-tui', 'model-filter', 'pi-open', 'pipeline',
   'preview', 'quiz', 'readonly-mode', 'todo', 'workflow'];
 const disabled = ['agentic-flow', 'claude-auth', 'dot-clean', 'pdf', 'session-cleanup', 'thinking-toggle'];
