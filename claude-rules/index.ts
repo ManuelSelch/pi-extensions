@@ -13,7 +13,7 @@ import { dirname, join, relative, resolve } from "node:path";
  * applies everywhere, like Pi's own context files.
  */
 
-const SECTION = "claudeRules";
+const SECTION = "claude_rules";
 
 /** `~/.claude/rules` first, then `<dir>/.claude/rules` from the root down to `cwd`. */
 function ruleDirectories(cwd: string, home: string): string[] {

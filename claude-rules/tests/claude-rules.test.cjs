@@ -46,14 +46,23 @@ test('returns no prompt without rules', () => {
   assert.equal(claudeRulesPrompt(empty, empty), undefined);
 });
 
-test('adds and removes the claudeRules system prompt section', async () => {
+test('adds and removes the claude_rules system prompt section', async () => {
   const { project } = fixture();
   const empty = mkdtempSync(join(tmpdir(), 'claude-rules-none-'));
   let handler;
   claudeRules({ on: (event, fn) => { if (event === 'before_agent_start') handler = fn; } }, empty);
-  const sections = { claudeRules: 'stale' };
+  const sections = { claude_rules: 'stale' };
   await handler({ systemPromptOptions: { sections } }, { cwd: project, ui: { notify() {} } });
-  assert.match(sections.claudeRules, /Scoped rule/);
+  assert.match(sections.claude_rules, /Scoped rule/);
   await handler({ systemPromptOptions: { sections } }, { cwd: empty, ui: { notify() {} } });
-  assert.equal('claudeRules' in sections, false);
+  assert.equal('claude_rules' in sections, false);
+});
+
+test('uses a section name Pi accepts', async () => {
+  const { project } = fixture();
+  let handler;
+  claudeRules({ on: (event, fn) => { if (event === 'before_agent_start') handler = fn; } }, project);
+  const sections = {};
+  await handler({ systemPromptOptions: { sections } }, { cwd: project, ui: { notify() {} } });
+  for (const name of Object.keys(sections)) assert.match(name, /^[a-z][a-z0-9_-]*$/);
 });
