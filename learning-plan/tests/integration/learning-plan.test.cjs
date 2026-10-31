@@ -9,7 +9,7 @@ test('create a session plan and show its milestones above the composer', async t
   ]);
 
   await plan.expectMilestones(['pending', 'pending']);
-  await plan.expectWidget(['TypeScript · 0/2 demonstrated', '○ #1 Explain unions', '○ #2 Apply narrowing']);
+  await plan.expectWidget(['TypeScript · 0/2', '○ #1 Explain unions', '○ #2 Apply narrowing']);
   await plan.expectCompleteSessionSnapshot();
 });
 
@@ -25,7 +25,7 @@ test('complete one milestone and activate the next atomically', async t => {
 
   await plan.expectMilestones(['demonstrated', 'active']);
   await plan.expectEvidence(1, 'Explained the union and independently handled a different example.');
-  await plan.expectWidgetCount('1/2 demonstrated');
+  await plan.expectWidget(['TypeScript · 1/2', '✓ #1 Explain unions', '● #2 Apply narrowing']);
 });
 
 test('invalid changes leave both stored state and widget unchanged', async t => {

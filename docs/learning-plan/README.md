@@ -17,7 +17,7 @@ For plans over eight milestones, completed rows yield space first, the active
 milestone remains visible, and a hidden count points to the full command.
 
 ```text
-TypeScript · 1/3 demonstrated
+TypeScript · 1/3
 ✓ #1 Explain unions
 ● #2 Apply narrowing
 ○ #3 Solve an independent task

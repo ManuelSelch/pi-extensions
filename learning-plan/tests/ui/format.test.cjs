@@ -23,7 +23,7 @@ test('long lists remove completed rows first while retaining the active mileston
 
   const lines = widgetLines(plan);
 
-  assert.equal(lines[0], 'TypeScript · 4/12 demonstrated');
+  assert.equal(lines[0], 'TypeScript · 4/12');
   assert.ok(lines.some(line => line === '● #12 Milestone 12'));
   assert.ok(!lines.some(line => /#1 /.test(line)));
   assert.equal(lines.length, 10);

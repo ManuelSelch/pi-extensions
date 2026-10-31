@@ -19,7 +19,7 @@ export function widgetLines(state: State): string[] | undefined {
   }
   const hidden = milestones.length - shown.length;
   return [
-    `${line(title)} · ${done}/${milestones.length} demonstrated`,
+    `${line(title)} · ${done}/${milestones.length}`,
     ...shown.map(m => `${marks[m.status]} #${m.id} ${line(m.title)}`),
     ...(hidden ? [`… ${hidden} more · /learning-plan for full details`] : []),
   ];
