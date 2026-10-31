@@ -24,6 +24,7 @@ entry points directly through jiti; there is no build step.
 | [quiz/index.ts](quiz/index.ts) | `quiz` — one multiple-choice check and written reasoning, using native select/editor dialogs. See [usage](docs/quiz/README.md). |
 | [readonly-mode/index.ts](readonly-mode/index.ts) | `/readonly` — block write/edit tools and destructive bash. |
 | [todo/index.ts](todo/index.ts) | `todo`, `/todos` — session task tracking. |
+| [learning-plan/index.ts](learning-plan/index.ts) | `learning_plan`, `/learning-plan` — session learning milestones and assessment evidence. See [usage](docs/learning-plan/README.md). |
 | [workflow/index.ts](workflow/index.ts) | `/workflow`, `/workflow global` — select enabled mock/plan/design/commit prompts and native skills. See [usage](docs/workflow/README.md). |
 
 ## Disabled extensions

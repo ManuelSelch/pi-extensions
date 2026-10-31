@@ -6,12 +6,12 @@ const { promisify } = require('node:util');
 const execFile = promisify(require('node:child_process').execFile);
 const root = path.resolve(__dirname, '../../..');
 const modules = ['agent-defaults', 'ask-user', 'calendar', 'context-badge', 'extension-manager',
-  'git-status', 'manual-updates', 'minimal-tui', 'model-filter', 'pi-open', 'pipeline',
+  'git-status', 'learning-plan', 'manual-updates', 'minimal-tui', 'model-filter', 'pi-open', 'pipeline',
   'preview', 'quiz', 'readonly-mode', 'todo', 'workflow'];
 const disabled = ['agentic-flow', 'claude-auth', 'dot-clean', 'pdf', 'session-cleanup', 'thinking-toggle'];
-const commands = ['defaults', 'extensions', 'models-add', 'models-filter', 'models-remove',
+const commands = ['defaults', 'extensions', 'learning-plan', 'models-add', 'models-filter', 'models-remove',
   'open', 'pipeline', 'preview', 'projects', 'readonly', 'todos', 'update', 'workflow'];
-const tools = ['ask_user', 'calendar_list', 'calendar_read', 'pipeline_configure',
+const tools = ['ask_user', 'calendar_list', 'calendar_read', 'learning_plan', 'pipeline_configure',
   'pipeline_run', 'pipeline_status', 'preview_manage', 'preview_start', 'quiz', 'todo'];
 
 function createLayoutDriver(t) {
