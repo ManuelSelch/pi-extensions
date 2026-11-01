@@ -3,6 +3,8 @@ import { withFileMutationQueue, type ExtensionAPI, type ExtensionContext } from 
 import { Pipeline, projectRoot, type Confirm, type RunResult, type PipelineStatus, type RunOptions } from "./core.ts";
 import { PipelineMonitor, renderWidget, renderStatus } from "./widget.ts";
 import { PipelineStatusReader } from "./api.ts";
+import { waitForPipeline, type WaitResult } from "./app/wait.ts";
+import { GitHubWaitReader } from "./infra/github-wait.ts";
 
 const SuiteSchema = Type.Object({
 	command: Type.Array(Type.String(), { minItems: 1, description: "Executable followed by arguments; no shell interpolation or watch mode." }),
@@ -29,6 +31,12 @@ const summary = (results: RunResult[]) => results.length ? results.map(r => `${r
 
 export default function pipelineExtension(pi: ExtensionAPI): void {
 	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]>; automatic: boolean }>();
+	const remoteWaits = new Set<{ controller: AbortController; done: Promise<WaitResult> }>();
+	async function stopRemoteWaits() {
+		const waits = [...remoteWaits];
+		for (const wait of waits) wait.controller.abort();
+		await Promise.allSettled(waits.map(wait => wait.done));
+	}
 	let statusReader = new PipelineStatusReader();
 	async function status(p: Pipeline, options: { force?: boolean } = {}): Promise<PipelineStatus> {
 		if (shuttingDown) return p.status();
@@ -92,6 +100,31 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		parameters: Type.Object({}),
 		async execute(_id, _params, _signal, _update, ctx) { return response(await status(await pipeline(ctx))); },
 	});
+	pi.registerTool({
+		name: "pipeline_wait", label: "Wait for GitHub Actions",
+		description: "Wait for GitHub Actions on an exact commit after an approved push. Defaults to current repository and HEAD (resolved once). Polls every 15 seconds, allowing runs to appear; waits for all discovered runs and confirms completion with a second poll. Default timeout 30 minutes. Returns outcome, run links and failed jobs. No runs, timeout, cancellation and unavailable CI are not success. Read-only: never pushes, merges, reruns, cancels remote CI or fixes code. Independent of local pipeline configuration and branch-status cache.",
+		parameters: Type.Object({
+			ref: Type.Optional(Type.String({ minLength: 1, description: "Local Git commit/ref to watch; defaults to HEAD. Use the pushed merge commit when appropriate." })),
+			timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400, description: "Overall wait timeout; default 1800 seconds." })),
+		}, { additionalProperties: false }),
+		async execute(_id, params, signal, update, ctx) {
+			if (shuttingDown) throw new Error("Pipeline extension is shutting down");
+			const controller = new AbortController();
+			const abort = () => controller.abort();
+			signal?.addEventListener("abort", abort, { once: true });
+			if (signal?.aborted) abort();
+			const done = waitForPipeline(new GitHubWaitReader(ctx.cwd), { ...params, signal: controller.signal, onUpdate: data => update?.(response(data)) });
+			const wait = { controller, done };
+			remoteWaits.add(wait);
+			try {
+				const result = await done;
+				return response(result, result.outcome !== "passed");
+			} finally {
+				remoteWaits.delete(wait);
+				signal?.removeEventListener("abort", abort);
+			}
+		},
+	});
 	pi.registerCommand("pipeline", {
 		description: "Refresh local pipeline and GitHub Actions status; run [suite|all], cancel",
 		getArgumentCompletions(prefix) {
@@ -124,6 +157,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	});
 	pi.on("session_start", async (_event, ctx) => {
 		const currentGeneration = ++generation;
+		await stopRemoteWaits();
 		statusReader.stop();
 		await monitor?.stop();
 		if (currentGeneration !== generation) return;
@@ -155,6 +189,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		const jobs = [...active.values()];
 		for (const job of jobs) job.controller.abort();
 		statusReader.stop();
+		await stopRemoteWaits();
 		await monitor?.stop();
 		monitor = undefined;
 		monitorRoot = undefined;

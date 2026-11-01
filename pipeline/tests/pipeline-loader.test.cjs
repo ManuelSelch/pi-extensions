@@ -11,7 +11,7 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   const result = await loadExtensions([path.resolve(__dirname, '..', 'index.ts')], f.root);
   assert.deepEqual(result.errors, []); assert.equal(result.extensions.length, 1);
   const ext = result.extensions[0], widgets = [];
-  assert.deepEqual([...ext.tools.keys()].sort(), ['pipeline_configure', 'pipeline_run', 'pipeline_status']);
+  assert.deepEqual([...ext.tools.keys()].sort(), ['pipeline_configure', 'pipeline_run', 'pipeline_status', 'pipeline_wait']);
   assert.ok(ext.commands.has('pipeline'));
   let confirmations = 0, notifications = 0;
   const reviews = [];

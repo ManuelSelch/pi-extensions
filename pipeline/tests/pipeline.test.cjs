@@ -337,7 +337,7 @@ test('extension registers tools and command, uses native approval, and shuts dow
   });
   const tools = {}, events = {}, commands = {}, notices = [], confirmations = [];
   extension({ registerTool(spec) { tools[spec.name] = spec; }, registerCommand(name, spec) { commands[name] = spec; }, on(name, fn) { events[name] = fn; } });
-  assert.deepEqual(Object.keys(tools).sort(), ['pipeline_configure', 'pipeline_run', 'pipeline_status']);
+  assert.deepEqual(Object.keys(tools).sort(), ['pipeline_configure', 'pipeline_run', 'pipeline_status', 'pipeline_wait']);
   const ctx = { cwd: f.root, hasUI: true, ui: { confirm: async (...args) => { confirmations.push(args); return true; }, notify: (...args) => notices.push(args) } };
   // Isolate extension state under the fixture cache by redirecting the host agent directory.
   const before = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = f.cache;

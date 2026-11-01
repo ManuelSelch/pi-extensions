@@ -35,13 +35,13 @@ interface WorkflowRun {
 }
 type Execute = (file: string, args: string[], cwd: string, signal: AbortSignal) => Promise<string>;
 const exec = promisify(execFile);
-const execute: Execute = async (file, args, cwd, signal) => (await exec(file, args, {
+export const execute: Execute = async (file, args, cwd, signal) => (await exec(file, args, {
 	cwd, signal, timeout: 10000, maxBuffer: 2 * 1024 * 1024,
 	env: { ...process.env, GH_PROMPT_DISABLED: "1", GH_PAGER: "cat" },
 })).stdout;
 
 // Inspect diagnostics only for classification; never expose raw CLI output.
-function errorKind(error: unknown): GitHubErrorKind {
+export function errorKind(error: unknown): GitHubErrorKind {
 	const detail = error as { code?: string; killed?: boolean; signal?: string; stderr?: string; message?: string } | undefined;
 	if (detail?.code === "ENOENT") return "missing-cli";
 	if (detail?.code === "ETIMEDOUT" || (detail?.killed && detail.signal === "SIGTERM")) return "timeout";
@@ -52,14 +52,14 @@ function errorKind(error: unknown): GitHubErrorKind {
 	if (/timeout|timed out|deadline exceeded/i.test(text)) return "timeout";
 	return "unknown";
 }
-const errorMessages: Record<GitHubErrorKind, string> = {
+export const errorMessages: Record<GitHubErrorKind, string> = {
 	timeout: "request timed out.", authentication: "run gh auth login.",
 	access: "check repository access or API limits.", "missing-cli": "install gh.",
 	connection: "check connection.", unknown: "refresh failed.",
 };
 
 /** github.com only; never send credentials to an arbitrary Git remote host. */
-function repository(remotes: string): string | undefined {
+export function repository(remotes: string): string | undefined {
 	const entries = remotes.split("\n").map(line => line.match(/^(\S+)\s+(\S+)\s+\(fetch\)$/)).filter(match => match !== null);
 	entries.sort((a, b) => Number(b[1] === "origin") - Number(a[1] === "origin"));
 	for (const entry of entries) {

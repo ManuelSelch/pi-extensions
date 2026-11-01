@@ -12,7 +12,7 @@ const disabled = ['agentic-flow', 'claude-auth', 'dot-clean', 'pdf', 'session-cl
 const commands = ['defaults', 'extensions', 'handoff', 'learning-plan', 'models-add', 'models-filter', 'models-remove',
   'open', 'pipeline', 'preview', 'projects', 'readonly', 'todos', 'update', 'workflow'];
 const tools = ['ask_user', 'calendar_list', 'calendar_read', 'learning_plan', 'pipeline_configure',
-  'pipeline_run', 'pipeline_status', 'preview_manage', 'preview_start', 'quiz', 'todo'];
+  'pipeline_run', 'pipeline_status', 'pipeline_wait', 'preview_manage', 'preview_start', 'quiz', 'todo'];
 
 function createLayoutDriver(t) {
   let registrations;
