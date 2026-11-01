@@ -82,7 +82,7 @@ No setup or pipeline configuration is needed. In a checkout with a `github.com` 
 ◐ GitHub Deploy · running · 1m ago
 ```
 
-- Show the latest run **per workflow on the current branch**, even if it tested an older commit. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
+- Show the latest run **per workflow on the current branch**, selecting the highest `run_number` across paginated run results rather than trusting timestamps or API ordering. Rerunning an older run does not supersede a newer run number; jobs still use the selected run's current attempt. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.
 - The widget uses one local summary and one summary per GitHub workflow, with passing/total counts (completed/total while a workflow is active). Only non-successful jobs expand beneath their workflow; `/pipeline status` retains all jobs and local suites. Tree-nested job rows (`├─` / `└─`) come from that run's exact attempt, including matrix names. `pipeline_status` includes direct job URLs. Job loading uses pagination and the same cache; an individual job-fetch failure shows a jobs-unavailable warning without hiding the workflow outcome. No individual step details are loaded.
 - Remote rows also appear when `.pi/pipeline.yaml` is absent. Non-GitHub projects and repositories with no workflows have no remote rows.
 - The initial monitor refresh runs in the background: opening a session does not wait for source scanning or GitHub requests. The widget appears when status is ready; shutdown still cancels pending remote requests.

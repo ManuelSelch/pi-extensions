@@ -16,7 +16,8 @@ function driver(options = {}) {
     }
     if (options.fetch) return options.fetch(args, signal);
     const id = args.find(arg => arg.includes('/runs?')).match(/workflows\/(\d+)/)[1];
-    return JSON.stringify({ workflow_runs: id === '1' ? [{ id: 100, run_attempt: options.attempt ?? 2, status: 'completed', conclusion: 'success', created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:01:00Z', html_url: 'https://github.com/owner/repo/actions/runs/100' }] : [] });
+    const pages = options.runPages ?? [{ workflow_runs: id === '1' ? [{ id: 100, run_number: 1, run_attempt: options.attempt ?? 2, status: 'completed', conclusion: 'success', created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:01:00Z', html_url: 'https://github.com/owner/repo/actions/runs/100' }] : [] }];
+    return JSON.stringify(pages);
   };
   const { GitHubActions } = load('pipeline/github.ts');
   const reader = new GitHubActions('/project', execute, () => now);
@@ -33,6 +34,28 @@ test('automatically reads latest run per workflow on current branch without comm
   assert.equal(status.workflows[1].status, 'never');
   assert.ok(d.queries().some(([, args]) => args.some(arg => arg.includes('branch=feature%2Flogin'))));
   assert.equal(d.calls.some(([, args]) => args.includes('HEAD')), false);
+});
+
+test('highest run number wins across pages despite future timestamps and older reruns', async () => {
+  const d = driver({ workflows: [{ id: 1, name: 'Tests' }], runPages: [
+    { workflow_runs: [
+      { id: 102, run_number: 2, run_attempt: 1, status: 'completed', conclusion: 'failure', updated_at: '2099-01-01T00:00:00Z' },
+      { id: 101, run_number: 1, run_attempt: 3, status: 'completed', conclusion: 'cancelled', updated_at: '2099-01-02T00:00:00Z' },
+    ] },
+    { workflow_runs: [{ id: 103, run_number: 3, run_attempt: 2, status: 'completed', conclusion: 'success', updated_at: '2020-01-01T00:00:00Z', html_url: 'https://github.com/owner/repo/actions/runs/103' }] },
+  ] });
+
+  const workflow = (await d.reader.read()).workflows[0];
+
+  assert.equal(workflow.conclusion, 'success');
+  assert.equal(workflow.url, 'https://github.com/owner/repo/actions/runs/103');
+  const runArgs = d.queries().find(([, args]) => args.some(arg => arg.includes('/runs?')))[1];
+  assert.ok(runArgs.includes('--paginate'));
+  assert.ok(runArgs.includes('--slurp'));
+  assert.ok(runArgs.some(arg => arg.includes('per_page=100')));
+  const jobQueries = d.queries().filter(([, args]) => args.some(arg => arg.includes('/jobs?')));
+  assert.equal(jobQueries.length, 1);
+  assert.ok(jobQueries[0][1].includes('repos/owner/repo/actions/runs/103/attempts/2/jobs?per_page=100'));
 });
 
 test('jobs are paginated and pinned to the selected run attempt, retaining matrix names and links', async () => {
@@ -116,7 +139,7 @@ test('concurrent refreshes share a request and shutdown aborts pending reads', a
   const d = driver({ workflows: [{ id: 1, name: 'Tests' }], fetch: async (_args, signal) => {
     await gate;
     if (signal.aborted) throw new Error('aborted');
-    return JSON.stringify({ workflow_runs: [] });
+    return JSON.stringify([{ workflow_runs: [] }]);
   } });
   const first = d.reader.read(), second = d.reader.read();
   await new Promise(resolve => setImmediate(resolve));
@@ -198,7 +221,7 @@ test('switching branches aborts previous fetches and discards their late results
       started();
       await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
     }
-    return JSON.stringify({ workflow_runs: [] });
+    return JSON.stringify([{ workflow_runs: [] }]);
   } });
   const previous = d.reader.read(); await pending;
   d.branch('main');
@@ -228,6 +251,6 @@ test('production CLI boundary enforces timeout, output bounds and noninteractive
 });
 
 test('unknown run states remain explicit rather than turning green', async () => {
-  const d = driver({ workflows: [{ id: 1, name: 'Tests' }], fetch: async () => JSON.stringify({ workflow_runs: [{ status: 'completed', conclusion: 'future-conclusion', created_at: '2020-01-01T00:00:00Z' }] }) });
+  const d = driver({ workflows: [{ id: 1, name: 'Tests' }], fetch: async () => JSON.stringify([{ workflow_runs: [{ run_number: 1, status: 'completed', conclusion: 'future-conclusion', created_at: '2020-01-01T00:00:00Z' }] }]) });
   assert.equal((await d.reader.read()).workflows[0].conclusion, 'future-conclusion');
 });
