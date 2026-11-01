@@ -6,9 +6,11 @@ Run `/handoff review` (no parameters) from an idle session in a Git repository. 
 2. Edit the handoff: confirm its review scope, artifact paths and any missing decisions or verification gaps.
 3. Confirm creation of `Review: <feature>` in the current working directory/worktree.
 4. The extension names the fresh session and submits the edited handoff once via `/skill:code-reviewer`. It copies no history and creates no parent/session links.
-5. **Archive the implementation session manually in Pi Chat.** This MVP never archives or deletes sessions and requires no pi-server/pi-sdk changes.
+5. When hosted by Pi Chat, the extension archives the saved implementation session through `getPiChatExtensionRegistry().sessionHost().archive(sourcePath)` after successful reviewer submission. Confirmation includes this action. Terminal Pi without a session host instead reminds you to archive manually; an unsaved source has nothing to archive. No history is deleted.
 
-Cancelling the editor or confirmation creates no session. A host extension can also cancel creation. If starting the reviewer throws, the new session receives an error notice and the prompt is restored to its editor for retry. The implementation session remains untouched. Do not rerun the handoff to retry a failed model request; use the new session.
+Cancelling the editor or confirmation creates no session. A host extension can also cancel creation. Cancellation, creation failure or a thrown reviewer submission never triggers archiving. If starting the reviewer throws, the new session receives an error notice and the prompt is restored to its editor for retry. Do not rerun the handoff to retry a failed model request; use the new session.
+
+Archive failures are reported separately: the review remains started, its prompt is not restored or resubmitted, and a warning names the source path for inspection in Pi Chat. A rejected archive can mean uncertain persistence, so the extension does not claim the source is unchanged or automatically retry.
 
 ## Scope and limitations
 
@@ -23,6 +25,8 @@ Cancelling the editor or confirmation creates no session. A host extension can a
 
 ## Ownership and verification
 
-`handoff/app/extension.ts` owns native dialogs/session orchestration; `domain/handoff.ts` formats facts and parses arguments; `infra/git-facts.ts` reads local Git/artifacts without a shell or model call. No server registry, archive metadata or permanent handoff file is involved.
+`handoff/app/extension.ts` owns native dialogs/session orchestration and captures the source path and session host before replacement; `domain/handoff.ts` formats facts and parses arguments; `infra/git-facts.ts` reads local Git/artifacts without a shell or model call. Archive metadata, runtime closing and catalogue publication belong to the server, never to this extension. No permanent handoff file is involved.
 
-Run `npm test -- handoff`, `npm test -- scripts` (native entry discovery), and `npm run typecheck`. Handoff integration tests use real temporary Git repositories and a fake Pi command/session host; they do not establish live model execution or Pi Chat rendering/persistence.
+The extension imports the public `@manuelselch/pi-server/extensions` entry point. This repository pins `vendor/pi-server-0.2.0-archive-f676032.tgz`, a local server snapshot containing the session-host API (absent from published 0.2.0). The running Pi Chat server must also contain that API; update the server before using this extension, then reload extensions. Older registries are not supported. Terminal Pi uses the same current registry package but has no bound session host.
+
+Run `npm test -- handoff`, `npm test -- scripts` (native entry discovery), and `npm run typecheck`. Handoff integration tests use real temporary Git repositories and the packaged registry with a fake Pi command/archive host. They cover archive ordering, cancellation, absent hosts/paths and review/archive failures; they do not establish live model execution or Pi Chat rendering/persistence.

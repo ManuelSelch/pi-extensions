@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { getPiChatExtensionRegistry } from "@manuelselch/pi-server/extensions";
 import { formatHandoff, parseArguments, reviewSessionName, USAGE } from "../domain/handoff.js";
 import { collectReviewFacts, HandoffFactsError } from "../infra/git-facts.js";
 
@@ -22,22 +23,35 @@ async function handoffReview(pi: ExtensionAPI, args: string, ctx: ExtensionComma
 
 	const name = reviewSessionName(facts.feature);
 	const source = ctx.sessionManager.getSessionFile();
-	const reminder = `Archive the implementation session manually in Pi Chat${source ? `: ${source}` : "."}`;
+	const host = getPiChatExtensionRegistry().sessionHost();
+	const archiveNotice = !source
+		? "There is no saved implementation session to archive."
+		: host
+			? "Archive the implementation session after the review successfully starts."
+			: `Archive the implementation session manually in Pi Chat: ${source}`;
 	if (!await ctx.ui.confirm("Start review session?",
-		`Create "${name}" in ${ctx.cwd} and submit the edited handoff to the code-reviewer.\n\nThis MVP does not archive sessions. ${reminder}`))
+		`Create "${name}" in ${ctx.cwd} and submit the edited handoff to the code-reviewer.\n\n${archiveNotice}`))
 		return ctx.ui.notify("Handoff cancelled. Nothing changed.", "info");
 
 	// Session replacement keeps the host's cwd. No parentSession or copied history.
 	const result = await ctx.newSession({
 		setup: async manager => { manager.appendSessionInfo(name); },
 		withSession: async next => {
-			next.ui.notify(reminder, "info");
 			try {
 				// Use the normal prompt path once: skill expansion and persistence belong to Pi.
 				await next.sendUserMessage(`/skill:code-reviewer ${handoff}`, { expandPromptTemplates: true });
 			} catch (error) {
 				next.ui.notify(`Review could not start: ${error instanceof Error ? error.message : String(error)}. The implementation session was not archived.`, "error");
 				next.ui.setEditorText(`/skill:code-reviewer ${handoff}`);
+				return;
+			}
+
+			if (!source || !host) return next.ui.notify(archiveNotice, "info");
+			try {
+				await host.archive(source);
+				next.ui.notify("Implementation session archived.", "info");
+			} catch (error) {
+				next.ui.notify(`Review started, but archiving could not be confirmed: ${error instanceof Error ? error.message : String(error)}. Check the implementation session in Pi Chat: ${source}`, "warning");
 			}
 		},
 	});
@@ -46,7 +60,7 @@ async function handoffReview(pi: ExtensionAPI, args: string, ctx: ExtensionComma
 
 export default function handoffExtension(pi: ExtensionAPI) {
 	pi.registerCommand("handoff", {
-		description: "Start a fresh code review: /handoff review (manual archive)",
+		description: "Start a fresh code review: /handoff review (archive implementation in Pi Chat)",
 		getArgumentCompletions: prefix => "review".startsWith(prefix.trim()) ? [{ value: "review", label: "review" }] : null,
 		handler: (args, ctx) => handoffReview(pi, args, ctx),
 	});

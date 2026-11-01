@@ -58,14 +58,31 @@ test('creates an unlinked named session and submits the edited handoff once thro
   assert.equal(handoff.newSessions.length, 1);
   assert.equal(handoff.newSessions[0].parentSession, undefined);
   assert.deepEqual(handoff.review.entries, [{ type: 'session_info', name: 'Review: handoff-review' }]);
-  assert.deepEqual(handoff.timeline, ['name', 'prompt']);
+  assert.deepEqual(handoff.timeline, ['name', 'prompt', 'archive']);
+  assert.deepEqual(handoff.archives, [handoff.implementationSession]);
   assert.equal(handoff.prompts.length, 1);
   assert.equal(handoff.prompts[0].content, '/skill:code-reviewer ' + handoff.draft + '\nReview this note too.\n');
   assert.equal(handoff.prompts[0].cwd, handoff.repo);
   assert.equal(handoff.prompts[0].options.expandPromptTemplates, true);
-  assert.match(handoff.confirmation().message, /does not archive sessions/);
-  handoff.expectNotified('info', /Archive the implementation session manually/);
+  assert.match(handoff.confirmation().message, /archive the implementation session after.*review.*start/i);
+  handoff.expectNotified('info', /implementation session archived/i);
   assert.equal(handoff.implementationContents(), sourceBefore);
+});
+
+test('waits for successful review submission before archiving', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  let finishPrompt;
+  handoff.promptWait = new Promise(resolve => { finishPrompt = resolve; });
+  const promptStarted = new Promise(resolve => { handoff.onPrompt = resolve; });
+
+  const running = handoff.run();
+  await promptStarted;
+  const archivesWhilePending = [...handoff.archives];
+  finishPrompt();
+  await running;
+
+  assert.deepEqual(archivesWhilePending, []);
+  assert.deepEqual(handoff.archives, [handoff.implementationSession]);
 });
 
 test('another extension cancelling creation never submits the handoff', async t => {
@@ -75,6 +92,7 @@ test('another extension cancelling creation never submits the handoff', async t 
   await handoff.run();
 
   assert.deepEqual(handoff.prompts, []);
+  assert.deepEqual(handoff.archives, []);
   handoff.expectNotified('warning', /cancelled.*unchanged/i);
 });
 
@@ -86,8 +104,56 @@ test('review start failure preserves the edited prompt for retry in the new sess
 
   assert.equal(handoff.newSessions.length, 1);
   assert.equal(handoff.prompts.length, 1);
+  assert.deepEqual(handoff.archives, []);
   handoff.expectNotified('error', /model unavailable.*not archived/);
   assert.deepEqual(handoff.editorTexts, ['/skill:code-reviewer ' + handoff.draft]);
+});
+
+test('archive failure leaves the review running without restoring or resubmitting its prompt', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.archiveError = new Error('metadata persistence uncertain');
+
+  await handoff.run();
+
+  assert.deepEqual(handoff.timeline, ['name', 'prompt', 'archive']);
+  assert.deepEqual(handoff.archives, [handoff.implementationSession]);
+  assert.equal(handoff.prompts.length, 1);
+  assert.deepEqual(handoff.editorTexts, []);
+  handoff.expectNotified('warning', /review started.*archiv.*metadata persistence uncertain.*Pi Chat/i);
+});
+
+test('terminal Pi without a session host keeps manual archiving explicit', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.hostAvailable = false;
+
+  await handoff.run();
+
+  assert.deepEqual(handoff.timeline, ['name', 'prompt']);
+  assert.deepEqual(handoff.archives, []);
+  assert.match(handoff.confirmation().message, /Archive the implementation session manually/);
+  handoff.expectNotified('info', /Archive the implementation session manually/);
+});
+
+test('an unsaved source session cannot be archived', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.implementationSession = undefined;
+
+  await handoff.run();
+
+  assert.deepEqual(handoff.timeline, ['name', 'prompt']);
+  assert.deepEqual(handoff.archives, []);
+  assert.match(handoff.confirmation().message, /no saved.*session.*archive/i);
+  handoff.expectNotified('info', /no saved.*session.*archive/i);
+});
+
+test('session creation failure never archives the source', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.creationError = new Error('creation failed');
+
+  await assert.rejects(handoff.run(), /creation failed/);
+
+  assert.deepEqual(handoff.archives, []);
+  assert.deepEqual(handoff.prompts, []);
 });
 
 test('rejects missing reviewer skill, non-Git directory, headless mode and running sessions', async t => {

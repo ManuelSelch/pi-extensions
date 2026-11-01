@@ -7,7 +7,7 @@ const ts = require('typescript');
 
 const root = path.resolve(__dirname, '../../../..');
 
-function loadTs(file, cache = new Map()) {
+function loadTs(file, imports, cache = new Map()) {
   file = path.resolve(file);
   if (cache.has(file)) return cache.get(file).exports;
   const module = { exports: {} };
@@ -16,7 +16,8 @@ function loadTs(file, cache = new Map()) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   new Function('require', 'module', 'exports', code)(id => {
-    if (id.startsWith('.')) return loadTs(path.resolve(path.dirname(file), id.replace(/\.js$/, '.ts')), cache);
+    if (id in imports) return imports[id];
+    if (id.startsWith('.')) return loadTs(path.resolve(path.dirname(file), id.replace(/\.js$/, '.ts')), imports, cache);
     return require(id);
   }, module, module.exports);
   return module.exports;
@@ -41,6 +42,8 @@ class HandoffDriver {
     this.dialogs = [];
     this.newSessions = [];
     this.prompts = [];
+    this.archives = [];
+    this.hostAvailable = true;
     this.editorTexts = [];
     this.skills = ['skill:code-reviewer'];
     this.idle = true;
@@ -96,9 +99,18 @@ class HandoffDriver {
     return this;
   }
 
-  install() {
+  async install() {
+    const { createPiChatExtensionRegistry } = await import('@manuelselch/pi-server/extensions');
+    const registry = createPiChatExtensionRegistry();
+    if (this.hostAvailable) registry.bindSessionHost({ archive: async source => {
+      this.timeline.push('archive');
+      this.archives.push(source);
+      if (this.archiveError) throw this.archiveError;
+    } });
     this.commands = new Map();
-    loadTs(path.join(root, 'handoff/index.ts')).default({
+    loadTs(path.join(root, 'handoff/index.ts'), {
+      '@manuelselch/pi-server/extensions': { getPiChatExtensionRegistry: () => registry },
+    }).default({
       registerCommand: (name, command) => this.commands.set(name, command),
       exec: async (command, args, options) => this.gitFailure && args[0] === this.gitFailure
         ? { stdout: '', code: 128 }
@@ -143,6 +155,8 @@ class HandoffDriver {
           sendUserMessage: async (content, options) => {
             this.timeline.push('prompt');
             this.prompts.push({ content, options, cwd: this.repo });
+            this.onPrompt?.();
+            await this.promptWait;
             if (this.promptError) throw this.promptError;
           },
         });
@@ -151,11 +165,11 @@ class HandoffDriver {
     };
   }
   async run(args = 'review') {
-    if (!this.commands) this.install();
+    if (!this.commands) await this.install();
     await this.commands.get('handoff').handler(args, this.context());
   }
-  completions(prefix) {
-    if (!this.commands) this.install();
+  async completions(prefix) {
+    if (!this.commands) await this.install();
     return this.commands.get('handoff').getArgumentCompletions(prefix);
   }
   head() { return this.git('rev-parse', 'HEAD'); }
@@ -164,6 +178,7 @@ class HandoffDriver {
   expectNothingChanged() {
     assert.deepEqual(this.newSessions, []);
     assert.deepEqual(this.prompts, []);
+    assert.deepEqual(this.archives, []);
   }
   expectNotified(level, pattern) {
     assert.ok(this.notifications.some(note => note.level === level && pattern.test(note.message)),
