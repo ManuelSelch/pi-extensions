@@ -20,24 +20,15 @@ export interface ReviewFacts {
 export type PathConcern = "code" | "tests" | "docs" | "artifacts";
 
 export type ParsedArguments =
-	| { ok: true; feature: string | undefined; base: string | undefined }
+	| { ok: true }
 	| { ok: false };
 
-export const USAGE = "Usage: /handoff review [--base <ref>] [feature name]";
+export const USAGE = "Usage: /handoff review";
 
 const LIST_LIMIT = 100;
 
 export function parseArguments(args: string): ParsedArguments {
-	const words = args.trim().split(/\s+/).filter(Boolean);
-	if (words.shift() !== "review") return { ok: false };
-	let base: string | undefined;
-	if (words[0] === "--base") {
-		base = words[1];
-		if (!base || base.startsWith("-")) return { ok: false };
-		words.splice(0, 2);
-	}
-	if (words.some(word => word.startsWith("--"))) return { ok: false };
-	return { ok: true, feature: words.length ? words.join(" ") : undefined, base };
+	return { ok: args.trim() === "review" };
 }
 
 export function classifyPath(path: string): PathConcern {
@@ -71,7 +62,7 @@ function nested(label: string, items: string[], format: (item: string) => string
 export function knownGaps(facts: ReviewFacts): string[] {
 	const byConcern = (concern: PathConcern) => facts.changed.filter(path => classifyPath(path) === concern);
 	const gaps: string[] = [];
-	if (!facts.base) gaps.push("Could not determine a base commit; only uncommitted changes are listed. Rerun with `/handoff review --base <ref>`.");
+	if (!facts.base) gaps.push("Could not determine a base commit; only uncommitted changes are listed. Verify and complete the review scope in this handoff before continuing.");
 	if (!facts.changed.length) gaps.push("No changed files found in scope.");
 	if (!facts.plans.length) gaps.push("No plan directory under `plans/` matches this change.");
 	if (!byConcern("tests").length) gaps.push("No test files changed.");

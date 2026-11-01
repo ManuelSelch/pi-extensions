@@ -95,19 +95,16 @@ test('rejects missing reviewer skill, non-Git directory, headless mode and runni
   }
 });
 
-test('accepts explicit base and feature name and rejects invalid refs', async t => {
-  const handoff = new HandoffDriver(t).featureBranch();
-  handoff.confirmReplies = [false];
+test('rejects base and feature-name parameters before opening dialogs', async t => {
+  for (const args of ['review --base main', 'review Custom feature', 'review --base main Custom feature']) {
+    const handoff = new HandoffDriver(t).featureBranch();
 
-  await handoff.run('review --base main Custom feature');
+    await handoff.run(args);
 
-  assert.ok(handoff.draft.includes(`Base: \`${handoff.mergeBase('main')}\` (--base main)`));
-  assert.match(handoff.confirmation().message, /Review: Custom feature/);
-
-  await handoff.run('review --base nonexistent-ref');
-
-  handoff.expectNothingChanged();
-  handoff.expectNotified('error', /Unknown base ref/);
+    handoff.expectNothingChanged();
+    assert.equal(handoff.dialogs.length, 0);
+    handoff.expectNotified('error', /^Usage: \/handoff review$/);
+  }
 });
 
 test('missing base is an explicit gap, not a guessed commit range', async t => {
@@ -118,6 +115,7 @@ test('missing base is an explicit gap, not a guessed commit range', async t => {
 
   assert.match(handoff.draft, /Base: unknown/);
   assert.match(handoff.draft, /Could not determine a base commit/);
+  assert.doesNotMatch(handoff.draft, /--base/);
   assert.match(handoff.draft, /No plan directory/);
   assert.match(handoff.draft, /No test files changed/);
   assert.match(handoff.draft, /No documentation files changed/);

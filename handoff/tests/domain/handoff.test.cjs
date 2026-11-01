@@ -25,8 +25,10 @@ test('classifies changed paths by review concern', () => {
 });
 
 test('parses review arguments', () => {
-  assert.deepEqual(domain.parseArguments('review'), { ok: true, feature: undefined, base: undefined });
-  assert.deepEqual(domain.parseArguments('  review --base origin/main  Inbox rows '), { ok: true, feature: 'Inbox rows', base: 'origin/main' });
+  assert.deepEqual(domain.parseArguments('review'), { ok: true });
+  assert.deepEqual(domain.parseArguments('  review  '), { ok: true });
+  assert.equal(domain.parseArguments('review --base origin/main').ok, false);
+  assert.equal(domain.parseArguments('review Inbox rows').ok, false);
   assert.equal(domain.parseArguments('').ok, false);
   assert.equal(domain.parseArguments('review --base').ok, false);
   assert.equal(domain.parseArguments('reviews').ok, false);

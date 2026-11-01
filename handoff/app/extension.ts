@@ -3,8 +3,7 @@ import { formatHandoff, parseArguments, reviewSessionName, USAGE } from "../doma
 import { collectReviewFacts, HandoffFactsError } from "../infra/git-facts.js";
 
 async function handoffReview(pi: ExtensionAPI, args: string, ctx: ExtensionCommandContext): Promise<void> {
-	const request = parseArguments(args);
-	if (!request.ok) return ctx.ui.notify(USAGE, "error");
+	if (!parseArguments(args).ok) return ctx.ui.notify(USAGE, "error");
 	if (!ctx.hasUI) return ctx.ui.notify("/handoff review needs an editor and confirmation dialog. Nothing changed.", "error");
 	if (!ctx.isIdle()) return ctx.ui.notify("Wait for the current run to finish before handing off. Nothing changed.", "error");
 	if (!pi.getCommands().some(command => command.source === "skill" && command.name === "skill:code-reviewer"))
@@ -12,7 +11,7 @@ async function handoffReview(pi: ExtensionAPI, args: string, ctx: ExtensionComma
 
 	let facts;
 	try {
-		facts = await collectReviewFacts(pi.exec.bind(pi), ctx.cwd, request);
+		facts = await collectReviewFacts(pi.exec.bind(pi), ctx.cwd);
 	} catch (error) {
 		if (error instanceof HandoffFactsError) return ctx.ui.notify(error.message, "error");
 		throw error;
@@ -47,7 +46,7 @@ async function handoffReview(pi: ExtensionAPI, args: string, ctx: ExtensionComma
 
 export default function handoffExtension(pi: ExtensionAPI) {
 	pi.registerCommand("handoff", {
-		description: "Start a fresh code review: /handoff review [--base <ref>] [feature] (manual archive)",
+		description: "Start a fresh code review: /handoff review (manual archive)",
 		getArgumentCompletions: prefix => "review".startsWith(prefix.trim()) ? [{ value: "review", label: "review" }] : null,
 		handler: (args, ctx) => handoffReview(pi, args, ctx),
 	});

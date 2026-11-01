@@ -54,7 +54,7 @@ function approvalLines(root: string, files: string[]): ReviewFacts["approvals"] 
 		.filter(line => APPROVAL.test(line.text)));
 }
 
-export async function collectReviewFacts(exec: Exec, cwd: string, request: { feature?: string; base?: string }): Promise<ReviewFacts> {
+export async function collectReviewFacts(exec: Exec, cwd: string): Promise<ReviewFacts> {
 	const run = async (args: string[], directory: string): Promise<string | undefined> => {
 		const result = await exec("git", args, { cwd: directory });
 		return result.code === 0 ? result.stdout : undefined;
@@ -73,20 +73,13 @@ export async function collectReviewFacts(exec: Exec, cwd: string, request: { fea
 		?? (await git("rev-parse", "--verify", "--quiet", "refs/heads/master") ? "master" : undefined);
 	const onDefault = defaultBranch?.replace(/^origin\//, "") === branch;
 
-	let base: ReviewFacts["base"];
-	if (request.base) {
-		const sha = await git("rev-parse", "--verify", "--quiet", `${request.base}^{commit}`);
-		if (!sha) throw new HandoffFactsError(`Unknown base ref: ${request.base}. Nothing changed.`);
-		base = { sha, source: `--base ${request.base}` };
-	} else {
-		// A feature branch is reviewed since it left the default branch; work on
-		// the default branch itself is reviewed since its upstream.
-		const reference = defaultBranch && !onDefault
-			? defaultBranch
-			: await git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
-		const sha = reference ? await git("merge-base", reference, "HEAD") : undefined;
-		if (reference && sha) base = { sha, source: `merge-base with ${reference}` };
-	}
+	// A feature branch is reviewed since it left the default branch; work on
+	// the default branch itself is reviewed since its upstream.
+	const reference = defaultBranch && !onDefault
+		? defaultBranch
+		: await git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
+	const sha = reference ? await git("merge-base", reference, "HEAD") : undefined;
+	const base = reference && sha ? { sha, source: `merge-base with ${reference}` } : undefined;
 
 	const scope = async (args: string[]): Promise<string> => {
 		const output = await run(args, root);
@@ -99,11 +92,11 @@ export async function collectReviewFacts(exec: Exec, cwd: string, request: { fea
 	const changed = [...new Set([...committed, ...status.map(entry => entry.path)])].sort();
 
 	const branchName = branch !== "HEAD" && !onDefault ? branch.split("/").pop() : undefined;
-	const names = [branchName, request.feature].filter((name): name is string => !!name).map(slug);
+	const names = branchName ? [slug(branchName)] : [];
 	const plans = matchingArtifacts(root, "plans", names, changed);
 	const mockups = matchingArtifacts(root, "mockups", names, changed, "DESIGN.md");
 	const planFolders = [...new Set(plans.map(file => file.split("/")[1]!))];
-	const feature = request.feature ?? (planFolders.length === 1 ? planFolders[0] : undefined) ?? branchName ?? basename(root);
+	const feature = (planFolders.length === 1 ? planFolders[0] : undefined) ?? branchName ?? basename(root);
 
 	return {
 		feature, root, branch, head: { sha: head, subject }, base, commits,
