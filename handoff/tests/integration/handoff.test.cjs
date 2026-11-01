@@ -1,0 +1,159 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { HandoffDriver } = require('./support/handoff-driver.cjs');
+
+test('drafts repository facts, matching artifacts, exact Git scope and verification gaps', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.confirmReplies = [false];
+
+  await handoff.run();
+
+  assert.match(handoff.draft, /^# Review handoff: handoff-review$/m);
+  assert.ok(handoff.draft.includes(`Base: \`${handoff.mergeBase('main')}\` (merge-base with main)`));
+  assert.ok(handoff.draft.includes(`Head: \`${handoff.head()}\` feat: add handoff`));
+  assert.match(handoff.draft, /Uncommitted changes \(2\):\n  - ` M src\/app\.ts`\n  - `\?\? notes\.txt`/);
+  assert.match(handoff.draft, /Plans: `plans\/handoff-review\/PLAN\.md`/);
+  assert.match(handoff.draft, /Mockups: `mockups\/handoff-review\/DESIGN\.md`/);
+  assert.match(handoff.draft, /PLAN\.md:4`: Approved by the user/);
+  assert.doesNotMatch(handoff.draft, /other-feature/);
+  assert.match(handoff.draft, /Code \(3\): `notes.txt`, `src\/app\.ts`, `src\/handoff\.ts`/);
+  assert.match(handoff.draft, /Tests \(1\): `tests\/handoff\.test\.ts`/);
+  assert.match(handoff.draft, /Docs \(1\): `docs\/handoff\.md`/);
+  assert.match(handoff.draft, /Verification results are not recorded/);
+});
+
+test('editor cancellation, blank input and declined confirmation change nothing', async t => {
+  for (const reply of [undefined, '', '  ', draft => draft]) {
+    const handoff = new HandoffDriver(t).featureBranch();
+    handoff.editorReply = reply;
+    handoff.confirmReplies = [false];
+
+    await handoff.run();
+
+    handoff.expectNothingChanged();
+    handoff.expectNotified('info', /cancelled.*nothing changed/i);
+  }
+});
+
+test('creates an unlinked named session and submits the edited handoff once through the reviewer skill', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.editorReply = draft => draft + '\nReview this note too.\n';
+  const sourceBefore = handoff.implementationContents();
+
+  await handoff.run();
+
+  assert.equal(handoff.newSessions.length, 1);
+  assert.equal(handoff.newSessions[0].parentSession, undefined);
+  assert.deepEqual(handoff.review.entries, [{ type: 'session_info', name: 'Review: handoff-review' }]);
+  assert.deepEqual(handoff.timeline, ['name', 'prompt']);
+  assert.equal(handoff.prompts.length, 1);
+  assert.equal(handoff.prompts[0].content, '/skill:code-reviewer ' + handoff.draft + '\nReview this note too.\n');
+  assert.equal(handoff.prompts[0].cwd, handoff.repo);
+  assert.equal(handoff.prompts[0].options.expandPromptTemplates, true);
+  assert.match(handoff.confirmation().message, /does not archive sessions/);
+  handoff.expectNotified('info', /Archive the implementation session manually/);
+  assert.equal(handoff.implementationContents(), sourceBefore);
+});
+
+test('another extension cancelling creation never submits the handoff', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.cancelNewSession = true;
+
+  await handoff.run();
+
+  assert.deepEqual(handoff.prompts, []);
+  handoff.expectNotified('warning', /cancelled.*unchanged/i);
+});
+
+test('review start failure preserves the edited prompt for retry in the new session', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.promptError = new Error('model unavailable');
+
+  await handoff.run();
+
+  assert.equal(handoff.newSessions.length, 1);
+  assert.equal(handoff.prompts.length, 1);
+  handoff.expectNotified('error', /model unavailable.*not archived/);
+  assert.deepEqual(handoff.editorTexts, ['/skill:code-reviewer ' + handoff.draft]);
+});
+
+test('rejects missing reviewer skill, non-Git directory, headless mode and running sessions', async t => {
+  for (const [arrange, message] of [
+    [driver => { driver.featureBranch(); driver.skills = []; }, /code-reviewer/],
+    [() => {}, /Git repository/],
+    [driver => { driver.featureBranch(); driver.idle = false; }, /current run/],
+    [driver => { driver.featureBranch(); driver.hasUI = false; }, /editor and confirmation/],
+  ]) {
+    const handoff = new HandoffDriver(t);
+    arrange(handoff);
+
+    await handoff.run();
+
+    handoff.expectNothingChanged();
+    assert.equal(handoff.dialogs.length, 0);
+    handoff.expectNotified('error', message);
+  }
+});
+
+test('accepts explicit base and feature name and rejects invalid refs', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.confirmReplies = [false];
+
+  await handoff.run('review --base main Custom feature');
+
+  assert.ok(handoff.draft.includes(`Base: \`${handoff.mergeBase('main')}\` (--base main)`));
+  assert.match(handoff.confirmation().message, /Review: Custom feature/);
+
+  await handoff.run('review --base nonexistent-ref');
+
+  handoff.expectNothingChanged();
+  handoff.expectNotified('error', /Unknown base ref/);
+});
+
+test('missing base is an explicit gap, not a guessed commit range', async t => {
+  const handoff = new HandoffDriver(t).onMainWithoutUpstream();
+  handoff.confirmReplies = [false];
+
+  await handoff.run();
+
+  assert.match(handoff.draft, /Base: unknown/);
+  assert.match(handoff.draft, /Could not determine a base commit/);
+  assert.match(handoff.draft, /No plan directory/);
+  assert.match(handoff.draft, /No test files changed/);
+  assert.match(handoff.draft, /No documentation files changed/);
+});
+
+test('failed Git scope reads abort before showing a misleading handoff', async t => {
+  for (const command of ['status', 'diff']) {
+    const handoff = new HandoffDriver(t).featureBranch();
+    handoff.gitFailure = command;
+
+    await handoff.run();
+
+    handoff.expectNothingChanged();
+    assert.equal(handoff.dialogs.length, 0);
+    handoff.expectNotified('error', /Could not read Git review scope/);
+  }
+});
+
+test('rename paths and unusual untracked filenames remain in dirty scope', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+  handoff.git('mv', 'src/handoff.ts', 'src/renamed file.ts');
+  handoff.write('odd\nfilename.txt', 'content');
+  handoff.confirmReplies = [false];
+
+  await handoff.run();
+
+  assert.ok(handoff.draft.includes('src/handoff.ts -> src/renamed file.ts'));
+  assert.ok(handoff.draft.includes('odd\nfilename.txt'));
+});
+
+test('rejects invalid subcommands and completes review', async t => {
+  const handoff = new HandoffDriver(t).featureBranch();
+
+  await handoff.run('ship');
+
+  handoff.expectNothingChanged();
+  handoff.expectNotified('error', /Usage: \/handoff review/);
+  assert.deepEqual((await handoff.completions('re')).map(item => item.value), ['review']);
+});

@@ -14,6 +14,7 @@ entry points directly through jiti; there is no build step.
 | [context-badge/index.ts](context-badge/index.ts) | Show context-window usage as a status label. |
 | [extension-manager/index.ts](extension-manager/index.ts) | `/extensions` — manage local native exclusions and package enablement; save and restore defaults. |
 | [git-status/index.ts](git-status/index.ts) | Show repository/worktree Git status. |
+| [handoff/index.ts](handoff/index.ts) | `/handoff review` — edit a repository-fact handoff and start a fresh reviewer session; archive manually. See [usage](docs/handoff/README.md). |
 | [manual-updates/index.ts](manual-updates/index.ts) | `/update` — run `pi update --all`; restart Pi manually afterward. |
 | [minimal-tui/index.ts](minimal-tui/index.ts) | Suppress startup package notifications and hide footer token/cost stats. |
 | [model-filter/index.ts](model-filter/index.ts) | `/models-filter`, `/models-add`, `/models-remove` — edit the enabled-model filter. |
