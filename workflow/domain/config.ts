@@ -1,4 +1,4 @@
-export const steps = ["mock", "plan", "design", "commit"] as const;
+export const steps = ["mock", "plan", "design", "scenario", "commit"] as const;
 export type Step = typeof steps[number];
 export interface StepConfig {
 	enabled?: boolean;

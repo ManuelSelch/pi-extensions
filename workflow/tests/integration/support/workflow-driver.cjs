@@ -9,7 +9,7 @@ async function createWorkflowDriver(t) {
  const agent=path.join(dir,'agent'),cwd=path.join(dir,'project');
  const write=async(file,value)=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,typeof value==='string'?value:JSON.stringify(value));};
  await fs.mkdir(cwd,{recursive:true});
- for (const s of ['mock','plan','design','commit']) await write(path.join(agent,'workflow/prompts',s+'.md'),s+' instructions');
+ for (const s of ['mock','plan','design','scenario','commit']) await write(path.join(agent,'workflow/prompts',s+'.md'),s==='scenario'?'Write scenarios and wait for explicit approval before implementing; applies independently of the plan and design steps.':s+' instructions');
  for (const s of ['mockup-first','roles/analyst','roles/design-writing']) await write(path.join(agent,'workflow/skills',s,'SKILL.md'),'---\nname: '+s.split('/').at(-1)+'\ndescription: Example\n---\nSECRET SKILL BODY');
  const commands=new Map(),events=new Map(),notifications=[],dialogs=[];let choices=[],trusted=true,hasUI=true,lastEvent,discovered;
  const pi={registerCommand:(name,definition)=>commands.set(name,definition),on:(name,fn)=>events.set(name,fn)};
@@ -49,7 +49,7 @@ async function createWorkflowDriver(t) {
   thenCompactStatus(){
    const text=notifications.at(-1).text;
    assert.ok(text.startsWith('Workflow project: ~/project/.pi/workflow.json'));
-   for(const step of ['mock','plan','design','commit']){
+   for(const step of ['mock','plan','design','scenario','commit']){
     assert.ok(text.includes(step+': on\n'));
     assert.ok(text.includes('  prompt: ~/agent/workflow/prompts/'+step+'.md'));
    }

@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { load, plain } = require('../support/load.cjs');
 const { steps, validateConfig, validateDefaults, resolveSteps, composePrompts, WorkflowDraft, parseCommand } = load('domain/config.ts');
-const defaults = Object.fromEntries(['mock','plan','design','commit'].map(s => [s, { enabled:true, prompt:s+'.md', skills:[s] }]));
+const defaults = Object.fromEntries(['mock','plan','design','scenario','commit'].map(s => [s, { enabled:true, prompt:s+'.md', skills:[s] }]));
 
 test('inherits fields independently, retaining false, null, empty lists and provenance', () => {
   const result = resolveSteps(defaults, { steps:{mock:{enabled:false, prompt:'global.md'}} }, { steps:{mock:{skills:[]},design:{prompt:null}} }, 'global.json', 'project.json');
@@ -33,10 +33,10 @@ test('shipped defaults require every field for every step, including disabled st
   assert.deepEqual(plain(validateDefaults(config, 'defaults.json').mock), config.steps.mock);
 });
 test('composes prompts once in fixed order, not input order', () => {
-  assert.equal(composePrompts({commit:'commit',mock:'mock',design:'design'}), '## mock\nmock\n\n## design\ndesign\n\n## commit\ncommit');
+  assert.equal(composePrompts({commit:'commit',mock:'mock',design:'design',scenario:'scenario'}), '## mock\nmock\n\n## design\ndesign\n\n## scenario\nscenario\n\n## commit\ncommit');
 });
 test('draft patches only changed enablement and cancels toggle round trips', () => {
-  const draft = new WorkflowDraft({steps:{mock:{enabled:false}}}, {mock:false,plan:true,design:true,commit:true}, {mock:true,plan:true,design:true,commit:true});
+  const draft = new WorkflowDraft({steps:{mock:{enabled:false}}}, {mock:false,plan:true,design:true,scenario:true,commit:true}, {mock:true,plan:true,design:true,scenario:true,commit:true});
   draft.toggle('mock');
   assert.deepEqual(plain(draft.patch()), {mock:true});
   draft.toggle('mock');

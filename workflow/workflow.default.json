@@ -15,6 +15,11 @@
       "prompt": "workflow/prompts/design.md",
       "skills": ["workflow/skills/roles/design-writing/SKILL.md"]
     },
+    "scenario": {
+      "enabled": true,
+      "prompt": "workflow/prompts/scenario.md",
+      "skills": []
+    },
     "commit": {
       "enabled": true,
       "prompt": "workflow/prompts/commit.md",

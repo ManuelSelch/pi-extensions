@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const {createWorkflowDriver}=require('./support/workflow-driver.cjs');
 test('multiple popup toggles save a minimal patch; other sections survive',async t=>{
  const app=await createWorkflowDriver(t);await app.discover();app.thenDiscoveredCount(3);
- await app.choose(['mock','commit','Save']);app.thenInitialChecks({mock:true,plan:true,design:true,commit:true});app.thenScopeLabel('project');
+ await app.choose(['mock','commit','Save']);app.thenInitialChecks({mock:true,plan:true,design:true,scenario:true,commit:true});app.thenScopeLabel('project');
  await app.thenProjectConfig({steps:{mock:{enabled:false},commit:{enabled:false}}});
  await app.run();app.thenPromptContains('plan instructions');app.thenOtherSectionPreserved();
  await app.status();app.thenNotificationContains('/reload');
@@ -46,10 +46,15 @@ test('status retains resource errors',async t=>{
  const app=await createWorkflowDriver(t);await app.deletePrompt('mock');await app.status();
  app.thenNotificationContains('Workflow unavailable:');app.thenNotificationContains('mock.md');
 });
+test('scenario gate remains independently enabled without plan or design',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.setProject({steps:{mock:{enabled:false},plan:{enabled:false},design:{enabled:false},commit:{enabled:false}}});
+ await app.run();app.thenPromptContains('wait for explicit approval before implementing');app.thenPromptContains('independently of the plan and design');app.thenOtherSectionPreserved();
+});
 test('all-off removes only workflow; prompt edits refresh without reload',async t=>{
  const app=await createWorkflowDriver(t);await app.run();app.thenPromptContains('mock instructions');
  await app.editPrompt('mock','NEW');await app.run();app.thenPromptContains('NEW');
- await app.choose(['mock','plan','design','commit','Save']);await app.run();app.thenNoPrompt();app.thenOtherSectionPreserved();
+ await app.choose(['mock','plan','design','scenario','commit','Save']);await app.run();app.thenNoPrompt();app.thenOtherSectionPreserved();
  await app.discover();app.thenDiscoveredCount(0);
 });
 test('malformed project config is ignored when untrusted; project writes are refused',async t=>{

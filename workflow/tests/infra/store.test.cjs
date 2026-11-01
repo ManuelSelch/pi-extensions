@@ -23,7 +23,7 @@ test('defaults point outside scanned skills and all steps are enabled', async t=
 test('rereads JSON-owned defaults and anchors template paths to the agent directory',async t=>{
  const {agent,cwd,write}=await fixture(t);
  const defaultsFile=path.join(agent,'templates/workflow.default.json');
- const config={steps:Object.fromEntries(['mock','plan','design','commit'].map(s=>[s,{enabled:true,prompt:null,skills:[]}]))};
+ const config={steps:Object.fromEntries(['mock','plan','design','scenario','commit'].map(s=>[s,{enabled:true,prompt:null,skills:[]}]))};
  config.steps.mock={enabled:false,prompt:'custom.md',skills:['custom/SKILL.md']};
  await write(defaultsFile,config);
  const store=new WorkflowStore(agent,defaultsFile);
@@ -76,7 +76,7 @@ test('skips disabled missing resources and deduplicates canonical prompt and ski
  const prompt=path.join(agent,'one.md'),skill=path.join(agent,'one/SKILL.md');
  await fs.writeFile(prompt,'same prompt');await fs.mkdir(path.dirname(skill));await fs.writeFile(skill,'---\nname: one\ndescription: test\n---\nbody');
  await fs.symlink(prompt,path.join(agent,'alias.md'));
- await write(path.join(agent,'workflow.json'),{steps:{mock:{prompt:'one.md',skills:['one/SKILL.md']},plan:{prompt:'alias.md',skills:['one/SKILL.md']},design:{enabled:false},commit:{enabled:false}}});
+ await write(path.join(agent,'workflow.json'),{steps:{mock:{prompt:'one.md',skills:['one/SKILL.md']},plan:{prompt:'alias.md',skills:['one/SKILL.md']},design:{enabled:false},scenario:{enabled:false},commit:{enabled:false}}});
  const resources=await store.resources((await store.load(cwd,true)).resolved);
  assert.deepEqual(plain(resources.skillPaths),[skill]);assert.equal(resources.prompt,'## mock\nsame prompt');
  await fs.rm(skill);await assert.rejects(store.resources((await store.load(cwd,true)).resolved),/SKILL.md/);

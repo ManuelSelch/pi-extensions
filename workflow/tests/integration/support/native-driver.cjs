@@ -14,7 +14,7 @@ async function createNativeDriver(t) {
  await fs.mkdir(cwd);
  await fs.writeFile(path.join(agent,'workflow/skills/mockup-first/SKILL.md'),'---\nname: native-fixture\ndescription: Native workflow skill\n---\nPRIVATE SKILL BODY');
  await fs.writeFile(path.join(agent,'workflow/prompts/mock.md'),'NATIVE MOCK');
- await fs.writeFile(path.join(agent,'workflow.json'),JSON.stringify({steps:{plan:{enabled:false},design:{enabled:false},commit:{enabled:false}}}));
+ await fs.writeFile(path.join(agent,'workflow.json'),JSON.stringify({steps:{plan:{enabled:false},design:{enabled:false},scenario:{enabled:false},commit:{enabled:false}}}));
  let result;
  return {
   async runNativeSession(sdkPath){
