@@ -2,11 +2,22 @@ const {test}=require('node:test');
 const {createWorkflowDriver}=require('./support/workflow-driver.cjs');
 test('multiple popup toggles save a minimal patch; other sections survive',async t=>{
  const app=await createWorkflowDriver(t);await app.discover();app.thenDiscoveredCount(3);
+ await app.setGlobal({note:'global unchanged',steps:{mock:{enabled:true}}});
  await app.choose(['mock','commit','Save']);app.thenInitialChecks({mock:true,plan:true,design:true,scenario:true,commit:true});app.thenScopeLabel('project');
  await app.thenProjectConfig({steps:{mock:{enabled:false},commit:{enabled:false}}});
+ await app.thenGlobalConfig({note:'global unchanged',steps:{mock:{enabled:true}}});
  await app.run();app.thenPromptContains('plan instructions');app.thenOtherSectionPreserved();
  await app.status();app.thenNotificationContains('/reload');
  await app.discover();app.thenDiscoveredCount(2);
+});
+test('bare workflow rejects without opening or writing; local is the project selector',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.invoke('');app.thenNoDialog();app.thenNotificationContains('Usage: /workflow [local|global|status|preview]');
+ await app.thenNoProjectConfig();
+ await app.setGlobal({note:'keep'});
+ await app.choose(['mock','Save'],'local');
+ await app.thenProjectConfig({steps:{mock:{enabled:false}}});
+ await app.thenGlobalConfig({note:'keep'});
 });
 test('Escape, Cancel and unchanged Save create no config',async t=>{
  for(const end of [undefined,'Cancel','Save']){const app=await createWorkflowDriver(t);await app.choose(end==='Save'?['Save']:['mock',end]);await app.thenNoProjectConfig();}
@@ -29,7 +40,7 @@ test('status preserves disabled states and absent resources',async t=>{
  await app.status();app.thenNotificationContains('mock: off\n  prompt: none\n  skills: none');
 });
 test('successful saves report only the abbreviated destination',async t=>{
- for(const [scope,destination] of [['','~/project/.pi/workflow.json'],['global','~/agent/workflow.json']]){
+ for(const [scope,destination] of [['local','~/project/.pi/workflow.json'],['global','~/agent/workflow.json']]){
   const app=await createWorkflowDriver(t);await app.choose(['mock','Save'],scope);
   app.thenNotificationEquals('Saved: '+destination);
  }

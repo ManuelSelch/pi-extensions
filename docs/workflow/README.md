@@ -1,7 +1,7 @@
 # Workflow
 
 ## Use
-- `/workflow` opens the project selection popup: select a row to toggle it, then Save. Cancel/Escape writes nothing.
+- `/workflow local` opens the project selection popup: select a row to toggle it, then Save. Cancel/Escape writes nothing. Bare `/workflow` reports usage without opening a popup or writing configuration.
 - `/workflow global` edits global defaults without project overrides.
 - `/workflow status` shows settings, resource paths, and pending skill discovery, without source annotations or informational footer text. Popup and status paths use `~` for the home directory.
 - `/workflow preview` shows exactly the workflow prompt contribution, not full skill bodies.
@@ -10,7 +10,7 @@
 The shipped [workflow.default.json](../../workflow/workflow.default.json) defines all five steps' enabled states, prompt paths, and skill mappings. TypeScript contains no fallback mapping. Settings persist to `<agent-dir>/workflow.json` and `<session-cwd>/.pi/workflow.json`. There is no version field, ancestor lookup, Git-root lookup, or session-only state. Project configuration requires project trust. Scope is shown in the popup title.
 
 ## Setup / personal migration
-The extension does not create or move personal files on startup. Until setup is approved and applied, the defaults refer to missing personal assets; `/workflow` is usable, but injection/discovery report these paths as unavailable. The local installation was migrated with explicit approval; see [the migration record](MIGRATION.md#local-installation). See the source checklist in [MIGRATION.md](MIGRATION.md). For a new installation, copy [workflow.default.json](../../workflow/workflow.default.json) to `<agent-dir>/workflow.json`; preserve existing settings rather than overwriting a configured installation. The repository's prompt templates are under [workflow/assets/prompts](../../workflow/assets/prompts/), including the independent scenario-approval gate; install editable copies under `<agent-dir>/workflow/prompts/`. Managed skills belong under `<agent-dir>/workflow/skills/`, not normally scanned skill directories.
+The extension does not create or move personal files on startup. Until setup is approved and applied, the defaults refer to missing personal assets; `/workflow local` is usable, but injection/discovery report these paths as unavailable. The local installation was migrated with explicit approval; see [the migration record](MIGRATION.md#local-installation). See the source checklist in [MIGRATION.md](MIGRATION.md). For a new installation, copy [workflow.default.json](../../workflow/workflow.default.json) to `<agent-dir>/workflow.json`; preserve existing settings rather than overwriting a configured installation. The repository's prompt templates are under [workflow/assets/prompts](../../workflow/assets/prompts/), including the independent scenario-approval gate; install editable copies under `<agent-dir>/workflow/prompts/`. Managed skills belong under `<agent-dir>/workflow/skills/`, not normally scanned skill directories.
 
 Default managed skill paths (relative to `<agent-dir>/workflow/skills/`):
 - mock: `mockup-first/SKILL.md`

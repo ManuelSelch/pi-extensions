@@ -30,7 +30,8 @@ async function createWorkflowDriver(t) {
   setTrusted(value){trusted=value;},setUI(value){hasUI=value;},
   async discover(){discovered=await events.get('resources_discover')({cwd,reason:'startup'},ctx());return discovered;},
   async run({supported=true,sections={other:'preserved'}}={}){lastEvent={systemPromptOptions:supported?{sections}:{}};await events.get('before_agent_start')(lastEvent,ctx());return lastEvent;},
-  async choose(actions=[],scope=''){choices=[...actions];await commands.get('workflow').handler(scope,ctx());assert.equal(choices.length,0);},
+  async choose(actions=[],scope='local'){choices=[...actions];await commands.get('workflow').handler(scope,ctx());assert.equal(choices.length,0);},
+  async invoke(args=''){await commands.get('workflow').handler(args,ctx());},
   async status(){await commands.get('workflow').handler('status',ctx());},
   async preview(){await commands.get('workflow').handler('preview',ctx());},
   thenPromptContains(text){assert.ok(lastEvent.systemPromptOptions.sections.workflow.includes(text));},
@@ -65,8 +66,8 @@ async function createWorkflowDriver(t) {
   async thenNoProjectConfig(){await assert.rejects(fs.stat(path.join(cwd,'.pi/workflow.json')),/ENOENT/);},
   thenPreviewOnlyPrompts(){const text=notifications.at(-1).text;assert.ok(text.includes('mock instructions'));assert.ok(!text.includes('SECRET'));},
   thenNoLegacyFallback(){assert.equal(lastEvent.systemPrompt,undefined);assert.equal(lastEvent.systemPromptOptions.appendSystemPrompt,undefined);},
-  async revokeTrustDuringSave(){choices=['mock',()=>{trusted=false;return 'Save';}];await commands.get('workflow').handler('',ctx());},
-  async toggleConcurrently(step){choices=[step,async options=>{await write(path.join(cwd,'.pi/workflow.json'),{steps:{[step]:{enabled:false}}});return 'Save';}];await commands.get('workflow').handler('',ctx());},
+  async revokeTrustDuringSave(){choices=['mock',()=>{trusted=false;return 'Save';}];await commands.get('workflow').handler('local',ctx());},
+  async toggleConcurrently(step){choices=[step,async options=>{await write(path.join(cwd,'.pi/workflow.json'),{steps:{[step]:{enabled:false}}});return 'Save';}];await commands.get('workflow').handler('local',ctx());},
  };
 }
 module.exports={createWorkflowDriver};

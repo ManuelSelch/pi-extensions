@@ -31,8 +31,8 @@ export default function workflowExtension(pi: ExtensionAPI): void {
   }
  });
  pi.registerCommand("workflow", {
-  description: "Select enabled workflow steps (project by default; global, status, preview)",
-  getArgumentCompletions: prefix => ["global", "status", "preview"].filter(s => s.startsWith(prefix)).map(value => ({ value, label: value })),
+  description: "Select enabled workflow steps (local, global, status, preview)",
+  getArgumentCompletions: prefix => ["local", "global", "status", "preview"].filter(s => s.startsWith(prefix)).map(value => ({ value, label: value })),
   handler: async (args, ctx) => {
    try {
     const command = parseCommand(args);

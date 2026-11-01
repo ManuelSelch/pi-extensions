@@ -83,7 +83,7 @@ export class WorkflowDraft {
 
 export function parseCommand(args: string): "project" | "global" | "status" | "preview" {
 	const command = args.trim();
-	if (!command) return "project";
+	if (command === "local") return "project";
 	if (command === "global" || command === "status" || command === "preview") return command;
-	throw new Error("Usage: /workflow [global|status|preview]");
+	throw new Error("Usage: /workflow [local|global|status|preview]");
 }

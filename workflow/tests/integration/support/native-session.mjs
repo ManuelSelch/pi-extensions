@@ -26,7 +26,7 @@ try {
  assert.equal(first.systemPromptOptions.sections.workflow,'## mock\nNATIVE MOCK');
  assert.equal(first.systemPromptOptions.sections.other,'PRESERVED');
  assert.equal((await before()).systemPromptOptions.sections.workflow,first.systemPromptOptions.sections.workflow);
- await session.prompt('/workflow');
+ await session.prompt('/workflow local');
  assert.equal(dialogs.length,2);
  assert.ok(dialogs[0].title.includes('project'));
  assert.ok(dialogs[0].options.includes('[x] mock'));
