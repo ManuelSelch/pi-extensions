@@ -43,6 +43,9 @@ class HandoffDriver {
     this.newSessions = [];
     this.prompts = [];
     this.archives = [];
+    this.archiveError = undefined;
+    this.busyArchiveAttempts = 0;
+    this.archiveCalls = 0;
     this.hostAvailable = true;
     this.editorTexts = [];
     this.skills = ['skill:code-reviewer'];
@@ -103,9 +106,16 @@ class HandoffDriver {
     const { createPiChatExtensionRegistry } = await import('@manuelselch/pi-server/extensions');
     const registry = createPiChatExtensionRegistry();
     if (this.hostAvailable) registry.bindSessionHost({ archive: async source => {
+      this.archiveCalls++;
+      if (this.busyArchiveAttempts > 0) {
+        this.busyArchiveAttempts--;
+        const error = new Error('session busy');
+        error.code = 'sessionBusy';
+        throw error;
+      }
+      if (this.archiveError) throw this.archiveError;
       this.timeline.push('archive');
       this.archives.push(source);
-      if (this.archiveError) throw this.archiveError;
     } });
     this.commands = new Map();
     loadTs(path.join(root, 'handoff/index.ts'), {

@@ -3,6 +3,22 @@ import { getPiChatExtensionRegistry } from "@manuelselch/pi-server/extensions";
 import { formatHandoff, parseArguments, reviewSessionName, USAGE } from "../domain/handoff.js";
 import { collectReviewFacts, HandoffFactsError } from "../infra/git-facts.js";
 
+const ARCHIVE_RETRY_MS = 50;
+const ARCHIVE_WAIT_LIMIT_MS = 30_000;
+
+async function archiveWhenIdle(archive: (path: string) => Promise<void>, path: string): Promise<void> {
+	const deadline = Date.now() + ARCHIVE_WAIT_LIMIT_MS;
+	while (true) {
+		try {
+			await archive(path);
+			return;
+		} catch (error) {
+			if (!(error && typeof error === "object" && "code" in error && error.code === "sessionBusy") || Date.now() >= deadline) throw error;
+			await new Promise(resolve => setTimeout(resolve, ARCHIVE_RETRY_MS));
+		}
+	}
+}
+
 async function handoffReview(pi: ExtensionAPI, args: string, ctx: ExtensionCommandContext): Promise<void> {
 	if (!parseArguments(args).ok) return ctx.ui.notify(USAGE, "error");
 	if (!ctx.hasUI) return ctx.ui.notify("/handoff review needs an editor and confirmation dialog. Nothing changed.", "error");
@@ -34,27 +50,35 @@ async function handoffReview(pi: ExtensionAPI, args: string, ctx: ExtensionComma
 		return ctx.ui.notify("Handoff cancelled. Nothing changed.", "info");
 
 	// Session replacement keeps the host's cwd. No parentSession or copied history.
-	const result = await ctx.newSession({
-		setup: async manager => { manager.appendSessionInfo(name); },
-		withSession: async next => {
-			try {
-				// Use the normal prompt path once: skill expansion and persistence belong to Pi.
-				await next.sendUserMessage(`/skill:code-reviewer ${handoff}`, { expandPromptTemplates: true });
-			} catch (error) {
-				next.ui.notify(`Review could not start: ${error instanceof Error ? error.message : String(error)}. The implementation session was not archived.`, "error");
-				next.ui.setEditorText(`/skill:code-reviewer ${handoff}`);
-				return;
-			}
+	let result;
+	try {
+		result = await ctx.newSession({
+			setup: async manager => { manager.appendSessionInfo(name); },
+			withSession: async next => {
+				try {
+					// Use the normal prompt path once: skill expansion and persistence belong to Pi.
+					await next.sendUserMessage(`/skill:code-reviewer ${handoff}`, { expandPromptTemplates: true });
+				} catch (error) {
+					next.ui.notify(`Review could not start: ${error instanceof Error ? error.message : String(error)}. The implementation session was not archived.`, "error");
+					next.ui.setEditorText(`/skill:code-reviewer ${handoff}`);
+					return;
+				}
 
-			if (!source || !host) return next.ui.notify(archiveNotice, "info");
-			try {
-				await host.archive(source);
-				next.ui.notify("Implementation session archived.", "info");
-			} catch (error) {
-				next.ui.notify(`Review started, but archiving could not be confirmed: ${error instanceof Error ? error.message : String(error)}. Check the implementation session in Pi Chat: ${source}`, "warning");
-			}
-		},
-	});
+				if (!source || !host) return next.ui.notify(archiveNotice, "info");
+				// The source request is still settling while ctx.newSession() runs. Defer
+				// archival until after this command yields, retrying transient busy states.
+				setTimeout(() => {
+					void archiveWhenIdle(host.archive.bind(host), source).then(
+						() => next.ui.notify("Implementation session archived.", "info"),
+						error => next.ui.notify(`Review started, but archiving could not be confirmed: ${error instanceof Error ? error.message : String(error)}. Check the implementation session in Pi Chat: ${source}`, "warning"),
+					);
+				}, 0);
+			},
+		});
+	} catch (error) {
+		ctx.ui.notify(`Review session could not be created: ${error instanceof Error ? error.message : String(error)}. The implementation session was not archived.`, "error");
+		return;
+	}
 	if (result.cancelled) ctx.ui.notify("Another extension cancelled the new session. Implementation session left unchanged.", "warning");
 }
 

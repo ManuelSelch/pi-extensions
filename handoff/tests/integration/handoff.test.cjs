@@ -2,6 +2,14 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { HandoffDriver } = require('./support/handoff-driver.cjs');
 
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.fail('condition did not become true');
+}
+
 test('drafts repository facts, matching artifacts, exact Git scope and verification gaps', async t => {
   const handoff = new HandoffDriver(t).featureBranch();
   handoff.confirmReplies = [false];
@@ -50,16 +58,19 @@ test('editor cancellation, blank input and declined confirmation change nothing'
 
 test('creates an unlinked named session and submits the edited handoff once through the reviewer skill', async t => {
   const handoff = new HandoffDriver(t).featureBranch();
+  handoff.busyArchiveAttempts = 1;
   handoff.editorReply = draft => draft + '\nReview this note too.\n';
   const sourceBefore = handoff.implementationContents();
 
   await handoff.run();
+  await waitFor(() => handoff.archives.length === 1);
 
   assert.equal(handoff.newSessions.length, 1);
   assert.equal(handoff.newSessions[0].parentSession, undefined);
   assert.deepEqual(handoff.review.entries, [{ type: 'session_info', name: 'Review: handoff-review' }]);
   assert.deepEqual(handoff.timeline, ['name', 'prompt', 'archive']);
   assert.deepEqual(handoff.archives, [handoff.implementationSession]);
+  assert.equal(handoff.archiveCalls, 2);
   assert.equal(handoff.prompts.length, 1);
   assert.equal(handoff.prompts[0].content, '/skill:code-reviewer ' + handoff.draft + '\nReview this note too.\n');
   assert.equal(handoff.prompts[0].cwd, handoff.repo);
@@ -80,6 +91,7 @@ test('waits for successful review submission before archiving', async t => {
   const archivesWhilePending = [...handoff.archives];
   finishPrompt();
   await running;
+  await waitFor(() => handoff.archives.length === 1);
 
   assert.deepEqual(archivesWhilePending, []);
   assert.deepEqual(handoff.archives, [handoff.implementationSession]);
@@ -114,9 +126,10 @@ test('archive failure leaves the review running without restoring or resubmittin
   handoff.archiveError = new Error('metadata persistence uncertain');
 
   await handoff.run();
+  await waitFor(() => handoff.notifications.some(note => note.level === 'warning'));
 
-  assert.deepEqual(handoff.timeline, ['name', 'prompt', 'archive']);
-  assert.deepEqual(handoff.archives, [handoff.implementationSession]);
+  assert.deepEqual(handoff.timeline, ['name', 'prompt']);
+  assert.deepEqual(handoff.archives, []);
   assert.equal(handoff.prompts.length, 1);
   assert.deepEqual(handoff.editorTexts, []);
   handoff.expectNotified('warning', /review started.*archiv.*metadata persistence uncertain.*Pi Chat/i);
@@ -150,10 +163,11 @@ test('session creation failure never archives the source', async t => {
   const handoff = new HandoffDriver(t).featureBranch();
   handoff.creationError = new Error('creation failed');
 
-  await assert.rejects(handoff.run(), /creation failed/);
+  await handoff.run();
 
   assert.deepEqual(handoff.archives, []);
   assert.deepEqual(handoff.prompts, []);
+  handoff.expectNotified('error', /session could not be created: creation failed.*not archived/i);
 });
 
 test('rejects missing reviewer skill, non-Git directory, headless mode and running sessions', async t => {
