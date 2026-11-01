@@ -13,7 +13,8 @@ export class PipelineStatusReader {
   private readonly github = new Map<string, GitHubActions>();
   private stopped = false;
 
-  async read(cwd: string): Promise<PipelineStatus> {
+  /** Force bypasses the remote TTL, but still shares any in-flight refresh. */
+  async read(cwd: string, options: { force?: boolean } = {}): Promise<PipelineStatus> {
     this.assertLive();
     const root = await projectRoot(cwd);
     this.assertLive(); // Disposal may happen while Git/realpath resolves the cwd.
@@ -22,7 +23,7 @@ export class PipelineStatusReader {
       reader = new GitHubActions(root);
       this.github.set(root, reader);
     }
-    const [local, github] = await Promise.all([new Pipeline(root).status(), reader.read()]);
+    const [local, github] = await Promise.all([new Pipeline(root).status(), reader.read(options)]);
     this.assertLive(); // Never publish a cancelled lifecycle's late results.
     return { ...local, ...(github ? { github } : {}) };
   }

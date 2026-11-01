@@ -30,9 +30,9 @@ const summary = (results: RunResult[]) => results.length ? results.map(r => `${r
 export default function pipelineExtension(pi: ExtensionAPI): void {
 	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]>; automatic: boolean }>();
 	let statusReader = new PipelineStatusReader();
-	async function status(p: Pipeline): Promise<PipelineStatus> {
+	async function status(p: Pipeline, options: { force?: boolean } = {}): Promise<PipelineStatus> {
 		if (shuttingDown) return p.status();
-		return statusReader.read(p.root);
+		return statusReader.read(p.root, options);
 	}
 	let shuttingDown = false;
 	let generation = 0;
@@ -93,7 +93,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		async execute(_id, _params, _signal, _update, ctx) { return response(await status(await pipeline(ctx))); },
 	});
 	pi.registerCommand("pipeline", {
-		description: "Inspect local pipeline and GitHub Actions; run [suite|all], cancel",
+		description: "Refresh local pipeline and GitHub Actions status; run [suite|all], cancel",
 		getArgumentCompletions(prefix) {
 			const values = ["status", "run all", "cancel"].filter(value => value.startsWith(prefix));
 			return values.map(value => ({ value, label: value }));
@@ -114,7 +114,8 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 					monitor?.agentStarted(); // Pause automatic retries until the next settled agent turn.
 					ctx.ui.notify(job ? "Pipeline cancellation requested." : "No pipeline running in this session.", "info");
 				} else if (action === "status") {
-					const current = await status(p);
+					const current = await status(p, { force: true });
+					refreshWidget(p.root);
 					const lines = renderStatus(current, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER);
 					ctx.ui.notify(lines.join("\n") || (!current.configured ? "No pipeline configuration or GitHub Actions runs." : "No pipeline suites configured."), "info");
 				} else throw new Error("Usage: /pipeline [status|run [suite|all]|cancel]");

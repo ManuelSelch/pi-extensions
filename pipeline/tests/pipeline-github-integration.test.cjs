@@ -39,6 +39,32 @@ test('remote-only project exposes status via tool, command and widget using a sh
   assert.equal(stopped, 1);
 });
 
+test('status command forces a remote refresh and updates the widget; tools and polling stay cached', async t => {
+  const reads = [];
+  let current = remote;
+  class Reader {
+    async read(options) {
+      reads.push(options);
+      if (options?.force) current = { ...remote, workflows: [{ name: 'Tests', status: 'completed', conclusion: 'success' }] };
+      return current;
+    }
+    stop() {}
+  }
+  const d = await driver(t, Reader);
+  await d.events.session_start({}, d.ctx);
+  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('◐ GitHub Tests')));
+  await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
+  assert.ok(reads.every(options => !options?.force));
+
+  await d.commands.pipeline.handler('status', d.ctx);
+
+  assert.equal(reads.filter(options => options?.force).length, 1);
+  assert.match(d.notices.at(-1), /✓ Tests passed/);
+  await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('✓ GitHub Tests')));
+  await d.commands.pipeline.handler('', d.ctx);
+  assert.equal(reads.filter(options => options?.force).length, 2);
+});
+
 test('session startup completes while GitHub is pending and the widget appears afterward', async t => {
   let resolveRead, started = false;
   class Reader {

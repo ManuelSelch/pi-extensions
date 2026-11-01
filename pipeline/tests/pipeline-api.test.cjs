@@ -9,7 +9,7 @@ function fixture() {
   let readRemote = async () => ({ repository: 'owner/repo', branch: 'main', workflows: [] });
   class GitHubActions {
     constructor(root) { this.root = root; this.stopped = 0; readers.push(this); }
-    read() { return readRemote(this); }
+    read(options) { return readRemote(this, options); }
     stop() { this.stopped++; }
   }
   class Pipeline {
@@ -44,6 +44,21 @@ test('canonical paths reuse a remote reader while local state is reread; roots r
   assert.deepEqual(f.localReads, ['/one', '/one', '/two']);
   f.reader.stop();
   assert.ok(f.readers.every(reader => reader.stopped === 1));
+});
+
+test('force refresh is forwarded to the shared remote reader without changing local reads', async () => {
+  const f = fixture();
+  const options = [];
+  f.remote(async (_reader, value) => { options.push(value); });
+
+  await f.reader.read('/one');
+  await f.reader.read('/one/sub', { force: true });
+
+  assert.equal(options[0]?.force ?? false, false);
+  assert.equal(options[1].force, true);
+  assert.equal(f.readers.length, 1);
+  assert.deepEqual(f.localReads, ['/one', '/one']);
+  f.reader.stop();
 });
 
 test('concurrent reads of one canonical root share the remote reader', async () => {

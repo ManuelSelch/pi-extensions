@@ -104,6 +104,52 @@ test('cache throttles requests for 60 seconds; changing branches invalidates it'
   assert.equal(d.queries().length, 12);
 });
 
+test('forced reads bypass the TTL, update the shared cache and retain snapshots on failure', async () => {
+  const options = {};
+  const d = driver(options);
+  const initial = await d.reader.read();
+  d.advance(1000);
+
+  const refreshed = await d.reader.read({ force: true });
+
+  assert.notEqual(refreshed, initial);
+  assert.equal(refreshed.checkedAt, new Date(1000).toISOString());
+  assert.equal(d.queries().length, 8);
+  assert.equal(await d.reader.read(), refreshed);
+  assert.equal(d.queries().length, 8);
+
+  options.error = 'ETIMEDOUT';
+  const failed = await d.reader.read({ force: true });
+
+  assert.equal(failed.stale, true);
+  assert.deepEqual(failed.workflows, refreshed.workflows);
+  assert.equal(failed.lastSuccessfulAt, refreshed.lastSuccessfulAt);
+  delete options.error;
+  assert.equal((await d.reader.read({ force: true })).error, undefined);
+});
+
+test('forced and ordinary reads share an in-flight refresh', async () => {
+  const options = { workflows: [{ id: 1, name: 'Tests' }] };
+  const d = driver(options);
+  await d.reader.read();
+  const before = d.queries().length;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  options.fetch = async () => { await gate; return JSON.stringify([{ workflow_runs: [] }]); };
+
+  const forced = d.reader.read({ force: true });
+  await new Promise(resolve => setImmediate(resolve));
+  const second = d.reader.read({ force: true }), ordinary = d.reader.read();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(d.queries().length, before + 2);
+  release();
+  const result = await forced;
+  assert.equal(await second, result);
+  assert.equal(await ordinary, result);
+  assert.equal(await d.reader.read(), result);
+});
+
 test('non-GitHub repositories and detached HEAD make no GitHub requests', async () => {
   for (const remotes of ['', 'origin\thttps://gitlab.com/owner/repo.git (fetch)\n']) {
     const d = driver({ remotes });

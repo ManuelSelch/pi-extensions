@@ -80,7 +80,7 @@ export class GitHubActions {
 	private pending?: Promise<GitHubStatus | undefined>;
 	constructor(private readonly root: string, private readonly run: Execute = execute, private readonly now = Date.now) {}
 	stop() { this.stopped = true; this.lifetime.abort(); this.controller.abort(); }
-	async read(): Promise<GitHubStatus | undefined> {
+	async read({ force = false }: { force?: boolean } = {}): Promise<GitHubStatus | undefined> {
 		if (this.stopped) return undefined;
 		let repo: string | undefined, branch: string;
 		try {
@@ -103,7 +103,7 @@ export class GitHubActions {
 		}
 		if (!repo || !branch) return undefined;
 		if (this.pending) return this.pending;
-		if (this.now() < this.expires) return this.cached;
+		if (!force && this.now() < this.expires) return this.cached;
 		const controller = this.controller;
 		const deadline = setTimeout(() => controller.abort(Object.assign(new Error("GitHub request timed out"), { code: "ETIMEDOUT" })), 15000);
 		deadline.unref();
