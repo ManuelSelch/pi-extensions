@@ -94,9 +94,9 @@ export async function collectReviewFacts(exec: Exec, cwd: string): Promise<Revie
 	const branchName = branch !== "HEAD" && !onDefault ? branch.split("/").pop() : undefined;
 	const names = branchName ? [slug(branchName)] : [];
 	const plans = matchingArtifacts(root, "plans", names, changed);
-	const mockups = matchingArtifacts(root, "mockups", names, changed, "DESIGN.md");
 	const planFolders = [...new Set(plans.map(file => file.split("/")[1]!))];
 	const feature = (planFolders.length === 1 ? planFolders[0] : undefined) ?? branchName ?? basename(root);
+	const mockups = matchingArtifacts(root, "mockups", [...names, feature], changed, "DESIGN.md");
 
 	return {
 		feature, root, branch, head: { sha: head, subject }, base, commits,

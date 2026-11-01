@@ -22,6 +22,19 @@ test('drafts repository facts, matching artifacts, exact Git scope and verificat
   assert.match(handoff.draft, /Verification results are not recorded/);
 });
 
+test('finds unchanged mockups by both branch slug and inferred feature name', async t => {
+  const handoff = new HandoffDriver(t).featureWithExistingMockups();
+  handoff.confirmReplies = [false];
+
+  await handoff.run();
+
+  assert.match(handoff.draft, /^# Review handoff: approved-feature$/m);
+  assert.match(handoff.draft, /Mockups: `mockups\/approved-feature\/DESIGN\.md`, `mockups\/implementation\/DESIGN\.md`/);
+  assert.match(handoff.draft, /mockups\/approved-feature\/DESIGN\.md:2`: Approved revision 1\./);
+  assert.match(handoff.draft, /mockups\/implementation\/DESIGN\.md:2`: Approved revision 1\./);
+  assert.doesNotMatch(handoff.draft, /mockups\/unrelated\//);
+});
+
 test('editor cancellation, blank input and declined confirmation change nothing', async t => {
   for (const reply of [undefined, '', '  ', draft => draft]) {
     const handoff = new HandoffDriver(t).featureBranch();

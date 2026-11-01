@@ -78,6 +78,18 @@ class HandoffDriver {
     this.write('notes.txt', 'scratch\n');
     return this;
   }
+  featureWithExistingMockups() {
+    this.initialRepository();
+    this.write('plans/approved-feature/PLAN.md', '# Feature\nApproved revision 1.\n');
+    for (const name of ['approved-feature', 'implementation', 'unrelated'])
+      this.write(`mockups/${name}/DESIGN.md`, '# Design\nApproved revision 1.\n');
+    this.commit('approve existing baselines');
+    this.git('checkout', '-q', '-b', 'feat/implementation');
+    this.write('plans/approved-feature/PLAN.md', '# Feature\nApproved revision 1.\nImplementation note.\n');
+    this.write('src/feature.ts', 'export const feature = true;\n');
+    this.commit('implement feature');
+    return this;
+  }
   onMainWithoutUpstream() {
     this.initialRepository();
     this.write('src/app.ts', 'export const app = 2;\n');
