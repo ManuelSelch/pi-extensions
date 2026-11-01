@@ -23,6 +23,16 @@ export interface GitHubStatus {
 	stale?: boolean;
 	lastSuccessfulAt?: string;
 }
+interface WorkflowRun {
+	id: number;
+	run_number: number;
+	run_attempt: number;
+	status: string;
+	conclusion: string | null;
+	created_at: string;
+	updated_at?: string;
+	html_url: string;
+}
 type Execute = (file: string, args: string[], cwd: string, signal: AbortSignal) => Promise<string>;
 const exec = promisify(execFile);
 const execute: Execute = async (file, args, cwd, signal) => (await exec(file, args, {
@@ -136,8 +146,13 @@ export class GitHubActions {
 				try {
 					while (index < workflows.length && !signal.aborted) {
 						const position = index++, workflow = workflows[position];
-						const data = await api(`repos/${repo}/actions/workflows/${workflow.id}/runs?branch=${encodeURIComponent(branch)}&per_page=1`);
-						const run = data.workflow_runs[0];
+						const runPages: { workflow_runs: WorkflowRun[] }[] = await api(`repos/${repo}/actions/workflows/${workflow.id}/runs?branch=${encodeURIComponent(branch)}&per_page=100`, true);
+						// GitHub can return older runs first when their timestamps are ahead.
+						// Run numbers order new runs; reruns only change run_attempt.
+						let run: WorkflowRun | undefined;
+						for (const page of runPages) for (const candidate of page.workflow_runs) {
+							if (!run || candidate.run_number > run.run_number) run = candidate;
+						}
 						results[position] = run ? {
 							name: workflow.name, status: run.status, conclusion: run.conclusion ?? undefined,
 							updatedAt: run.updated_at ?? run.created_at, url: run.html_url,
