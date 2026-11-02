@@ -8,4 +8,4 @@ The limit is **two automatic continuations per user request**, currently a code 
 
 This is a deterministic policy over a **model-provided signal**, not a deterministic assessment of task completion or approval needs. A model can omit or mislabel the status, so the extension can miss unfinished work or continue when it should not. Do not rely on the marker as an independent safety or approval guarantee. On older runtimes without structured prompt sections the model receives no status instructions, so automatic detection is not expected to work.
 
-Behavior examples: [continuation scenarios](../../agentic-flow/tests/integration/continuation.test.cjs). These use a simulated lifecycle, not a live provider.
+Behavior examples: [continuation scenarios](../../agentic-flow/tests/integration/continuation.test.cjs) use a simulated lifecycle. [Native boundary tests](../../agentic-flow/tests/integration/native-boundary.test.cjs) exercise Pi's actual settlement boundary against the development and installed server runtimes; neither uses a live provider.

@@ -1,5 +1,6 @@
 [
   "integration/continuation.test.cjs",
+  "integration/native-boundary.test.cjs",
   "App/refresh.test.cjs",
   "App/session.test.cjs",
   "Infra/watch.test.cjs",

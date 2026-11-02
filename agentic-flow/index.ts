@@ -101,7 +101,7 @@ export default function agenticFlowExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("agent_before_settle", (event, ctx) => {
-		if (event.outcome !== "completed" || event.continue || !event.context.canContinue || event.context.pendingMessages.length) return;
+		if (event.outcome !== "completed" || event.continue || event.context.pendingMessages.length) return;
 		const last = event.context.contextMessages.at(-1);
 		if (!last || last.role !== "assistant" || last.stopReason !== "stop") return;
 		const text = last.content.filter(part => part.type === "text").map(part => part.text).join("\n");

@@ -51,9 +51,9 @@ test('a new user request gets a fresh continuation budget', async t => {
  flow.thenContinuationRequested();
 });
 
-test('queued work, unavailable context and incomplete responses do not trigger another continuation', async t => {
+test('queued work and incomplete responses do not trigger another continuation', async t => {
  const flow = await createAgenticFlowDriver(t);
- for (const state of [{ pending: true }, { canContinue: false }, { stopReason: 'length' }]) {
+ for (const state of [{ pending: true }, { stopReason: 'length' }]) {
   await flow.finishWithUnfinishedAnd(state);
   flow.thenNoContinuation();
  }

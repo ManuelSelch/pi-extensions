@@ -17,7 +17,7 @@ async function createAgenticFlowDriver(_testContext) {
  let result;
  async function settle(text, outcome = 'completed', overrides = {}) {
   const message = { role: 'assistant', stopReason: overrides.stopReason || 'stop', content: [{ type: 'text', text }] };
-  result = await handlers.agent_before_settle({ entries: [], continue: overrides.alreadyContinuing || false, outcome, context: { contextMessages: [message], canContinue: overrides.canContinue !== false, pendingMessages: overrides.pending ? [{}] : [] } }, ctx);
+  result = await handlers.agent_before_settle({ entries: [], continue: overrides.alreadyContinuing || false, outcome, context: { contextMessages: [message], canContinue: overrides.canContinue === true, pendingMessages: overrides.pending ? [{}] : [] } }, ctx);
  }
  return {
   async finishWithStatus(status) { await settle(`Work summary.\n\n[agentic-flow: ${status}]`); },
