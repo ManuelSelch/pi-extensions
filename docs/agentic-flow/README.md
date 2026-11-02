@@ -19,4 +19,8 @@ Jev is off by default. `/agentic-flow jev on` enables observation for the curren
 
 On settlement Jev reports `done`, `blocked`, `not-finished`, or `uncertain` and its returned confidence. It does **not** trigger continuation; the existing marker policy remains active even if Jev disagrees or fails. Confidence is provider output, not a calibrated guarantee. No review or pipeline integration is implemented.
 
+## Synthetic Jev replay
+
+Run `node agentic-flow/jev/replay-cli.ts --live` from the repository root with the provider environment variables above. The explicit `--live` flag sends six synthetic fixtures (two each for Done, Blocked and Not Finished) to the configured provider, with one request per fixture; charges may apply. Expected labels and fixture IDs remain local. The report shows expected and actual outcomes, confidence, disagreements and errors; errors produce a nonzero exit status. Without `--live`, no requests are made. The fixtures are development examples, not a held-out benchmark or evidence of calibrated accuracy.
+
 Transport and validation are adapted from the local `pi-session-analyzer` Jev implementation. Behavior examples: [continuation](../../agentic-flow/tests/integration/continuation.test.cjs), [Jev observation](../../agentic-flow/tests/integration/jev-observation.test.cjs), and [native boundary](../../agentic-flow/tests/integration/native-boundary.test.cjs). The provider tests use mocked HTTP; none of these tests calls a live model.
