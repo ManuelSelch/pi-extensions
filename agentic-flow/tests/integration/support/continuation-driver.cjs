@@ -41,6 +41,7 @@ async function createAgenticFlowDriver(_testContext) {
   thenContinuationRequested() { assert.equal(result?.continue, true); assert.match(result.entries.at(-1).content, /continue/i); },
   thenNoContinuation() { assert.notEqual(result?.continue, true); },
   thenLimitReported() { assert.ok(notifications.some(message => /limit/i.test(message))); },
+  thenSkipReasonReported(reason) { assert.ok(notifications.some(message => message.includes(reason))); },
  };
 }
 module.exports = { createAgenticFlowDriver };

@@ -101,11 +101,15 @@ export default function agenticFlowExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("agent_before_settle", (event, ctx) => {
-		if (event.outcome !== "completed" || event.continue || event.context.pendingMessages.length) return;
 		const last = event.context.contextMessages.at(-1);
-		if (!last || last.role !== "assistant" || last.stopReason !== "stop") return;
-		const text = last.content.filter(part => part.type === "text").map(part => part.text).join("\n");
+		const assistant = event.context.contextMessages.findLast(message => message.role === "assistant");
+		if (!assistant || assistant.role !== "assistant") return;
+		const text = assistant.content.filter(part => part.type === "text").map(part => part.text).join("\n");
 		if (!/(?:^|\n)\[agentic-flow: not-finished\]\s*$/.test(text)) return;
+		if (event.outcome !== "completed" || event.continue || event.context.pendingMessages.length || last !== assistant || assistant.stopReason !== "stop") {
+			ctx.ui.notify(`Agentic flow: unfinished marker not continued (outcome=${event.outcome}, alreadyContinuing=${event.continue}, pending=${event.context.pendingMessages.length}, lastRole=${last?.role ?? "none"}, stopReason=${assistant.stopReason}).`, "warning");
+			return;
+		}
 		if (continuations >= MAX_CONTINUATIONS) {
 			ctx.ui.notify(`Agentic flow: continuation limit (${MAX_CONTINUATIONS}) reached.`, "warning");
 			return;
@@ -192,7 +196,7 @@ export default function agenticFlowExtension(pi: ExtensionAPI): void {
 		description: "Show the agentic coding workflow commands",
 		handler: async (_args, ctx) => {
 			ctx.ui.notify(
-				"Agentic flow: discuss normally, use /plan, then /implement <target>, then /review <target>.",
+				"Agentic flow: continuation diagnostics enabled; discuss normally, use /plan, then /implement <target>, then /review <target>.",
 				"info",
 			);
 		},

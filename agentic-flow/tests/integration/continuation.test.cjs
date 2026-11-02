@@ -57,4 +57,6 @@ test('queued work and incomplete responses do not trigger another continuation',
   await flow.finishWithUnfinishedAnd(state);
   flow.thenNoContinuation();
  }
+ flow.thenSkipReasonReported('pending=1');
+ flow.thenSkipReasonReported('stopReason=length');
 });
