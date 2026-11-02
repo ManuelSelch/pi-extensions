@@ -9,6 +9,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { observe } from "./jev/observe.ts";
 import { getTodoStateFromBranch, summary as todoSummary, TODO_SNAPSHOT_ENTRY, todoSnapshot, type TodoState } from "../todo/index.ts";
 
 const EXT_ID = "agentic-flow";
@@ -94,13 +95,23 @@ Never mark a required approval, cancellation, or blocker as not-finished.`;
 
 export default function agenticFlowExtension(pi: ExtensionAPI): void {
 	let continuations = 0;
+	let jevEnabled = false;
+	pi.on("session_start", () => { jevEnabled = false; });
 	pi.on("before_agent_start", (event) => {
 		continuations = 0;
 		const options = event.systemPromptOptions as typeof event.systemPromptOptions & { sections?: Record<string, string> };
 		if (options.sections) options.sections.agentic_flow = STATUS_INSTRUCTIONS;
 	});
 
-	pi.on("agent_before_settle", (event, ctx) => {
+	pi.on("agent_before_settle", async (event, ctx) => {
+		if (jevEnabled && event.outcome === "completed" && !event.continue && !event.context.pendingMessages.length) {
+			try {
+				const result = await observe(event.context.contextMessages);
+				ctx.ui.notify(`Agentic flow Jev (${result.provider}): ${result.outcome}, confidence ${result.confidence}. Observation only.`, "info");
+			} catch {
+				ctx.ui.notify("Agentic flow Jev: classification failed; no Jev-based continuation.", "warning");
+			}
+		}
 		const last = event.context.contextMessages.at(-1);
 		const assistant = event.context.contextMessages.findLast(message => message.role === "assistant");
 		if (!assistant || assistant.role !== "assistant") return;
@@ -194,11 +205,23 @@ export default function agenticFlowExtension(pi: ExtensionAPI): void {
 
 	pi.registerCommand("agentic-flow", {
 		description: "Show the agentic coding workflow commands",
-		handler: async (_args, ctx) => {
-			ctx.ui.notify(
-				"Agentic flow: continuation diagnostics enabled; discuss normally, use /plan, then /implement <target>, then /review <target>.",
-				"info",
-			);
+		handler: async (args, ctx) => {
+			const command = args.trim();
+			if (command === "jev on") {
+				jevEnabled = true;
+				ctx.ui.notify("Jev observation enabled for this session: user request, assistant and tool-result text may be sent unredacted to the configured external provider. Thinking, images, tool arguments and custom messages are omitted.", "warning");
+				return;
+			}
+			if (command === "jev off") {
+				jevEnabled = false;
+				ctx.ui.notify("Jev observation disabled.", "info");
+				return;
+			}
+			if (command) {
+				ctx.ui.notify("Usage: /agentic-flow [jev on|jev off]", "warning");
+				return;
+			}
+			ctx.ui.notify(`Agentic flow: continuation diagnostics enabled; Jev observation ${jevEnabled ? "on" : "off"} (provider: ${process.env.JEV_PROVIDER?.trim() || "typesafe"}).`, "info");
 		},
 	});
 }

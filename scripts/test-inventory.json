@@ -1,5 +1,7 @@
 [
   "integration/continuation.test.cjs",
+  "integration/jev-observation.test.cjs",
+  "integration/jev-provider.test.cjs",
   "integration/native-boundary.test.cjs",
   "App/refresh.test.cjs",
   "App/session.test.cjs",
