@@ -85,7 +85,43 @@ Output:
 - Merge/keep recommendation`;
 }
 
+const MAX_CONTINUATIONS = 2;
+const STATUS_INSTRUCTIONS = `When ending a response, put exactly one status on its own final line:
+[agentic-flow: done] if the user's request is complete;
+[agentic-flow: blocked] if you need user input, approval, or cannot safely proceed;
+[agentic-flow: not-finished] only if work remains and you can proceed without user input.
+Never mark a required approval, cancellation, or blocker as not-finished.`;
+
 export default function agenticFlowExtension(pi: ExtensionAPI): void {
+	let continuations = 0;
+	pi.on("before_agent_start", (event) => {
+		continuations = 0;
+		const options = event.systemPromptOptions as typeof event.systemPromptOptions & { sections?: Record<string, string> };
+		if (options.sections) options.sections.agenticFlow = STATUS_INSTRUCTIONS;
+	});
+
+	pi.on("agent_before_settle", (event, ctx) => {
+		if (event.outcome !== "completed" || event.continue || !event.context.canContinue || event.context.pendingMessages.length) return;
+		const last = event.context.contextMessages.at(-1);
+		if (!last || last.role !== "assistant" || last.stopReason !== "stop") return;
+		const text = last.content.filter(part => part.type === "text").map(part => part.text).join("\n");
+		if (!/(?:^|\n)\[agentic-flow: not-finished\]\s*$/.test(text)) return;
+		if (continuations >= MAX_CONTINUATIONS) {
+			ctx.ui.notify(`Agentic flow: continuation limit (${MAX_CONTINUATIONS}) reached.`, "warning");
+			return;
+		}
+		continuations++;
+		ctx.ui.notify(`Agentic flow: continuing unfinished work (${continuations}/${MAX_CONTINUATIONS}).`, "info");
+		return {
+			entries: [...event.entries, {
+				type: "custom_message" as const,
+				customType: "agentic-flow-continuation",
+				content: "Continue the original request. Finish remaining work and verification; stop if user input or approval is needed.",
+				display: true,
+			}],
+			continue: true,
+		};
+	});
 	pi.registerCommand("implement", {
 		description: "Start a clean session to implement one small target and commit it",
 		handler: async (args, ctx) => {

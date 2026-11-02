@@ -34,7 +34,7 @@ The following modules now have normal folder entry points but remain disabled by
 native agent settings: [agentic-flow](agentic-flow/index.ts),
 [claude-auth](claude-auth/index.ts), [dot-clean](dot-clean/index.ts),
 [pdf](pdf/index.ts), [session-cleanup](session-cleanup/index.ts), and
-[thinking-toggle](thinking-toggle/index.ts). `/extensions` lists them as disabled;
+[thinking-toggle](thinking-toggle/index.ts). Agentic flow's continuation draft is described in [its usage guide](docs/agentic-flow/README.md). `/extensions` lists them as disabled;
 their current manager defaults are false. There are no `.disabled` source files.
 
 Disablement is local configuration, not a property of the source folder. Before

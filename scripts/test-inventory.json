@@ -1,4 +1,5 @@
 [
+  "integration/continuation.test.cjs",
   "App/refresh.test.cjs",
   "App/session.test.cjs",
   "Infra/watch.test.cjs",
