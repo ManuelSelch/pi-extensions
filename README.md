@@ -57,8 +57,8 @@ into that agent's `settings.json` (preserve any existing entries):
 The authorized one-time migration backs up and updates the user's settings and
 manager defaults before exposing these entry points. No runtime settings
 migration is added. Existing implementations are preserved; these disabled
-modules are excluded from the active-source typecheck and are not certified for
-intentional reactivation. Absent/external extensions such as `workspace` remain
+modules other than `agentic-flow` are excluded from the active-source typecheck.
+Disabled modules are not certified for intentional reactivation. Absent/external extensions such as `workspace` remain
 outside this repository's migration.
 
 ## Open the current directory in an app
