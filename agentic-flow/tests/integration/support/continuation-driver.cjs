@@ -31,8 +31,8 @@ async function createAgenticFlowDriver(_testContext) {
    const { resolve } = require('node:path');
    const runtime = await import(pathToFileURL(resolve(__dirname, '../../../../node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js')).href);
    const sections = runtime.buildSystemPromptSections({ ...options, cwd: process.cwd() });
-   assert.match(sections['agentic-flow'], /approval/);
-   assert.match(sections['agentic-flow'], /not-finished/);
+   assert.match(sections.agentic_flow, /approval/);
+   assert.match(sections.agentic_flow, /not-finished/);
   },
   async exhaustContinuationLimit() {
    await settle('[agentic-flow: not-finished]');
