@@ -97,7 +97,7 @@ export default function agenticFlowExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", (event) => {
 		continuations = 0;
 		const options = event.systemPromptOptions as typeof event.systemPromptOptions & { sections?: Record<string, string> };
-		if (options.sections) options.sections.agenticFlow = STATUS_INSTRUCTIONS;
+		if (options.sections) options.sections["agentic-flow"] = STATUS_INSTRUCTIONS;
 	});
 
 	pi.on("agent_before_settle", (event, ctx) => {

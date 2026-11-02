@@ -26,7 +26,14 @@ async function createAgenticFlowDriver(_testContext) {
   async cancelWithUnfinishedWork() { await settle('[agentic-flow: not-finished]', 'aborted'); },
   async finishWithUnfinishedAnd(overrides) { await settle('[agentic-flow: not-finished]', 'completed', overrides); },
   async startNewRequest() { await handlers.before_agent_start({ systemPromptOptions: { sections: {} } }, ctx); },
-  thenStatusInstructionsProvided() { assert.match(options.sections.agenticFlow, /approval/); assert.match(options.sections.agenticFlow, /not-finished/); },
+  async thenStatusInstructionsProvided() {
+   const { pathToFileURL } = require('node:url');
+   const { resolve } = require('node:path');
+   const runtime = await import(pathToFileURL(resolve(__dirname, '../../../../node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js')).href);
+   const sections = runtime.buildSystemPromptSections({ ...options, cwd: process.cwd() });
+   assert.match(sections['agentic-flow'], /approval/);
+   assert.match(sections['agentic-flow'], /not-finished/);
+  },
   async exhaustContinuationLimit() {
    await settle('[agentic-flow: not-finished]');
    await settle('[agentic-flow: not-finished]');

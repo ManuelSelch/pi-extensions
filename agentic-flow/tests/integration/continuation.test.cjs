@@ -3,7 +3,7 @@ const { createAgenticFlowDriver } = require('./support/continuation-driver.cjs')
 
 test('explicit unfinished work requests a continuation', async t => {
  const flow = await createAgenticFlowDriver(t);
- flow.thenStatusInstructionsProvided();
+ await flow.thenStatusInstructionsProvided();
  await flow.finishWithStatus('not-finished');
  flow.thenContinuationRequested();
 });
