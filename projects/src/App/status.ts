@@ -1,6 +1,6 @@
 import type { Catalogue, Project } from "../Domain/catalogue.ts";
 import { ProjectPipelineReader } from "../Infra/pipeline.ts";
-import type { PipelineStatus } from "../../../pipeline/api.ts";
+import type { PipelineStatus } from "../../../pipeline/core/api.ts";
 import { renderRepositoryStatus } from "../UI/Components/status.ts";
 
 export interface RepositoryStatus {

@@ -9,7 +9,7 @@ class WaitToolDriver {
     const { default: extension } = load('pipeline/index.ts', {
       typebox: { Type },
       '@earendil-works/pi-coding-agent': { withFileMutationQueue: (_path, fn) => fn() },
-      './app/wait.ts': { waitForPipeline: async (reader, options) => {
+      '../core/wait.ts': { waitForPipeline: async (reader, options) => {
         calls.push({ reader, options });
         options.onUpdate({ outcome: 'waiting', runs: [] });
         if (outcome) return { outcome, runs: [] };

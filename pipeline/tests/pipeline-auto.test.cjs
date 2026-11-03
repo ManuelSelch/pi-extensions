@@ -107,7 +107,7 @@ test('simultaneous automatic requests in separate sessions cannot duplicate exec
 });
 
 test('scheduler waits for agent settlement and quiet code, then skips unchanged code silently', async () => {
-  const { PipelineMonitor } = load('pipeline/widget.ts');
+  const { PipelineMonitor } = load('pipeline/core/monitor.ts');
   const clock = fakeClock(), status = autoStatus(), rendered = []; let runs = 0;
   const monitor = new PipelineMonitor(async () => status, s => rendered.push(s), clock, {
     idle: () => true, cancel() {}, run: async () => { runs++; finished(status, clock); },
@@ -123,7 +123,7 @@ test('scheduler waits for agent settlement and quiet code, then skips unchanged 
 });
 
 test('scheduler respects cooldown, cancels on a new turn, and does not repeatedly retry a failed unchanged run', async () => {
-  const { PipelineMonitor } = load('pipeline/widget.ts'); const clock = fakeClock(), status = autoStatus();
+  const { PipelineMonitor } = load('pipeline/core/monitor.ts'); const clock = fakeClock(), status = autoStatus();
   let runs = 0, cancels = 0;
   const monitor = new PipelineMonitor(async () => status, () => {}, clock, {
     idle: () => true, cancel() { cancels++; }, run: async () => { runs++; finished(status, clock, 'failed'); },
@@ -139,7 +139,7 @@ test('scheduler respects cooldown, cancels on a new turn, and does not repeatedl
 });
 
 test('shutdown cancels automatic work, stops all timers and rejects late read resurrection', async () => {
-  const { PipelineMonitor } = load('pipeline/widget.ts'); const clock = fakeClock();
+  const { PipelineMonitor } = load('pipeline/core/monitor.ts'); const clock = fakeClock();
   let completeRead; const render = [];
   const monitor = new PipelineMonitor(() => new Promise(resolve => { completeRead = resolve; }), status => render.push(status), clock);
   const starting = monitor.start(); const stopping = monitor.stop();
@@ -149,7 +149,7 @@ test('shutdown cancels automatic work, stops all timers and rejects late read re
 });
 
 test('automatic errors are silent and retried with backoff; an active agent prevents execution', async () => {
-  const { PipelineMonitor } = load('pipeline/widget.ts'); const clock = fakeClock(), status = autoStatus();
+  const { PipelineMonitor } = load('pipeline/core/monitor.ts'); const clock = fakeClock(), status = autoStatus();
   let runs = 0, idle = false;
   const monitor = new PipelineMonitor(async () => status, () => {}, clock, {
     idle: () => idle, cancel() {}, run: async () => { runs++; throw new Error('busy or unapproved'); },

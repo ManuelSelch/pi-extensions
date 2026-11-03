@@ -8,8 +8,8 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type { GitHubStatus } from "./github.ts";
-import { parseConfigYaml, formatConfigYaml } from "./infra/config-format.ts";
-import { configurationReview, executionSummary } from "./ui/components/approval.ts";
+import { parseConfigYaml, formatConfigYaml } from "./config-format.ts";
+import { configurationReview, executionSummary } from "./approval.ts";
 
 const exec = promisify(execFile);
 export type Confirm = (description: string) => Promise<boolean>;

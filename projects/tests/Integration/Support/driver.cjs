@@ -16,7 +16,7 @@ function createDriver(t) {
   let response = async () => ({ configured: false, suites: {} });
   const statusLoad = loader({
     '@earendil-works/pi-coding-agent': { getAgentDir: () => path.join(root, 'agent') },
-    '../../../pipeline/api.ts': { PipelineStatusReader: class {
+    '../../../pipeline/core/api.ts': { PipelineStatusReader: class {
       constructor() { readers.push(this); this.stopped = false; }
       read(path) { reads.push(path); return response(path); }
       stop() { this.stopped = true; }

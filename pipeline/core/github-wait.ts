@@ -1,6 +1,6 @@
-import { execute, repository, errorKind, errorMessages } from "../github.ts";
+import { execute, repository, errorKind, errorMessages } from "./github.ts";
 
-import { successfulConclusion, type WaitTarget, type WaitRun, type WaitJob } from "../domain/wait.ts";
+import { successfulConclusion, type WaitTarget, type WaitRun, type WaitJob } from "./wait-types.ts";
 
 /** Uncached exact-commit queries, separate from the branch-status monitor. */
 export class GitHubWaitReader {

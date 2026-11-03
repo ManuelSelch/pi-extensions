@@ -3,6 +3,17 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { fixture, config, waitFor } = require('./pipeline-helpers.cjs');
 
+test('Pi discovers the pipeline directory entry point', async t => {
+  const f = await fixture(t);
+  const { discoverAndLoadExtensions } = await import('../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js');
+
+  const result = await discoverAndLoadExtensions([path.resolve(__dirname, '..')], f.root, path.join(f.root, 'empty-agent'));
+
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.extensions.length, 1);
+  assert.ok(result.extensions[0].tools.has('pipeline_status'));
+});
+
 test('real Pi loader integrates config approval, hidden/populated widgets and silent after-agent execution', async t => {
   const f = await fixture(t);
   const before = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = f.cache;

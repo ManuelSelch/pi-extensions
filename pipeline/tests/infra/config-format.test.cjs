@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { load } = require('../pipeline-helpers.cjs');
 const { validateConfig } = load();
-const { parseConfigYaml, formatConfigYaml } = load('pipeline/infra/config-format.ts');
+const { parseConfigYaml, formatConfigYaml } = load('pipeline/core/config-format.ts');
 const normalized = (suites = {}, prepare) => validateConfig({ suites, ...(prepare ? { prepare } : {}) });
 const step = (command = ['npm', 'test'], extra = {}) => ({ command, ...extra });
 

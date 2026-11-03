@@ -1,5 +1,5 @@
 import { Document, isSeq, parseDocument, visit } from "yaml";
-import type { Config } from "../core.ts";
+import type { Config } from "./pipeline.ts";
 
 /** Only YAML's core scalar types; duplicate keys and ambiguous/custom tags fail closed. */
 export function parseConfigYaml(text: string): unknown {

@@ -19,7 +19,7 @@ function driver(options = {}) {
     const pages = options.runPages ?? [{ workflow_runs: id === '1' ? [{ id: 100, run_number: 1, run_attempt: options.attempt ?? 2, status: 'completed', conclusion: 'success', created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:01:00Z', html_url: 'https://github.com/owner/repo/actions/runs/100' }] : [] }];
     return JSON.stringify(pages);
   };
-  const { GitHubActions } = load('pipeline/github.ts');
+  const { GitHubActions } = load('pipeline/core/github.ts');
   const reader = new GitHubActions('/project', execute, () => now);
   return { reader, calls, branch(value) { branch = value; }, advance(ms) { now += ms; }, queries() { return calls.filter(([file]) => file === 'gh'); } };
 }
@@ -278,7 +278,7 @@ test('switching branches aborts previous fetches and discards their late results
 
 test('production CLI boundary enforces timeout, output bounds and noninteractive GitHub host', async () => {
   const invocations = [];
-  const { GitHubActions } = load('pipeline/github.ts', {
+  const { GitHubActions } = load('pipeline/core/github.ts', {
     'node:util': { promisify: fn => fn },
     'node:child_process': { execFile: async (file, args, options) => {
       invocations.push({ file, args, options });

@@ -1,4 +1,4 @@
-import type { PipelineStatus, SuiteStatus, JobStatus } from "../../../../pipeline/api.ts";
+import type { PipelineStatus, SuiteStatus, JobStatus } from "../../../../pipeline/core/api.ts";
 
 // CLI errors and remote names must not emit terminal controls.
 const safe = (value: string) => value.replace(/[\x00-\x1f\x7f-\x9f]/g, "");

@@ -2,6 +2,8 @@
 
 Provides native-confirmed local test configuration, manual execution, persisted results, a compact status widget, opt-in after-agent scheduling and automatic read-only GitHub Actions status.
 
+Shared pipeline logic lives in `pipeline/core/`; Pi-specific registration and rendering live in `pipeline/pi/`. The root `pipeline/index.ts` is the Pi loader entry point.
+
 ## Usage
 
 Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the native popup: stacked plain-text entries for creation, a focused field-level diff for updates. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
@@ -48,10 +50,10 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after
 
 ## TypeScript status API
 
-Other extensions in this repository can import the public `pipeline/api.ts` module instead of calling slash commands or reading private cache files:
+Other extensions in this repository can import the public `pipeline/core/api.ts` module instead of calling slash commands or reading private cache files:
 
 ```typescript
-import { PipelineStatusReader, type PipelineStatus } from "./pipeline/api.ts";
+import { PipelineStatusReader, type PipelineStatus } from "./pipeline/core/api.ts";
 
 const reader = new PipelineStatusReader();
 try {
@@ -82,7 +84,7 @@ After the user approves a merge/push and the push finishes, call `pipeline_wait(
 - Returns `passed` when all discovered conclusions are `success`, `neutral` or `skipped`; other terminal conclusions (including cancelled, timed out, missing and unknown) return `failed`. It waits for the remaining runs even if one already failed. Run names, IDs, attempts, conclusions and URLs are retained. Failed runs include paginated failed/non-success job names and URLs for their exact attempt; unavailable job details are marked explicitly and never turn a failure into success.
 - Other outcomes: `not-found` when successful discovery queries found no runs before the deadline; `timed-out` when runs remain unfinished/unconfirmed or resolution/querying exhausted the deadline; `cancelled` for tool cancellation/session replacement/shutdown; `unavailable` for Git/CLI/API failures. Every non-passing result is a tool error with structured details. No stale snapshot is accepted after a query error; raw CLI diagnostics are not exposed.
 - The tool emits progress updates while waiting. Aborting it or replacing/shutting down/reloading the session aborts pending requests and sleeps, awaits cleanup, and only stops local observation—it never cancels remote CI. `/pipeline cancel` remains specific to local suite runs.
-- Implementation: `app/wait.ts` owns the deadline/polling lifecycle, `infra/github-wait.ts` owns uncached read-only Git/`gh` access, and `domain/wait.ts` owns run values and conclusion policy. There is no persistent waiter, background agent continuation, automatic repair, push, merge, rerun or CI configuration change. Existing status/widget branch semantics are unchanged.
+- Implementation: `core/wait.ts` owns the deadline/polling lifecycle, `core/github-wait.ts` owns uncached read-only Git/`gh` access, and `core/wait-types.ts` owns run values and conclusion policy. There is no persistent waiter, background agent continuation, automatic repair, push, merge, rerun or CI configuration change. Existing status/widget branch semantics are unchanged.
 
 ## Automatic GitHub Actions status
 

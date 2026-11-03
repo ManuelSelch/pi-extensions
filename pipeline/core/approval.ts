@@ -1,4 +1,4 @@
-import type { Config, Prepare, Suite } from "../../core.ts";
+import type { Config, Prepare, Suite } from "./pipeline.ts";
 
 // Preserve literal argument boundaries and escape control characters in plain-text dialogs.
 const literal = (value: string) => /^[a-zA-Z0-9_./:@%+=,-]+$/.test(value) ? value : JSON.stringify(value);

@@ -19,7 +19,7 @@ entry points directly through jiti; there is no build step.
 | [minimal-tui/index.ts](minimal-tui/index.ts) | Suppress startup package notifications and hide footer token/cost stats. |
 | [model-filter/index.ts](model-filter/index.ts) | `/models-filter`, `/models-add`, `/models-remove` — edit the enabled-model filter. |
 | [pi-open/index.ts](pi-open/index.ts) | `/open <app>` — open the current directory in a configured app. |
-| [pipeline/index.ts](pipeline/index.ts) | `/pipeline`, `pipeline_configure`, `pipeline_run`, `pipeline_status`, `pipeline_wait` — approved local tests, GitHub Actions status and commit-pinned CI waiting. See [usage](docs/pipeline/README.md). |
+| [pipeline/index.ts](pipeline/index.ts) | `/pipeline`, `pipeline_configure`, `pipeline_run`, `pipeline_status`, `pipeline_wait` — approved local tests, GitHub Actions status and commit-pinned CI waiting. See [usage](pipeline/docs/README.md). |
 | [preview/index.ts](preview/index.ts) | `/preview`, `preview_start`, `preview_manage` — managed development previews. |
 | [projects/index.ts](projects/index.ts) | `/projects` — virtual repository collections, pipeline status and native `/projects browse` menus. See [usage](docs/projects/README.md). |
 | [quiz/index.ts](quiz/index.ts) | `quiz` — one multiple-choice check and written reasoning, using native select/editor dialogs. See [usage](docs/quiz/README.md). |

@@ -6,9 +6,9 @@ Retain the last successful GitHub snapshot when a refresh fails. Replace the nor
 ## Components
 | Package/module | Component | Change | Responsibility |
 |---|---|---|---|
-| pipeline | [GitHubActions](../../pipeline/github.ts) | Changed | Own session-local last-success data and classify refresh failures |
-| pipeline | [renderWidget](../../pipeline/widget.ts) | Changed | Render warning heading and muted cached rows, retaining outcome symbols |
-| pipeline | [PipelineStatusReader](../../pipeline/api.ts) | Reused | Expose structured remote status to tools and widget |
+| pipeline | [GitHubActions](../core/github.ts) | Changed | Own session-local last-success data and classify refresh failures |
+| pipeline | [renderWidget](../pi/widget.ts) | Changed | Render warning heading and muted cached rows, retaining outcome symbols |
+| pipeline | [PipelineStatusReader](../core/api.ts) | Reused | Expose structured remote status to tools and widget |
 
 ## Runtime flow
 1. Existing monitor/status request invokes GitHubActions.read().

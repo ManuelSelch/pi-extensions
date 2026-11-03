@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { PipelineStatusReader, type PipelineStatus } from "../../../pipeline/api.ts";
+import { PipelineStatusReader, type PipelineStatus } from "../../../pipeline/core/api.ts";
 
 /** Session-owned public API adapter. Does not register UI or execute suites. */
 export class ProjectPipelineReader {

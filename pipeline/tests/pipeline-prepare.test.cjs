@@ -163,7 +163,7 @@ test('tool schema exposes optional preparation, guidance, and visible blocking s
   assert.ok(!schema.required.includes('prepare'));
   assert.match(tools.pipeline_configure.description, /fresh.*worktree/i);
   assert.match(tools.pipeline_configure.description, /npm ci/);
-  const { renderWidget } = load('pipeline/widget.ts');
+  const { renderWidget } = load('pipeline/pi/widget.ts');
   const status = { configured: true, suites: { unit: { outcome: 'never', stale: false } },
     prepare: { outcome: 'failed', stale: false, startedAt: new Date().toISOString() } };
   const lines = renderWidget(status, { fg: (_color, text) => text }, 100);

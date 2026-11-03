@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { load } = require('../pipeline-helpers.cjs');
-const { waitForPipeline } = load('pipeline/app/wait.ts');
+const { waitForPipeline } = load('pipeline/core/wait.ts');
 
 const run = (id = 1, status = 'completed', conclusion = 'success', attempt = 1) => ({ id, attempt, name: `Workflow ${id}`, status, conclusion, url: `https://github.com/o/r/actions/runs/${id}` });
 function fixture(snapshots, options = {}) {

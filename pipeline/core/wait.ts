@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { GitHubWaitReader, waitError } from "../infra/github-wait.ts";
-import { successfulConclusion, type WaitTarget, type WaitRun } from "../domain/wait.ts";
+import { GitHubWaitReader, waitError } from "./github-wait.ts";
+import { successfulConclusion, type WaitTarget, type WaitRun } from "./wait-types.ts";
 
 export interface WaitOptions {
 	ref?: string;

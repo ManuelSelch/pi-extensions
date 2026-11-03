@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { load } = require('../pipeline-helpers.cjs');
-const { GitHubWaitReader } = load('pipeline/infra/github-wait.ts');
+const { GitHubWaitReader } = load('pipeline/core/github-wait.ts');
 const sha = 'a'.repeat(40);
 const wireRun = (overrides = {}) => ({ id: 1, run_attempt: 2, name: 'Tests', head_sha: sha, status: 'completed', conclusion: 'success', html_url: 'https://github.com/o/r/actions/runs/1', ...overrides });
 function fixture(options = {}) {

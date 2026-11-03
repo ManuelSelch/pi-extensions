@@ -27,7 +27,7 @@
 - Verify pagination, explicit attempt selection, matrix names, empty jobs, partial job-fetch errors, links, rendering, terminal sanitization and existing local/remote regressions.
 
 ## Public Status API — Proposed Extension
-- Add `pipeline/api.ts` as the pipeline feature's public entry point. Export `PipelineStatusReader` with `read(cwd: string): Promise<PipelineStatus>` and idempotent `stop(): void`, plus the public status types.
+- Add `pipeline/core/api.ts` as the pipeline feature's public entry point. Export `PipelineStatusReader` with `read(cwd: string): Promise<PipelineStatus>` and idempotent `stop(): void`, plus the public status types.
 - Resolve each supplied cwd to its canonical worktree root using existing `projectRoot`. Compose existing `Pipeline.status()` and `GitHubActions.read()` without executing tests, installing dependencies, requesting approval or registering extension UI.
 - Each reader owns a per-worktree map of GitHub readers, preserving the existing 60-second cache, concurrent-request deduplication, branch invalidation and cancellation. No module-global singleton: the consumer owns its reader and must stop it on shutdown/reload. Reads after stop reject; in-flight remote work is cancelled and may not create new readers after disposal.
 - Replace the private status composition and GitHub reader map in `pipeline.ts` with this API. Create a fresh reader for each session lifecycle and stop the old one during replacement/shutdown. Keep execution, approvals, widget rendering and monitor scheduling unchanged.

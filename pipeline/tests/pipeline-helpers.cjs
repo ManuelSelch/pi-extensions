@@ -4,7 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const vm = require('node:vm');
 const ts = require('typescript');
-function load(file = 'pipeline/core.ts', overrides = {}) {
+function load(file = 'pipeline/core/pipeline.ts', overrides = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(readFileSync(path.join(__dirname, '..', '..', file), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },

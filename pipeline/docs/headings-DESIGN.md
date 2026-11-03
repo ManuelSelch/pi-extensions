@@ -1,7 +1,7 @@
 # Pipeline Headings — Design
 
 ## Proposed Design
-- Update the existing pure renderer in `pipeline/widget.ts`; keep data fetching and status ownership unchanged.
+- Update the existing pure renderer in `pipeline/pi/widget.ts`; keep data fetching and status ownership unchanged.
 - Replace accent-colored `## Local` and `## GitHub` headings with muted plain `Local` and `GitHub` labels, reducing their visual prominence without Markdown heading markers.
 - Show `Local` only when local rows and a visible GitHub section coexist. GitHub workflows or an unavailable/error message count as a visible GitHub section.
 - Omit `Local` when GitHub data is absent or has neither workflows nor an error. Preserve all suite, preparation, workflow and job rows.

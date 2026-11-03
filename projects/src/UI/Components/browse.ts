@@ -1,5 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { GitHubStatus, PipelineStatus } from "../../../../pipeline/api.ts";
+import type { GitHubStatus, PipelineStatus } from "../../../../pipeline/core/api.ts";
 import type { BrowseAction, BrowseView } from "../../App/browse.ts";
 import { renderRepositoryStatus } from "./status.ts";
 

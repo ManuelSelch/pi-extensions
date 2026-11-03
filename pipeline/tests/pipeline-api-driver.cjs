@@ -16,7 +16,7 @@ async function createApiDriver(t) {
     async read() { return undefined; }
     stop() { this.stopped = true; }
   }
-  const { PipelineStatusReader } = load('pipeline/api.ts', { './github.ts': { GitHubActions: Remote } });
+  const { PipelineStatusReader } = load('pipeline/core/api.ts', { './github.ts': { GitHubActions: Remote } });
   const reader = new PipelineStatusReader();
   t.after(() => reader.stop());
   let cwd = f.root, status;

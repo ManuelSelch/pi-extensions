@@ -16,8 +16,8 @@ function fixture() {
     constructor(root) { this.root = root; }
     status() { localReads.push(this.root); return readLocal(this.root); }
   }
-  const { PipelineStatusReader } = load('pipeline/api.ts', {
-    './core.ts': { Pipeline, projectRoot(cwd) { roots.push(cwd); return resolveRoot(cwd); } },
+  const { PipelineStatusReader } = load('pipeline/core/api.ts', {
+    './pipeline.ts': { Pipeline, projectRoot(cwd) { roots.push(cwd); return resolveRoot(cwd); } },
     './github.ts': { GitHubActions },
   });
   return {
