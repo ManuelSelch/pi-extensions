@@ -74,6 +74,22 @@ test('Desktop refresh continues while any client is attached and stops after the
   expect(calls).toBe(2)
 })
 
+test('the Desktop widget reports a permission refusal without exposing diagnostics', async ($, on) => {
+  const clock = mock.clock(on)
+  on('session.start', () => ({ cwd: '/work' }))
+  on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['other mod'] }))
+  on('mcp.call', () => ({ deny: 'auto mode classifier gave no verdict; secret diagnostic' }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: '/work' })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-1' })
+  await clock.settle()
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Pipeline.*unavailable.*permission/i })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /secret diagnostic/ })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('detaching Desktop leaves an interactive terminal polling', async ($, on) => {
   const clock = mock.clock(on)
   let calls = 0

@@ -1,6 +1,6 @@
 // This module runs in Claude Code's mod environment, not Node.js.
 let status;
-let unavailable = false;
+let unavailable = '';
 let timers = [];
 let generation = 0;
 let pending = false;
@@ -12,7 +12,7 @@ function stop() {
   for (const timer of timers) timer.cancel();
   timers = [];
   status = undefined;
-  unavailable = false;
+  unavailable = '';
 }
 
 async function refresh($, current) {
@@ -23,14 +23,17 @@ async function refresh($, current) {
     if (result.isError) throw new Error('Status unavailable');
     const content = result.content?.find(block => block.type === 'text')?.text;
     const value = JSON.parse(content);
-    if (!value || typeof value !== 'object' || !value.suites || typeof value.suites !== 'object') throw new Error('Invalid status');
+    if (!value || typeof value !== 'object' || !value.suites || typeof value.suites !== 'object') throw new Error('Invalid status response');
     if (current !== generation) return;
     status = value;
-    unavailable = false;
-  } catch {
+    unavailable = '';
+  } catch (error) {
     if (current !== generation) return;
     status = undefined;
-    unavailable = true;
+    const message = String(error?.message ?? error);
+    unavailable = /permission|denied|refused|classifier|policy/i.test(message) ? 'permission' :
+      /timeout|timed out/i.test(message) ? 'timeout' :
+      /invalid|json|syntax/i.test(message) ? 'invalid response' : 'connection';
   } finally {
     pending = false;
     if (current === generation) $.ui.invalidate('ui.render');
@@ -109,7 +112,7 @@ export function register(on) {
   });
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
-    const rows = unavailable ? ['⚠ Pipeline · unavailable'] : status ? lines(status) : [];
+    const rows = unavailable ? [`⚠ Pipeline · unavailable · ${unavailable}`] : status ? lines(status) : [];
     if (!rows.length) return next(e);
     const { Box, Text } = $.ui.resolve(e);
     const other = await next(e);
