@@ -1,9 +1,12 @@
-const { test } = require('node:test');
+const { test, beforeEach, afterEach } = require('node:test');
 
 const { ClaudePipelineDriver } = require('./claude-driver.cjs');
 
+beforeEach(async t => { t.context = { claude: await ClaudePipelineDriver.create(t, { widget: true }) }; });
+afterEach(async t => { await t.context?.claude?.dispose(); });
+
 test('Claude shows local suites and GitHub Actions status in the widget', async t => {
-  const claude = await ClaudePipelineDriver.create(t, { widget: true });
+  const claude = t.context.claude;
   const widget = claude.widget;
   await widget.provideStatus('local-and-github');
 
@@ -14,7 +17,7 @@ test('Claude shows local suites and GitHub Actions status in the widget', async 
 });
 
 test('Claude hides the widget when there is no pipeline or GitHub status', async t => {
-  const claude = await ClaudePipelineDriver.create(t, { widget: true });
+  const claude = t.context.claude;
   const widget = claude.widget;
   await widget.provideStatus('empty');
 
@@ -24,7 +27,7 @@ test('Claude hides the widget when there is no pipeline or GitHub status', async
 });
 
 test('the widget refreshes when pipeline status changes', async t => {
-  const claude = await ClaudePipelineDriver.create(t, { widget: true });
+  const claude = t.context.claude;
   const widget = claude.widget;
   await widget.provideStatus('local-and-github');
   await claude.startSession();
@@ -37,7 +40,7 @@ test('the widget refreshes when pipeline status changes', async t => {
 });
 
 test('an unavailable status refresh is not displayed as a current success', async t => {
-  const claude = await ClaudePipelineDriver.create(t, { widget: true });
+  const claude = t.context.claude;
   const widget = claude.widget;
   await widget.provideStatus('local-and-github');
   await claude.startSession();
@@ -49,7 +52,7 @@ test('an unavailable status refresh is not displayed as a current success', asyn
 });
 
 test('ending the session stops background status refreshes', async t => {
-  const claude = await ClaudePipelineDriver.create(t, { widget: true });
+  const claude = t.context.claude;
   const widget = claude.widget;
   await claude.startSession();
 

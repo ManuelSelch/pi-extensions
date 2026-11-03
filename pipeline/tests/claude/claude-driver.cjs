@@ -28,12 +28,19 @@ class ClaudePipelineDriver {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     Object.assign(d, { server, client });
-    t.after(async () => { if (d.widget) await d.endSession(); await client.close(); await server.close(); });
+    t.after(() => d.dispose());
     if (options.widget) {
       const { ClaudeWidgetDriver } = require('./widget-driver.cjs');
       d.widget = await ClaudeWidgetDriver.create();
     }
     return d;
+  }
+  async dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    if (this.widget) await this.endSession();
+    await this.client.close();
+    await this.server.close();
   }
   async startSession() {
     await this.widget.events['session.start'](this.widget.api, { isInteractive: true, surface: 'terminal' }, async () => ({}));

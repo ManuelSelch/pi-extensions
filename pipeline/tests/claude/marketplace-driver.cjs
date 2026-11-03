@@ -8,13 +8,14 @@ class MarketplaceDriver {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), 'pipeline-marketplace-'));
     const d = new MarketplaceDriver();
     d.home = home;
+    t.after(() => d.dispose());
     d.repo = path.resolve(__dirname, '../../..');
     d.env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: path.join(home, '.claude') };
     await fs.mkdir(path.join(home, '.pi', 'agent'), { recursive: true });
     await fs.symlink(d.repo, path.join(home, '.pi', 'agent', 'extensions'), 'dir');
-    t.after(() => fs.rm(home, { recursive: true, force: true }));
     return d;
   }
+  async dispose() { await fs.rm(this.home, { recursive: true, force: true }); }
   async addMarketplace() {
     this.catalog = JSON.parse(await fs.readFile(path.join(this.repo, '.claude-plugin', 'marketplace.json'), 'utf8'));
   }

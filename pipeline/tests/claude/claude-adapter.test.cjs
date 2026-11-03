@@ -1,9 +1,12 @@
-const { test } = require('node:test');
+const { test, beforeEach, afterEach } = require('node:test');
 
 const { ClaudePipelineDriver } = require('./claude-driver.cjs');
 
+beforeEach(async t => { t.context = { pipeline: await ClaudePipelineDriver.create(t) }; });
+afterEach(async t => { await t.context?.pipeline?.dispose(); });
+
 test('Claude reads pipeline status without executing commands or requesting approval', async t => {
-  const pipeline = await ClaudePipelineDriver.create(t);
+  const pipeline = t.context.pipeline;
 
   await pipeline.inspectStatus();
 
@@ -11,25 +14,25 @@ test('Claude reads pipeline status without executing commands or requesting appr
 });
 
 test('Claude saves configuration only after the user reviews and approves it', async t => {
-  const pipeline = await ClaudePipelineDriver.create(t);
+  const pipeline = t.context.pipeline;
 
   await pipeline.configurePipeline('approve');
 
   await pipeline.thenConfigurationIsSavedAfterReview();
 });
 
-test('Claude does not save configuration when approval is rejected or unavailable', async t => {
-  for (const approval of ['reject', 'unavailable']) {
-    const pipeline = await ClaudePipelineDriver.create(t);
+for (const approval of ['reject', 'unavailable']) {
+  test(`Claude does not save configuration when approval is ${approval}`, async t => {
+    const pipeline = t.context.pipeline;
 
     await pipeline.configurePipeline(approval);
 
     await pipeline.thenConfigurationAndApprovalAreUnchanged();
-  }
-});
+  });
+}
 
 test('Claude runs approved suites and reports their results', async t => {
-  const pipeline = await ClaudePipelineDriver.create(t);
+  const pipeline = t.context.pipeline;
 
   await pipeline.runSuite('approve');
 
@@ -37,7 +40,7 @@ test('Claude runs approved suites and reports their results', async t => {
 });
 
 test('Claude reuses an existing Pi approval for the same configuration', async t => {
-  const pipeline = await ClaudePipelineDriver.create(t);
+  const pipeline = t.context.pipeline;
   await pipeline.approveThroughPi();
 
   await pipeline.runPreviouslyApproved();
@@ -46,19 +49,19 @@ test('Claude reuses an existing Pi approval for the same configuration', async t
   await pipeline.thenNoApprovalWasRequested();
 });
 
-test('Claude never runs an unapproved pipeline when approval is rejected or unavailable', async t => {
-  for (const approval of ['reject', 'unavailable']) {
-    const pipeline = await ClaudePipelineDriver.create(t);
+for (const approval of ['reject', 'unavailable']) {
+  test(`Claude never runs an unapproved pipeline when approval is ${approval}`, async t => {
+    const pipeline = t.context.pipeline;
 
     await pipeline.runSuite(approval);
 
     await pipeline.thenNoCommandsWereExecuted();
     await pipeline.thenToolFailed();
-  }
-});
+  });
+}
 
 test('Claude reports the outcome of waiting for an exact commit', async t => {
-  const pipeline = await ClaudePipelineDriver.create(t);
+  const pipeline = t.context.pipeline;
 
   await pipeline.waitForCommit('failed');
 
@@ -66,7 +69,7 @@ test('Claude reports the outcome of waiting for an exact commit', async t => {
 });
 
 test('disconnecting Claude stops local work', async t => {
-  const pipeline = await ClaudePipelineDriver.create(t);
+  const pipeline = t.context.pipeline;
   await pipeline.runSuite('start-and-wait');
 
   await pipeline.disconnect();
@@ -75,7 +78,7 @@ test('disconnecting Claude stops local work', async t => {
 });
 
 test('cancelling a Claude operation stops local work', async t => {
-  const pipeline = await ClaudePipelineDriver.create(t);
+  const pipeline = t.context.pipeline;
   await pipeline.runSuite('start-and-wait');
 
   await pipeline.cancelOperation();

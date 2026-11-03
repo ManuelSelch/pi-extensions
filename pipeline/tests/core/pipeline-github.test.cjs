@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { load } = require('../pipeline-helpers.cjs');
 
@@ -21,11 +21,14 @@ function driver(options = {}) {
   };
   const { GitHubActions } = load('pipeline/core/github.ts');
   const reader = new GitHubActions('/project', execute, () => now);
-  return { reader, calls, branch(value) { branch = value; }, advance(ms) { now += ms; }, queries() { return calls.filter(([file]) => file === 'gh'); } };
+  return { reader, calls, configure(value = {}) { options = value; return this; }, branch(value) { branch = value; }, advance(ms) { now += ms; }, queries() { return calls.filter(([file]) => file === 'gh'); } };
 }
 
-test('automatically reads latest run per workflow on current branch without commit matching', async () => {
-  const d = driver();
+beforeEach(t => { t.context = { driver: driver() }; });
+afterEach(t => { t.context?.driver?.reader.stop(); });
+
+test('automatically reads latest run per workflow on current branch without commit matching', async t => {
+  const d = t.context.driver.configure();
   const status = await d.reader.read();
   assert.equal(status.repository, 'owner/repo');
   assert.equal(status.branch, 'feature/login');
@@ -36,8 +39,8 @@ test('automatically reads latest run per workflow on current branch without comm
   assert.equal(d.calls.some(([, args]) => args.includes('HEAD')), false);
 });
 
-test('highest run number wins across pages despite future timestamps and older reruns', async () => {
-  const d = driver({ workflows: [{ id: 1, name: 'Tests' }], runPages: [
+test('highest run number wins across pages despite future timestamps and older reruns', async t => {
+  const d = t.context.driver.configure({ workflows: [{ id: 1, name: 'Tests' }], runPages: [
     { workflow_runs: [
       { id: 102, run_number: 2, run_attempt: 1, status: 'completed', conclusion: 'failure', updated_at: '2099-01-01T00:00:00Z' },
       { id: 101, run_number: 1, run_attempt: 3, status: 'completed', conclusion: 'cancelled', updated_at: '2099-01-02T00:00:00Z' },
@@ -58,8 +61,8 @@ test('highest run number wins across pages despite future timestamps and older r
   assert.ok(jobQueries[0][1].includes('repos/owner/repo/actions/runs/103/attempts/2/jobs?per_page=100'));
 });
 
-test('jobs are paginated and pinned to the selected run attempt, retaining matrix names and links', async () => {
-  const d = driver({ attempt: 3, jobPages: [
+test('jobs are paginated and pinned to the selected run attempt, retaining matrix names and links', async t => {
+  const d = t.context.driver.configure({ attempt: 3, jobPages: [
     { jobs: [{ name: 'build (node 24)', status: 'completed', conclusion: 'success', html_url: 'https://github.com/owner/repo/actions/runs/100/job/1' }] },
     { jobs: [{ name: 'e2e', status: 'completed', conclusion: 'failure', html_url: 'https://github.com/owner/repo/actions/runs/100/job/2' }, { name: 'sonar', status: 'queued', conclusion: null }] },
   ] });
@@ -75,8 +78,8 @@ test('jobs are paginated and pinned to the selected run attempt, retaining matri
   assert.ok(args.includes('--paginate')); assert.ok(args.includes('--slurp'));
 });
 
-test('job errors preserve workflow outcome and other workflows without exposing diagnostics', async () => {
-  const d = driver({ jobsError: true });
+test('job errors preserve workflow outcome and other workflows without exposing diagnostics', async t => {
+  const d = t.context.driver.configure({ jobsError: true });
   const status = await d.reader.read();
   assert.equal(status.error, undefined);
   assert.equal(status.workflows[0].conclusion, 'success');
@@ -86,15 +89,15 @@ test('job errors preserve workflow outcome and other workflows without exposing 
   assert.doesNotMatch(JSON.stringify(status), /private/);
 });
 
-test('empty jobs stay empty and workflows with no run do not fetch jobs', async () => {
-  const d = driver(); const status = await d.reader.read();
+test('empty jobs stay empty and workflows with no run do not fetch jobs', async t => {
+  const d = t.context.driver.configure(); const status = await d.reader.read();
   assert.equal(status.workflows[0].jobs.length, 0);
   assert.equal(status.workflows[1].jobs, undefined);
   assert.equal(d.queries().filter(([, args]) => args.some(arg => arg.includes('/jobs?'))).length, 1);
 });
 
-test('cache throttles requests for 60 seconds; changing branches invalidates it', async () => {
-  const d = driver();
+test('cache throttles requests for 60 seconds; changing branches invalidates it', async t => {
+  const d = t.context.driver.configure();
   await d.reader.read(); await d.reader.read();
   assert.equal(d.queries().length, 4);
   d.advance(60000); await d.reader.read();
@@ -104,9 +107,9 @@ test('cache throttles requests for 60 seconds; changing branches invalidates it'
   assert.equal(d.queries().length, 12);
 });
 
-test('forced reads bypass the TTL, update the shared cache and retain snapshots on failure', async () => {
+test('forced reads bypass the TTL, update the shared cache and retain snapshots on failure', async t => {
   const options = {};
-  const d = driver(options);
+  const d = t.context.driver.configure(options);
   const initial = await d.reader.read();
   d.advance(1000);
 
@@ -128,9 +131,9 @@ test('forced reads bypass the TTL, update the shared cache and retain snapshots 
   assert.equal((await d.reader.read({ force: true })).error, undefined);
 });
 
-test('forced and ordinary reads share an in-flight refresh', async () => {
+test('forced and ordinary reads share an in-flight refresh', async t => {
   const options = { workflows: [{ id: 1, name: 'Tests' }] };
-  const d = driver(options);
+  const d = t.context.driver.configure(options);
   await d.reader.read();
   const before = d.queries().length;
   let release;
@@ -150,39 +153,46 @@ test('forced and ordinary reads share an in-flight refresh', async () => {
   assert.equal(await d.reader.read(), result);
 });
 
-test('non-GitHub repositories and detached HEAD make no GitHub requests', async () => {
-  for (const remotes of ['', 'origin\thttps://gitlab.com/owner/repo.git (fetch)\n']) {
-    const d = driver({ remotes });
+for (const remotes of ['', 'origin\thttps://gitlab.com/owner/repo.git (fetch)\n']) {
+  test(`non-GitHub remote ${JSON.stringify(remotes)} makes no GitHub requests`, async t => {
+    const d = t.context.driver.configure({ remotes });
     assert.equal(await d.reader.read(), undefined);
     assert.equal(d.queries().length, 0);
-  }
-  const d = driver(); d.branch('');
+  });
+}
+test('detached HEAD makes no GitHub requests', async t => {
+  const d = t.context.driver.configure(); d.branch('');
   assert.equal(await d.reader.read(), undefined);
   assert.equal(d.queries().length, 0);
 });
 
-test('origin is preferred; HTTPS and fallback GitHub remotes work', async () => {
-  const d = driver({ remotes: 'upstream\tgit@github.com:other/repo.git (fetch)\norigin\thttps://github.com/owner/repo.git (fetch)\n' });
-  assert.equal((await d.reader.read()).repository, 'owner/repo');
-  const fallback = driver({ remotes: 'upstream\tssh://git@github.com/other/repo.git (fetch)\n' });
-  assert.equal((await fallback.reader.read()).repository, 'other/repo');
-});
+for (const [name, remotes, repository] of [
+  ['origin is preferred over upstream', 'upstream\tgit@github.com:other/repo.git (fetch)\norigin\thttps://github.com/owner/repo.git (fetch)\n', 'owner/repo'],
+  ['SSH fallback remote works', 'upstream\tssh://git@github.com/other/repo.git (fetch)\n', 'other/repo'],
+]) {
+  test(name, async t => {
+    const d = t.context.driver.configure({ remotes });
+    assert.equal((await d.reader.read()).repository, repository);
+  });
+}
 
-test('no workflows is empty; missing CLI and fetch errors are concise and cached', async () => {
-  assert.equal((await driver({ workflows: [] }).reader.read()).workflows.length, 0);
-  for (const error of ['ENOENT', 'EFAIL']) {
-    const d = driver({ error });
+test('no workflows is empty', async t => {
+  assert.equal((await t.context.driver.configure({ workflows: [] }).reader.read()).workflows.length, 0);
+});
+for (const error of ['ENOENT', 'EFAIL']) {
+  test(`GitHub error ${error} is concise and cached`, async t => {
+    const d = t.context.driver.configure({ error });
     const status = await d.reader.read();
     assert.match(status.error, error === 'ENOENT' ? /install gh/i : /unavailable/i);
     assert.doesNotMatch(status.error, /secret/);
     await d.reader.read(); assert.equal(d.queries().length, 1);
-  }
-});
+  });
+}
 
-test('concurrent refreshes share a request and shutdown aborts pending reads', async () => {
+test('concurrent refreshes share a request and shutdown aborts pending reads', async t => {
   let release;
   const gate = new Promise(resolve => { release = resolve; });
-  const d = driver({ workflows: [{ id: 1, name: 'Tests' }], fetch: async (_args, signal) => {
+  const d = t.context.driver.configure({ workflows: [{ id: 1, name: 'Tests' }], fetch: async (_args, signal) => {
     await gate;
     if (signal.aborted) throw new Error('aborted');
     return JSON.stringify([{ workflow_runs: [] }]);
@@ -195,9 +205,9 @@ test('concurrent refreshes share a request and shutdown aborts pending reads', a
   assert.equal(await d.reader.read(), undefined);
 });
 
-test('failed refreshes retain the last successful snapshot and timestamp until recovery', async () => {
+test('failed refreshes retain the last successful snapshot and timestamp until recovery', async t => {
   const options = { jobPages: [{ jobs: [{ name: 'unit', status: 'completed', conclusion: 'success' }] }] };
-  const d = driver(options);
+  const d = t.context.driver.configure(options);
   const success = await d.reader.read();
   assert.equal(success.lastSuccessfulAt, new Date(0).toISOString());
   options.error = 'ETIMEDOUT'; d.advance(60000);
@@ -222,8 +232,7 @@ test('failed refreshes retain the last successful snapshot and timestamp until r
   assert.equal(recovered.lastSuccessfulAt, new Date(180000).toISOString());
 });
 
-test('initial failures have no stale snapshot; errors use bounded categories without raw diagnostics', async () => {
-  for (const [error, kind] of [
+for (const [error, kind] of [
     [{ code: 'ETIMEDOUT' }, 'timeout'], [{ killed: true, signal: 'SIGTERM' }, 'timeout'],
     [{ code: 'ENOENT' }, 'missing-cli'], [{ stderr: 'gh: Bad credentials (HTTP 401) secret' }, 'authentication'],
     [{ stderr: 'To get started with GitHub CLI, please run: gh auth login' }, 'authentication'],
@@ -231,20 +240,21 @@ test('initial failures have no stale snapshot; errors use bounded categories wit
     [{ stderr: 'gh: API rate limit exceeded (HTTP 403) secret' }, 'access'],
     [{ stderr: 'error connecting to api.github.com secret' }, 'connection'],
     [{ code: 'EFAIL', message: 'secret' }, 'unknown'],
-  ]) {
-    const status = await driver({ error }).reader.read();
+]) {
+  test(`initial ${kind} failure has no stale snapshot or raw diagnostics`, async t => {
+    const status = await t.context.driver.configure({ error }).reader.read();
     assert.equal(status.errorKind, kind);
     assert.equal(status.stale, undefined);
     assert.equal(status.lastSuccessfulAt, undefined);
     assert.equal(status.workflows.length, 0);
     assert.doesNotMatch(JSON.stringify(status), /secret/);
     if (kind !== 'authentication') assert.doesNotMatch(status.error, /gh auth login/);
-  }
-});
+  });
+}
 
-test('branch and repository changes never reuse another selection\'s successful snapshot', async () => {
+test('branch and repository changes never reuse another selection\'s successful snapshot', async t => {
   const options = {};
-  const d = driver(options);
+  const d = t.context.driver.configure(options);
   await d.reader.read();
   options.error = 'ETIMEDOUT'; d.branch('main');
   const branch = await d.reader.read();
@@ -259,10 +269,10 @@ test('branch and repository changes never reuse another selection\'s successful 
   assert.equal(repo.workflows.length, 0);
 });
 
-test('switching branches aborts previous fetches and discards their late results', async () => {
+test('switching branches aborts previous fetches and discards their late results', async t => {
   let started;
   const pending = new Promise(resolve => { started = resolve; });
-  const d = driver({ workflows: [{ id: 1, name: 'Tests' }], fetch: async (args, signal) => {
+  const d = t.context.driver.configure({ workflows: [{ id: 1, name: 'Tests' }], fetch: async (args, signal) => {
     if (args.some(arg => arg.includes('branch=feature'))) {
       started();
       await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
@@ -276,7 +286,7 @@ test('switching branches aborts previous fetches and discards their late results
   assert.equal((await d.reader.read()).branch, 'main');
 });
 
-test('production CLI boundary enforces timeout, output bounds and noninteractive GitHub host', async () => {
+test('production CLI boundary enforces timeout, output bounds and noninteractive GitHub host', async t => {
   const invocations = [];
   const { GitHubActions } = load('pipeline/core/github.ts', {
     'node:util': { promisify: fn => fn },
@@ -296,7 +306,7 @@ test('production CLI boundary enforces timeout, output bounds and noninteractive
   reader.stop(); assert.equal(call.options.signal.aborted, true);
 });
 
-test('unknown run states remain explicit rather than turning green', async () => {
-  const d = driver({ workflows: [{ id: 1, name: 'Tests' }], fetch: async () => JSON.stringify([{ workflow_runs: [{ run_number: 1, status: 'completed', conclusion: 'future-conclusion', created_at: '2020-01-01T00:00:00Z' }] }]) });
+test('unknown run states remain explicit rather than turning green', async t => {
+  const d = t.context.driver.configure({ workflows: [{ id: 1, name: 'Tests' }], fetch: async () => JSON.stringify([{ workflow_runs: [{ run_number: 1, status: 'completed', conclusion: 'future-conclusion', created_at: '2020-01-01T00:00:00Z' }] }]) });
   assert.equal((await d.reader.read()).workflows[0].conclusion, 'future-conclusion');
 });
