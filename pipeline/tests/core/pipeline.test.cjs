@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { load, fixture, config, approve, waitFor } = require('./pipeline-helpers.cjs');
+const { load, fixture, config, approve, waitFor } = require('../pipeline-helpers.cjs');
 
 test('uses versionless YAML, refuses duplicate keys and does not load legacy JSON files', async t => {
   const f = await fixture(t);

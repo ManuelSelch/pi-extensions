@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./pipeline-helpers.cjs');
+const { load } = require('../pipeline-helpers.cjs');
 
 function driver(options = {}) {
   let branch = 'feature/login', now = 0;

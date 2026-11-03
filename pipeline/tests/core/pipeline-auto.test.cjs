@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { load, fixture, config, approve, waitFor } = require('./pipeline-helpers.cjs');
+const { load, fixture, config, approve, waitFor } = require('../pipeline-helpers.cjs');
 const flush = async () => { for (let i = 0; i < 25; i++) await Promise.resolve(); };
 function fakeClock() {
   let now = 100000, next = 1;

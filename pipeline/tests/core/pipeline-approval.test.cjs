@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { load, fixture, config, approve } = require('./pipeline-helpers.cjs');
+const { load, fixture, config, approve } = require('../pipeline-helpers.cjs');
 
 async function repository(t) {
   const f = await fixture(t);

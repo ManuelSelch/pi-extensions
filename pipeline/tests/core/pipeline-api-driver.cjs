@@ -3,7 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { promisify } = require('node:util');
 const execute = promisify(require('node:child_process').execFile);
-const { load, fixture } = require('./pipeline-helpers.cjs');
+const { load, fixture } = require('../pipeline-helpers.cjs');
 
 async function createApiDriver(t) {
   const f = await fixture(t);

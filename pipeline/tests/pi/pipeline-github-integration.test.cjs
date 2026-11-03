@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load, fixture, waitFor } = require('./pipeline-helpers.cjs');
+const { load, fixture, waitFor } = require('../pipeline-helpers.cjs');
 
 async function driver(t, Reader) {
   const f = await fixture(t);

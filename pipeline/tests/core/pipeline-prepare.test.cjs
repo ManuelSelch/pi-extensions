@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { load, fixture, config, approve, waitFor } = require('./pipeline-helpers.cjs');
+const { load, fixture, config, approve, waitFor } = require('../pipeline-helpers.cjs');
 const command = script => ({ command: [process.execPath, '-e', script] });
 function preparedConfig() {
   const c = config(`require('node:fs').appendFileSync('order.txt', 'test\\n')`);

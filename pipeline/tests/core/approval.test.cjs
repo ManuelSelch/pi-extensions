@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../../pipeline-helpers.cjs');
+const { load } = require('../pipeline-helpers.cjs');
 const { validateConfig } = load();
 const loadView = () => load('pipeline/core/approval.ts');
 const config = (suites, prepare) => validateConfig({ suites, ...(prepare ? { prepare } : {}) });

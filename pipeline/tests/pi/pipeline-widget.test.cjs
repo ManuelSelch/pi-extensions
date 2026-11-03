@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { load, fixture, config, approve, waitFor } = require('./pipeline-helpers.cjs');
+const { load, fixture, config, approve, waitFor } = require('../pipeline-helpers.cjs');
 const plain = { fg: (_color, text) => text };
 const now = Date.parse('2026-10-14T12:00:00Z');
 const result = (outcome, minutes = 3, stale = false) => ({ outcome, stale, startedAt: new Date(now - minutes * 60000).toISOString(), finishedAt: new Date(now - minutes * 60000).toISOString() });
