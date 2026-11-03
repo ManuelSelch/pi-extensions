@@ -33,6 +33,7 @@
   "core/github-wait.test.cjs",
   "pi/wait-tool.test.cjs",
   "claude/claude-adapter.test.cjs",
+  "claude/claude-widget.test.cjs",
   "claude/claude-stdio.test.cjs",
   "claude/marketplace.test.cjs",
   "core/pipeline-api-integration.test.cjs",

@@ -5,7 +5,7 @@ const { pathToFileURL } = require('node:url');
 const { fixture, config, waitFor } = require('../pipeline-helpers.cjs');
 
 class ClaudePipelineDriver {
-  static async create(t) {
+  static async create(t, options = {}) {
     const f = await fixture(t);
     const { tsImport } = await import('tsx/esm/api');
     const { createPipelineServer } = await tsImport(pathToFileURL(path.resolve(__dirname, '../../claude/server.ts')).href, __filename);
@@ -28,8 +28,19 @@ class ClaudePipelineDriver {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     Object.assign(d, { server, client });
-    t.after(async () => { await client.close(); await server.close(); });
+    t.after(async () => { if (d.widget) await d.endSession(); await client.close(); await server.close(); });
+    if (options.widget) {
+      const { ClaudeWidgetDriver } = require('./widget-driver.cjs');
+      d.widget = await ClaudeWidgetDriver.create();
+    }
     return d;
+  }
+  async startSession() {
+    await this.widget.events['session.start'](this.widget.api, { isInteractive: true, surface: 'terminal' }, async () => ({}));
+    await this.widget.timers[0].fn();
+  }
+  async endSession() {
+    if (this.widget.events['session.end']) await this.widget.events['session.end'](this.widget.api, {}, async () => ({}));
   }
   async call(name, args = {}, options = {}) { return this.client.callTool({ name, arguments: args }, undefined, options); }
   async inspectStatus() { this.result = await this.call('pipeline_status'); }

@@ -58,7 +58,9 @@ Claude gets the four pipeline MCP tools: configure, run, status and wait. Config
 
 Pi and Claude use the same `.pi/pipeline.yaml`, per-worktree results and preparation state, locks, and repository-scoped approvals, provided they use the same `PI_CODING_AGENT_DIR` (or both use its default). An approval in either host permits the identical configuration in the other; external configuration changes still require approval. The server resolves the project from `CLAUDE_PROJECT_DIR`, or its process working directory if unset.
 
-This adapter exposes tools only: it does not add Pi's `/pipeline` command, widget, or after-agent scheduler. MCP cancellation stops local running work and never cancels remote GitHub Actions. Claude Code can background long calls and applies its own MCP idle and wall-clock timeouts; configure those in Claude Code if needed. No model-facing progress updates are emitted by this adapter.
+The plugin also includes a Claude Code mod that shows local suites and GitHub Actions in the band above the prompt. It reads `pipeline_status` in the background every five seconds, without running suites or prompting the model. Empty status hides the widget; an unavailable status shows a warning rather than a stale success. Claude Code can collapse the band with Ctrl+X, Ctrl+A. The mod requires Claude Code with mod support and a connected plugin MCP server; it does not add Pi's `/pipeline` command or after-agent scheduler.
+
+MCP cancellation stops local running work and never cancels remote GitHub Actions. Claude Code can background long calls and applies its own MCP idle and wall-clock timeouts; configure those in Claude Code if needed. No model-facing progress updates are emitted by this adapter.
 
 ## YAML migration and review
 
