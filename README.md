@@ -2,7 +2,9 @@
 
 Personal extensions for the [Pi coding agent](https://pi.dev), loaded from
 `~/.pi/agent/extensions`. This directory is the repository. Pi loads TypeScript
-entry points directly through jiti; there is no build step.
+entry points directly through jiti; there is no Pi build step.
+
+The [Claude Code marketplace](.claude-plugin/marketplace.json) lists compatible plugins in this repository. See [pipeline's Claude instructions](pipeline/docs/README.md#claude-code) for installation and its bundled MCP server.
 
 ## Active extensions
 

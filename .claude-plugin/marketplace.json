@@ -1,0 +1,12 @@
+{
+  "name": "pi-extensions",
+  "description": "Claude Code plugins from the pi-extensions repository",
+  "owner": { "name": "Manuel Selch" },
+  "plugins": [
+    {
+      "name": "pipeline",
+      "source": "./pipeline",
+      "description": "Approved local pipeline suites and GitHub Actions status"
+    }
+  ]
+}

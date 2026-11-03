@@ -41,7 +41,16 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after
 
 ## Claude Code
 
-Install this repository's dependencies with `npm ci`, then start Claude Code from the project you want to work on with `claude --plugin-dir /path/to/extensions/pipeline`. This local plugin uses Node.js, the repository's `node_modules`, and the plugin's `.mcp.json`; keep the pipeline directory inside this checkout. It is not packaged as a standalone marketplace plugin. Use `/mcp` to check that the pipeline server connected.
+Register this repository as a local Claude Code marketplace, then install the pipeline plugin once:
+
+```bash
+claude plugin marketplace add ~/.pi/agent/extensions
+claude plugin install pipeline@pi-extensions --scope user
+```
+
+Restart Claude Code and use `/mcp` to check the connection. Marketplace installation copies the plugin into Claude's cache; its bundled Node.js MCP server does not need this repository's `node_modules` at runtime. You can also load the checkout directly for one session with `claude --plugin-dir /path/to/extensions/pipeline`.
+
+When changing the shared pipeline core or Claude adapter, run `npm ci` and `npm run build:pipeline-claude`, then commit the updated `pipeline/claude/server.bundle.mjs`. The marketplace integration test checks that this bundle matches the source. Reinstall or update the marketplace plugin to use a changed cached copy; loading via `--plugin-dir` uses the checkout directly.
 
 Claude gets the four pipeline MCP tools: configure, run, status and wait. Configuration and execution reviews use MCP form elicitation, including the configuration diff or command summary. The user must explicitly check the approval field and submit; rejection, cancellation, unavailable elicitation or a failed request never grants approval. A client's automated elicitation hooks can answer these requests, so only use trusted client settings.
 
