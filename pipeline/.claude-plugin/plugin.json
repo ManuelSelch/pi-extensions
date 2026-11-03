@@ -1,0 +1,5 @@
+{
+  "name": "pipeline",
+  "version": "1.0.0",
+  "description": "Approved local pipeline suites and GitHub Actions status"
+}

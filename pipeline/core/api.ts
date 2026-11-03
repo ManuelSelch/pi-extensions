@@ -13,6 +13,8 @@ export class PipelineStatusReader {
   private readonly github = new Map<string, GitHubActions>();
   private stopped = false;
 
+  constructor(private readonly cacheRoot?: string) {}
+
   /** Force bypasses the remote TTL, but still shares any in-flight refresh. */
   async read(cwd: string, options: { force?: boolean } = {}): Promise<PipelineStatus> {
     this.assertLive();
@@ -23,7 +25,7 @@ export class PipelineStatusReader {
       reader = new GitHubActions(root);
       this.github.set(root, reader);
     }
-    const [local, github] = await Promise.all([new Pipeline(root).status(), reader.read(options)]);
+    const [local, github] = await Promise.all([new Pipeline(root, this.cacheRoot).status(), reader.read(options)]);
     this.assertLive(); // Never publish a cancelled lifecycle's late results.
     return { ...local, ...(github ? { github } : {}) };
   }

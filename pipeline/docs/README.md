@@ -2,7 +2,7 @@
 
 Provides native-confirmed local test configuration, manual execution, persisted results, a compact status widget, opt-in after-agent scheduling and automatic read-only GitHub Actions status.
 
-Shared pipeline logic lives in `pipeline/core/`; Pi-specific registration and rendering live in `pipeline/pi/`. The root `pipeline/index.ts` is the Pi loader entry point.
+Shared pipeline logic lives in `pipeline/core/`; Pi-specific registration and rendering live in `pipeline/pi/`. The root `pipeline/index.ts` is the Pi loader entry point. The Claude Code MCP adapter lives in `pipeline/claude/`.
 
 ## Usage
 
@@ -38,6 +38,16 @@ Configuration is stored in `.pi/pipeline.yaml` (no `version` key) at the git wor
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
 Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
+
+## Claude Code
+
+Install this repository's dependencies with `npm ci`, then start Claude Code from the project you want to work on with `claude --plugin-dir /path/to/extensions/pipeline`. This local plugin uses Node.js, the repository's `node_modules`, and the plugin's `.mcp.json`; keep the pipeline directory inside this checkout. It is not packaged as a standalone marketplace plugin. Use `/mcp` to check that the pipeline server connected.
+
+Claude gets the four pipeline MCP tools: configure, run, status and wait. Configuration and execution reviews use MCP form elicitation, including the configuration diff or command summary. The user must explicitly check the approval field and submit; rejection, cancellation, unavailable elicitation or a failed request never grants approval. A client's automated elicitation hooks can answer these requests, so only use trusted client settings.
+
+Pi and Claude use the same `.pi/pipeline.yaml`, per-worktree results and preparation state, locks, and repository-scoped approvals, provided they use the same `PI_CODING_AGENT_DIR` (or both use its default). An approval in either host permits the identical configuration in the other; external configuration changes still require approval. The server resolves the project from `CLAUDE_PROJECT_DIR`, or its process working directory if unset.
+
+This adapter exposes tools only: it does not add Pi's `/pipeline` command, widget, or after-agent scheduler. MCP cancellation stops local running work and never cancels remote GitHub Actions. Claude Code can background long calls and applies its own MCP idle and wall-clock timeouts; configure those in Claude Code if needed. No model-facing progress updates are emitted by this adapter.
 
 ## YAML migration and review
 
