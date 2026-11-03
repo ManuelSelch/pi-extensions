@@ -4,6 +4,8 @@ let unavailable = false;
 let timers = [];
 let generation = 0;
 let pending = false;
+let terminalActive = false;
+const desktopClients = new Set();
 
 function stop() {
   generation += 1;
@@ -77,10 +79,26 @@ function lines(value) {
 
 export function register(on) {
   on('session.start', async ($, e, next) => {
-    if (e.isInteractive) start($);
+    terminalActive = e.isInteractive && e.surface === 'terminal';
+    if (e.isInteractive || e.surface === 'desktop') start($);
+    return next(e);
+  });
+  on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
+    desktopClients.add(e.clientId);
+    if (!timers.length) start($);
+    return next(e);
+  });
+  on('session.detach', { surface: 'desktop' }, async ($, e, next) => {
+    desktopClients.delete(e.clientId);
+    if (!desktopClients.size && !terminalActive) {
+      stop();
+      $.ui.invalidate('ui.render');
+    }
     return next(e);
   });
   on('session.end', async ($, e, next) => {
+    terminalActive = false;
+    desktopClients.clear();
     stop();
     $.ui.invalidate('ui.render');
     return next(e);

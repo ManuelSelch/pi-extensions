@@ -25,3 +25,71 @@ test('the mod draws pipeline status after its first refresh', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: 'other mod' })).toBeDefined()
   await ui.unmount()
 })
+
+test('a Desktop surface attaching after headless startup begins status polling', async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('session.start', () => ({ cwd: '/work' }))
+  on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['other mod'] }))
+  on('mcp.call', () => {
+    calls += 1
+    return { value: { content: [{ type: 'text', text: JSON.stringify({ configured: true, suites: { unit: { outcome: 'never', stale: false } } }) }] } }
+  })
+  await $.session.start({ surface: null, isInteractive: false, cwd: '/work' })
+  await clock.advance(5000)
+  expect(calls).toBe(0)
+
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-1' })
+  await clock.settle()
+
+  expect(calls).toBe(1)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Local 0\/1/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('Desktop refresh continues while any client is attached and stops after the last detaches', async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('session.start', () => ({ cwd: '/work' }))
+  on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+  on('session.detach', (_$, e) => ({ clientId: e.clientId }))
+  on('mcp.call', () => {
+    calls += 1
+    return { value: { content: [{ type: 'text', text: JSON.stringify({ configured: false, suites: {} }) }] } }
+  })
+  await $.session.start({ surface: null, isInteractive: false, cwd: '/work' })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-1' })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-2' })
+  await clock.settle()
+  expect(calls).toBe(1)
+
+  await $.session.detach({ surface: 'desktop', clientId: 'desktop-1', reason: 'detach' })
+  await clock.advance(5000)
+  expect(calls).toBe(2)
+
+  await $.session.detach({ surface: 'desktop', clientId: 'desktop-2', reason: 'detach' })
+  await clock.advance(5000)
+  expect(calls).toBe(2)
+})
+
+test('detaching Desktop leaves an interactive terminal polling', async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('session.start', () => ({ cwd: '/work' }))
+  on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+  on('session.detach', (_$, e) => ({ clientId: e.clientId }))
+  on('mcp.call', () => {
+    calls += 1
+    return { value: { content: [{ type: 'text', text: JSON.stringify({ configured: false, suites: {} }) }] } }
+  })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-1' })
+  await clock.settle()
+
+  await $.session.detach({ surface: 'desktop', clientId: 'desktop-1', reason: 'detach' })
+  await clock.advance(5000)
+
+  expect(calls).toBe(2)
+})
