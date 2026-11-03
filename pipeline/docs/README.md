@@ -41,16 +41,18 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after
 
 ## Claude Code
 
-Register this repository as a local Claude Code marketplace, then install the pipeline plugin once:
+Keep the repository at `~/.pi/agent/extensions` and install its dependencies, then register the local Claude Code marketplace and install the pipeline plugin once:
 
 ```bash
+cd ~/.pi/agent/extensions
+npm ci
 claude plugin marketplace add ~/.pi/agent/extensions
 claude plugin install pipeline@pi-extensions --scope user
 ```
 
-Restart Claude Code and use `/mcp` to check the connection. Marketplace installation copies the plugin into Claude's cache; its bundled Node.js MCP server does not need this repository's `node_modules` at runtime. You can also load the checkout directly for one session with `claude --plugin-dir /path/to/extensions/pipeline`.
+Restart Claude Code and use `/mcp` to check the connection. Claude copies the plugin configuration into its cache, but starts the MCP server from `~/.pi/agent/extensions/pipeline/claude/main.ts` using the checkout's `node_modules`. The checkout must remain at that path; run `npm ci` again when its dependencies change. No bundle or build step is needed. You can also load the plugin for one session with `claude --plugin-dir ~/.pi/agent/extensions/pipeline`.
 
-When changing the shared pipeline core or Claude adapter, run `npm ci` and `npm run build:pipeline-claude`, then commit the updated `pipeline/claude/server.bundle.mjs`. The marketplace integration test checks that this bundle matches the source. Reinstall or update the marketplace plugin to use a changed cached copy; loading via `--plugin-dir` uses the checkout directly.
+If an earlier marketplace installation still references `server.bundle.mjs`, run `claude plugin update pipeline@pi-extensions` and restart Claude Code so it reads the new MCP configuration.
 
 Claude gets the four pipeline MCP tools: configure, run, status and wait. Configuration and execution reviews use MCP form elicitation, including the configuration diff or command summary. The user must explicitly check the approval field and submit; rejection, cancellation, unavailable elicitation or a failed request never grants approval. A client's automated elicitation hooks can answer these requests, so only use trusted client settings.
 

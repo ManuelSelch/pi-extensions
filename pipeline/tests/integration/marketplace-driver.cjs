@@ -2,9 +2,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { execFile } = require('node:child_process');
-const { promisify } = require('node:util');
-const exec = promisify(execFile);
 
 class MarketplaceDriver {
   static async create(t) {
@@ -13,6 +10,8 @@ class MarketplaceDriver {
     d.home = home;
     d.repo = path.resolve(__dirname, '../../..');
     d.env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: path.join(home, '.claude') };
+    await fs.mkdir(path.join(home, '.pi', 'agent'), { recursive: true });
+    await fs.symlink(d.repo, path.join(home, '.pi', 'agent', 'extensions'), 'dir');
     t.after(() => fs.rm(home, { recursive: true, force: true }));
     return d;
   }
@@ -27,19 +26,19 @@ class MarketplaceDriver {
     await fs.cp(path.resolve(this.repo, entry.source), this.installPath, { recursive: true });
   }
   async thenPipelineIsListed() {
-    await exec(process.execPath, [path.join(this.repo, 'pipeline/claude/build.mjs'), '--check'], { cwd: this.repo, timeout: 30000 });
     assert.equal(this.catalog.name, 'pi-extensions');
     assert.ok(this.catalog.plugins.some(item => item.name === 'pipeline' && item.source === './pipeline'));
   }
   async thenInstalledPipelineConnects() {
     const config = JSON.parse(await fs.readFile(path.join(this.installPath, '.mcp.json'), 'utf8'));
     const spec = config.mcpServers.pipeline;
+    assert.deepEqual(spec.args, ['--import', '${HOME}/.pi/agent/extensions/node_modules/tsx/dist/loader.mjs', '${HOME}/.pi/agent/extensions/pipeline/claude/main.ts']);
     const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
     const { ElicitRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
     const client = new Client({ name: 'marketplace-test', version: '1' }, { capabilities: { elicitation: {} } });
     client.setRequestHandler(ElicitRequestSchema, async () => ({ action: 'accept', content: { approved: true } }));
-    const transport = new StdioClientTransport({ command: spec.command, args: spec.args.map(a => a.replaceAll('${CLAUDE_PLUGIN_ROOT}', this.installPath)), cwd: this.home, env: { ...this.env, CLAUDE_PROJECT_DIR: this.home } });
+    const transport = new StdioClientTransport({ command: spec.command, args: spec.args.map(a => a.replaceAll('${HOME}', this.home).replaceAll('${CLAUDE_PLUGIN_ROOT}', this.installPath)), cwd: this.home, env: { ...this.env, CLAUDE_PROJECT_DIR: this.home } });
     try {
       await client.connect(transport);
       const tools = await client.listTools();

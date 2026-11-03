@@ -2,7 +2,7 @@
   "mcpServers": {
     "pipeline": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/claude/server.bundle.mjs"]
+      "args": ["--import", "${HOME}/.pi/agent/extensions/node_modules/tsx/dist/loader.mjs", "${HOME}/.pi/agent/extensions/pipeline/claude/main.ts"]
     }
   }
 }
