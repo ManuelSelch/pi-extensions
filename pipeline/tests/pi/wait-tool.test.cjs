@@ -30,7 +30,7 @@ class WaitToolDriver {
   async thenOutcome(expected) { const result = await this.result; assert.equal(result.details.outcome, expected); assert.equal(result.isError, expected !== 'passed'); }
   thenParametersForwarded() { assert.equal(this.calls[0].options.ref, 'release'); assert.equal(this.calls[0].options.timeoutSeconds, 90); assert.equal(this.updates[0].details.outcome, 'waiting'); }
   thenSchemaHasDefaultsGuidance() {
-    assert.match(this.tools.pipeline_wait.description, /HEAD.*resolved once/);
+    assert.match(this.tools.pipeline_wait.description, /default HEAD/);
     assert.equal(this.tools.pipeline_wait.parameters.properties.timeoutSeconds.maximum, 86400);
   }
 }

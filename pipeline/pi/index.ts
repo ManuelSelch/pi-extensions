@@ -8,14 +8,14 @@ import { waitForPipeline, type WaitResult } from "../core/wait.ts";
 import { GitHubWaitReader } from "../core/github-wait.ts";
 
 const SuiteSchema = Type.Object({
-	command: Type.Array(Type.String(), { minItems: 1, description: "Executable followed by arguments; no shell interpolation or watch mode." }),
-	cwd: Type.Optional(Type.String({ description: "Project-relative working directory; defaults to the project root." })),
+	command: Type.Array(Type.String(), { minItems: 1, description: "Executable and arguments; no shell or watch mode." }),
+	cwd: Type.Optional(Type.String({ description: "Working directory relative to the project root." })),
 	timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400 })),
 	auto: Type.Optional(Type.Union([Type.Literal("manual"), Type.Literal("after-agent")])),
 }, { additionalProperties: false });
 const PrepareSchema = Type.Object({
-	command: Type.Array(Type.String(), { minItems: 1, description: "One-time worktree preparation executable and arguments, e.g. npm ci. No shell interpolation." }),
-	cwd: Type.Optional(Type.String({ description: "Project-relative working directory; defaults to the project root." })),
+	command: Type.Array(Type.String(), { minItems: 1, description: "One-time worktree setup command and arguments, e.g. npm ci." }),
+	cwd: Type.Optional(Type.String({ description: "Working directory relative to the project root." })),
 	timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400 })),
 }, { additionalProperties: false });
 const ConfigSchema = Type.Object({ suites: Type.Record(Type.String(), SuiteSchema), prepare: Type.Optional(PrepareSchema) }, { additionalProperties: false });
@@ -72,7 +72,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	}
 	pi.registerTool({
 		name: "pipeline_configure", label: "Configure pipeline",
-		description: "Create or replace this project's .pi/pipeline.yaml (no version key) with native user confirmation showing a focused configuration diff. Read pipeline_status first when updating: include every suite to retain; omitted suites are removed. Inspect project instructions, scripts and lockfiles so this works in a fresh worktree. Add optional prepare for dependency installation (prefer npm ci for npm projects with a package-lock); omit it when unnecessary or already handled. Prepare runs once successfully per worktree before any selected suite; failure blocks suites. No dependency/configuration invalidation. Preserve prepare and all suites to retain; omitted fields are removed. Saving does not immediately execute commands. auto=after-agent opts a suite into quiet, cooldown-limited runs after the agent settles.",
+		description: "Create or replace this project's .pi/pipeline.yaml (no version key) after native confirmation. Call pipeline_status first: include every suite and prepare you want to keep — omitted ones are removed. Use prepare for one-time dependency install (prefer npm ci when a package-lock exists).",
 		parameters: Type.Object({ config: ConfigSchema }),
 		async execute(_id, params, signal, _update, ctx) {
 			const p = await pipeline(ctx);
@@ -88,7 +88,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	});
 	pi.registerTool({
 		name: "pipeline_run", label: "Run pipeline",
-		description: "Run approved local test suites serially, with timeouts and cancellation. Optional prepare runs once successfully per worktree before any selected suite; preparation failure blocks suites. External command changes require native user confirmation. Returns outcomes, bounded output and full log paths; failures are tool errors.",
+		description: "Run the approved local suites serially with timeouts and cancellation; returns outcomes, log paths and errors. Preparation failure or any failed suite is a tool error.",
 		parameters: selectionSchema,
 		async execute(_id, params, signal, _update, ctx) {
 			const results = await start(await pipeline(ctx), ctx, params.suite ?? "all", signal);
@@ -97,15 +97,15 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	});
 	pi.registerTool({
 		name: "pipeline_status", label: "Pipeline status",
-		description: "Read local pipeline configuration and suite outcomes/freshness, plus latest GitHub Actions runs for the current branch. Remote status uses authenticated gh and a 60-second cache; no commit matching. Does not execute tests or request approval.",
+		description: "Read local pipeline config, suite freshness and latest GitHub Actions runs for the current branch. Read-only; does not execute tests.",
 		parameters: Type.Object({}),
 		async execute(_id, _params, _signal, _update, ctx) { return response(await status(await pipeline(ctx))); },
 	});
 	pi.registerTool({
 		name: "pipeline_wait", label: "Wait for GitHub Actions",
-		description: "Wait for GitHub Actions on an exact commit after an approved push. Defaults to current repository and HEAD (resolved once). Polls every 15 seconds, allowing runs to appear; waits for all discovered runs and confirms completion with a second poll. Default timeout 30 minutes. Returns outcome, run links and failed jobs. No runs, timeout, cancellation and unavailable CI are not success. Read-only: never pushes, merges, reruns, cancels remote CI or fixes code. Independent of local pipeline configuration and branch-status cache.",
+		description: "Wait for GitHub Actions on a pushed commit (default HEAD) and return outcome, run links and failed jobs. Read-only. No runs, timeout, cancellation or unavailable CI are not success.",
 		parameters: Type.Object({
-			ref: Type.Optional(Type.String({ minLength: 1, description: "Local Git commit/ref to watch; defaults to HEAD. Use the pushed merge commit when appropriate." })),
+			ref: Type.Optional(Type.String({ minLength: 1, description: "Commit or ref to watch; defaults to HEAD." })),
 			timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400, description: "Overall wait timeout; default 1800 seconds." })),
 		}, { additionalProperties: false }),
 		async execute(_id, params, signal, update, ctx) {
