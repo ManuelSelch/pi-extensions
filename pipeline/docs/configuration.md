@@ -1,0 +1,105 @@
+# Pipeline configuration and safety
+
+[Pipeline overview](README.md)
+
+## Usage
+
+
+Reload Pi after installing `pipeline/index.ts`. Ask the agent to inspect project instructions, scripts and lockfiles and call `pipeline_configure`. Configure for a fresh worktree, not just the currently installed checkout: include optional `prepare` when dependencies need installation (for npm projects with a lockfile, usually `npm ci`). Omit it for projects that need no preparation or already handle it in their commands. The tool takes a **complete replacement configuration**: include `prepare` and every suite you want to retain; omitted fields are removed. Nothing is written until you confirm the native popup: stacked plain-text entries for creation, a focused field-level diff for updates. Saving does not immediately execute tests; approved opt-in suites can run after the agent settles.
+
+```yaml
+prepare:
+  command: [npm, ci]
+  timeoutSeconds: 300
+
+suites:
+  unit:
+    command: [npm, run, test:unit]
+    timeoutSeconds: 120
+    auto: after-agent
+  integration:
+    command: [npm, run, test:integration]
+    cwd: .
+    timeoutSeconds: 600
+    auto: manual
+```
+
+Suite declaration order controls serial execution and widget order; suites are not alphabetically sorted. Use descriptive suite names (JavaScript enumerates integer-only names numerically). Reorder suites via `pipeline_configure` to review and approve the new configuration.
+
+Configuration is stored in `.pi/pipeline.yaml` (no `version` key) at the git worktree root, or Pi's cwd outside git. Starting Pi in a git subdirectory still uses the worktree root. Commit the configuration if you want to share it; approvals and results are never stored in that file.
+
+- `pipeline_configure({config: ...})`: validate and save after approval.
+- `pipeline_run({suite: "unit"})`: wait for a suite's results; omit suite or use `all` to run all suites serially. Non-passing results are tool errors carrying outcome/output/log paths. Aborting the tool cancels execution.
+- `pipeline_status({})`: inspect local configuration/outcomes/freshness and the latest GitHub Actions runs, including run URLs, without executing tests or showing a popup.
+- `pipeline_wait({})`: after an approved push, wait for GitHub Actions on the current commit; optional `ref` and `timeoutSeconds`. See [commit-pinned waiting](github.md#wait-for-github-actions).
+- `/pipeline` or `/pipeline status`: force-refresh GitHub Actions status and show a concise outcome/freshness line per local suite and outcome/age per GitHub workflow; no commands, fingerprints or log paths. Refreshes also update the widget. The agent's `pipeline_status` tool retains detailed data and uses the normal cache.
+- `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
+- `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
+
+Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.
+
+## YAML migration and review
+
+
+- Only `.pi/pipeline.yaml` is loaded; `.pi/pipeline.json` is not a fallback. To migrate another project, convert its JSON to YAML, remove the top-level `version` key, and remove the old file explicitly. This repository's config is already converted.
+- `pipeline_configure` still accepts a structured object, now without `version`; callers do not send YAML text. Saving emits stable YAML with inline argv arrays and explicit defaults. Comments and custom formatting are not preserved when saving.
+- YAML duplicate keys, custom tags, aliases and multiple documents are rejected, alongside the existing strict field/command validation.
+- Update popups compare normalized configurations, so comments, whitespace and omitted defaults do not produce noise. Each changed suite/preparation section shows only changed fields as `-` old / `+` new rows, with readable commands and timeouts in seconds. Added/removed sections show their command, timeout, automation mode and non-root cwd. Shared-suite execution-order changes are shown separately; additions/removals do not create redundant order diffs. Unrelated suites and patch/YAML boilerplate are omitted. Unchanged proposals say “No configuration changes.”
+- Initial creation and manual execution of an unapproved config show aligned name/command/timeout rows, including preparation and any non-root cwd. Root cwd and automation footers are omitted. Commands preserve argv boundaries using quotes/escapes when needed; they are not shell scripts. Popups use separate “Approve pipeline changes?” / “Approve pipeline execution?” titles, a home-abbreviated project path and a short scope line, without duplicate questions or Git-common-directory internals. Edits during review are still refused; saving never immediately runs tests.
+- Removing `version` changes normalized fingerprints: old JSON approvals are **not** silently transferred. Approve the new config explicitly before execution/automation; old results become stale. Preparation's once-per-worktree success flag remains unchanged.
+
+## Optional once-per-worktree preparation
+
+
+`prepare` accepts an executable/argument array, optional project-relative `cwd` (default `.`), and `timeoutSeconds` (default 300). It has no freshness or automatic-run mode of its own.
+
+- Before the first selected suite, run approved preparation under the same worktree lock. This applies to `all`, a single suite, command runs and automatic runs. Merely configuring or reading status never executes preparation.
+- Persist success in the worktree-local cache's `prepare.json`. Once successful, skip it across sessions/reloads and all future runs in that worktree. Shared repository approvals do **not** share preparation success.
+- Failure, timeout or cancellation blocks every selected suite and does not mark the worktree prepared. An explicit subsequent run retries preparation. Automatic runs do not repeatedly retry an unchanged failed preparation; changed source/config can make a later automatic attempt eligible after cooldown.
+- **No invalidation:** manifest/lockfile edits, a different preparation command, deleted dependencies, or removing/readding `prepare` do not clear prior success. Dependency maintenance afterward is manual. A successful flag is scoped to the cached worktree path, not a Git branch name; reusing the same checkout path reuses its cache.
+- Preparation is optional; configurations without it skip preparation. Adding/changing it requires native approval, even if preparation already succeeded.
+- `pipeline_status` exposes `prepare` separately from suite outcomes; the widget shows preparation only while running or after failure, cancellation or timeout; successful and never-run preparation stay hidden and are excluded from suite counts. A run that performs preparation includes its result before suite results. Failed preparation is a tool error with bounded output and a full log reference.
+- Put installation here, and keep ordinary compilation/build as a suite: editing source should not reinstall dependencies. Preparation is not a general suite dependency graph; ordinary suite failures still do not stop later suites.
+
+## Approval and safety
+
+
+Creation and execution approvals use blank-line-separated plain-text entries, avoiding space-padded columns that misalign in proportional-font clients:
+
+```text
+build · timeout 300s
+npm run build
+
+e2e · timeout 600s
+npm run test:e2e
+cwd: web
+```
+
+Only non-root working directories get a `cwd:` line. Updates group changed fields under each suite/preparation name using literal `-`/`+` lines; additions/removals are labeled `(added)`/`(removed)`. Unchanged fields and suites are hidden. No Markdown rendering is required.
+
+Native confirmation covers the exact commands, directories, timeouts and automation settings. In Git repositories, approval applies to identical validated configurations across **all worktrees of that repository**, identified by the canonical Git common directory (`git rev-parse --git-common-dir`). Independent repositories/clones do not share approval, even with the same remote. Outside Git, approval remains scoped to the canonical project directory. The confirmation popup explicitly shows this scope.
+
+Changes during review are refused and must be reviewed again. Configurations without an existing exact approval require confirmation before execution. Multiple approved configurations are retained, so approving a different configuration in another worktree does not invalidate earlier approvals. Without a UI channel, unapproved execution/configuration is refused; previously approved manual runs can still execute.
+
+Legacy `approval.json` records remain valid only in their original worktree; they are not silently promoted to repository-wide trust. To share an existing configuration, approve it once via `pipeline_configure` (even unchanged), or approve a manual run in a worktree without a legacy approval. New worktrees then reuse that approval automatically. Automatic scheduling still requires `auto: "after-agent"` and a settled agent turn.
+
+Approval covers configuration, not the contents of every executable, script, dependency or inherited environment variable. Only approve commands in projects you trust. This extension is not a sandbox and does not intercept arbitrary file-edit or bash tools. External configuration edits are checked before spawning, but cannot be made transactionally atomic with external writers.
+
+A per-worktree filesystem lock prevents overlapping runs/configuration reviews across Pi sessions. A second request fails as busy rather than queuing. Cancellation from another Pi session is not supported.
+
+## Results and freshness
+
+
+Results, per-run logs and transient locks with owner PID live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/<hash-of-canonical-worktree-path>/`, with private permissions. They remain isolated per worktree; a new worktree starts with never-run results and can execute independently of another worktree.
+
+New approvals live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/approvals/<scope-hash>/<configuration-fingerprint>.json`. The scope hash includes the scope kind and canonical Git common-directory path (or canonical project-directory path outside Git). Separate atomic records preserve simultaneous approvals from different worktrees. Legacy worktree-local `approval.json` files are still recognized locally.
+
+Full logs are retained; returned output is bounded. Logs can contain secrets printed by tests; retention/pruning is not implemented yet.
+
+Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Any source change makes all completed suites stale. Results do not expire with age; only source/configuration changes or changes detected during a run make them stale. The legacy suite field `staleAfterMinutes` is accepted but ignored and omitted from normalized/saved configurations. It does not affect freshness or configuration fingerprints; other unknown fields are still rejected. Approvals created before age expiry was removed may still require explicit reapproval because the normalized configuration changed. Changes detected between the start and end of a run also keep it stale, even if another run is fresh.
+
+In git projects, source fingerprints use tracked and non-ignored untracked file contents, paths, symlink targets and file modes; deleted tracked files count. Outside git, source files are scanned recursively. Conventional generated directories (`node_modules`, `dist`, `build`, `coverage`, `.next`, `__pycache__`, `.venv`, `test-results`, `playwright-report`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.turbo`) plus git metadata, `.DS_Store` and the pipeline cache directory (even if placed inside the project) are excluded. Pipeline config is fingerprinted separately. Changes reverted between fingerprint samples cannot be detected; ignored source and files behind symlinks are not scanned.
+
+Shutdown/reload aborts this session's active runs and waits for cleanup. On macOS/Linux, cancellation and timeout terminate the process group and escalate to SIGKILL; Windows uses `taskkill /T /F` (not yet tested on Windows). Processes that deliberately escape the group/tree cannot be contained.
+
+An abrupt crash can leave a lock and a last result marked running. Inspect the lock's `owner.json`, ensure no test process remains, then remove that cache's `lock` directory manually. The extension never steals a possibly live lock automatically; the next completed run replaces the interrupted result.
