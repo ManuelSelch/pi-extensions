@@ -3,7 +3,7 @@ import { execFile, spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { once } from "node:events";
 import { promisify } from "node:util";
-import { lstat, mkdir, open, readFile, readdir, readlink, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, lstat, mkdir, open, readFile, readdir, readlink, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -374,6 +374,7 @@ export class Pipeline {
 		const child = spawn(suite.command[0], suite.command.slice(1), { cwd, shell: false, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
 		let reason: "cancelled" | "timed-out" | undefined;
 		let escalation: ReturnType<typeof setTimeout> | undefined;
+		let childClosed = false;
 		const kill = (sig: NodeJS.Signals) => {
 			if (!child.pid) return;
 			try { if (process.platform === "win32") execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], () => {}); else process.kill(-child.pid, sig); }
@@ -399,6 +400,7 @@ export class Pipeline {
 			await new Promise<void>((done) => {
 				child.on("error", error => { result.output = (result.output + String(error)).slice(-MAX_OUTPUT); log.write(`${error}\n`); });
 				child.on("close", (code, sig) => {
+					childClosed = true;
 					result.exitCode = code; result.signal = sig;
 					result.outcome = reason ?? (code === 0 ? "passed" : "failed");
 					done();
@@ -409,8 +411,15 @@ export class Pipeline {
 		} finally {
 			clearTimeout(timer); if (escalation) clearTimeout(escalation);
 			signal?.removeEventListener("abort", abort);
-			kill("SIGKILL"); // also stop descendants after their parent exits
-			log.destroy();
+			try {
+				try { kill("SIGKILL"); } // also stop descendants after their parent exits
+				catch (error) {
+					if (!childClosed || (error as NodeJS.ErrnoException).code !== "EPERM") throw error;
+					const warning = `\nWarning: process group cleanup failed with EPERM; descendants may still be running.\n`;
+					result.output = (result.output + warning).slice(-MAX_OUTPUT);
+					await appendFile(result.logPath, warning);
+				}
+			} finally { log.destroy(); }
 		}
 	}
 	async ensureApproved(config: Config, confirm?: Confirm): Promise<void> {

@@ -225,6 +225,30 @@ test('tracks never-run, source changes, generated artifacts, and changes during 
   assert.equal((await p.status()).suites.unit.stale, true);
 });
 
+test('reports post-exit cleanup permission failures without failing a successful suite', { skip: process.platform === 'win32' }, async t => {
+  const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
+  await p.configure(config(), approve);
+  t.mock.method(process, 'kill', () => { throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' }); });
+
+  const [result] = await p.run('unit');
+
+  assert.equal(result.outcome, 'passed');
+  assert.equal(result.exitCode, 0);
+  assert.match(result.output, /cleanup.*EPERM/i);
+  assert.match(await fs.readFile(result.logPath, 'utf8'), /cleanup.*EPERM/i);
+});
+
+test('post-exit cleanup still fails for unexpected errors', { skip: process.platform === 'win32' }, async t => {
+  const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
+  await p.configure(config(), approve);
+  t.mock.method(process, 'kill', () => { throw Object.assign(new Error('kill EIO'), { code: 'EIO' }); });
+
+  const [result] = await p.run('unit');
+
+  assert.equal(result.outcome, 'failed');
+  assert.match(result.output, /EIO/);
+});
+
 test('enforces timeout, cancellation and exclusive worktree locks', async t => {
   const f = await fixture(t); const { Pipeline } = load(); const p = new Pipeline(f.root, f.cache);
   const c = config('setTimeout(() => {}, 10000)'); c.suites.unit.timeoutSeconds = 0.1;
