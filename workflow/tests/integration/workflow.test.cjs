@@ -10,9 +10,9 @@ test('custom steps retain global and project override behavior',async t=>{
  const app=await createWorkflowDriver(t);
  await app.defineCustomStep('custom-review','CUSTOM REVIEW instructions');
  await app.choose(['custom-review','Save'],'global');
- await app.choose(['custom-review','Save'],'local');
+ await app.choose(['custom-review','Save'],'project');
  await app.run();app.thenPromptExcludes('CUSTOM REVIEW instructions');
- await app.choose(['Restore','Save'],'local');
+ await app.choose(['Restore','Save'],'project');
  await app.run();app.thenPromptContains('CUSTOM REVIEW instructions');
 });
 test('Agentation watch workflow is opt-in and injects setup and watch guidance when enabled',async t=>{
@@ -39,12 +39,12 @@ test('multiple popup toggles save a minimal patch; other sections survive',async
  await app.status();app.thenNotificationContains('/reload');
  await app.discover();app.thenDiscoveredCount(2);
 });
-test('bare workflow rejects without opening or writing; local is the project selector',async t=>{
+test('bare workflow rejects without opening or writing; project is the project selector',async t=>{
  const app=await createWorkflowDriver(t);
- await app.invoke('');app.thenNoDialog();app.thenNotificationContains('Usage: /workflow [local|global|status|preview]');
+ await app.invoke('');app.thenNoDialog();app.thenNotificationContains('Usage: /workflow [project|global|session|status|preview]');
  await app.thenNoProjectConfig();
  await app.setGlobal({note:'keep'});
- await app.choose(['mock','Save'],'local');
+ await app.choose(['mock','Save'],'project');
  await app.thenProjectConfig({steps:{mock:{enabled:false}}});
  await app.thenGlobalConfig({note:'keep'});
 });
@@ -69,7 +69,7 @@ test('status preserves disabled states and absent resources',async t=>{
  await app.status();app.thenNotificationContains('mock: off\n  prompt: none\n  skills: none');
 });
 test('successful saves report only the abbreviated destination',async t=>{
- for(const [scope,destination] of [['local','~/project/.pi/workflow.json'],['global','~/agent/workflow.json']]){
+ for(const [scope,destination] of [['project','~/project/.pi/workflow.json'],['global','~/agent/workflow.json']]){
   const app=await createWorkflowDriver(t);await app.choose(['mock','Save'],scope);
   app.thenNotificationEquals('Saved: '+destination);
  }

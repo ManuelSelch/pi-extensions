@@ -46,7 +46,8 @@ test('draft patches only changed enablement and cancels toggle round trips', () 
   assert.deepEqual(plain(draft.patch()), {mock:null});
 });
 test('commands use subcommands, not flags or manual on/off', () => {
-  for (const [text, expected] of [['local','project'], ['global','global'], ['status','status'], ['preview','preview']]) assert.equal(parseCommand(text), expected);
-  for (const text of ['', '--global']) assert.throws(() => parseCommand(text), /Usage: \/workflow \[local\|global\|status\|preview\]/);
+  for (const [text, expected] of [['project','project'], ['global','global'], ['status','status'], ['preview','preview']]) assert.equal(parseCommand(text), expected);
+  for (const text of ['', 'local', '--global']) assert.throws(() => parseCommand(text), /Usage: \/workflow \[project\|global\|session\|status\|preview\]/);
+  assert.equal(parseCommand('session'), 'session');
   assert.throws(() => parseCommand('on mock'), /Usage/);
 });

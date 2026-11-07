@@ -11,10 +11,10 @@ async function createWorkflowDriver(t) {
  await fs.mkdir(cwd,{recursive:true});
  for (const s of ['mock','plan','design','scenario','commit']) await write(path.join(agent,'workflow/prompts',s+'.md'),s==='scenario'?'Write scenarios and wait for explicit approval before implementing; applies independently of the plan and design steps.':s+' instructions');
  for (const s of ['mockup-first','roles/analyst','roles/design-writing']) await write(path.join(agent,'workflow/skills',s,'SKILL.md'),'---\nname: '+s.split('/').at(-1)+'\ndescription: Example\n---\nSECRET SKILL BODY');
- const commands=new Map(),events=new Map(),notifications=[],dialogs=[];let choices=[],trusted=true,hasUI=true,lastEvent,discovered;
- const pi={registerCommand:(name,definition)=>commands.set(name,definition),on:(name,fn)=>events.set(name,fn)};
+ const commands=new Map(),events=new Map(),notifications=[],dialogs=[];let choices=[],trusted=true,hasUI=true,lastEvent,discovered,branch=[],firstPrompt;
+ const pi={registerCommand:(name,definition)=>commands.set(name,definition),on:(name,fn)=>events.set(name,fn),sendMessage:message=>branch.push({type:'custom_message',...message})};
  load('index.ts',{'@earendil-works/pi-coding-agent':{getAgentDir:()=>agent},'node:os':{...os,homedir:()=>dir}}).default(pi);
- const ctx=()=>({cwd,hasUI,isProjectTrusted:()=>trusted,ui:{notify:(text,type)=>notifications.push({text,type}),select:async(title,options)=>{
+ const ctx=()=>({cwd,hasUI,sessionManager:{getBranch:()=>branch},isProjectTrusted:()=>trusted,ui:{notify:(text,type)=>notifications.push({text,type}),select:async(title,options)=>{
    dialogs.push({title,options:[...options]});
    const choice=choices.shift();
    if (typeof choice==='function') return choice(options);
@@ -23,6 +23,19 @@ async function createWorkflowDriver(t) {
    assert.ok(found,'Missing option '+choice);return found;
  }}});
  return {
+  async toggleSessionStep(step){choices=[step,'Save'];await commands.get('workflow').handler('session',ctx());assert.equal(choices.length,0);},
+  async thenSessionStepEnabled(step, enabled){choices=['Cancel'];await commands.get('workflow').handler('session',ctx());assert.ok(dialogs.at(-1).options.includes(`[${enabled?'x':' '}] ${step}`));},
+  async thenWorkflowTransitionMessage(step, enabled){const message=branch.at(-1);assert.equal(message.display,false);assert.ok(message.content.includes(`Workflow step ${step} is now ${enabled?'enabled':'disabled'}.`));if(enabled)assert.ok(message.content.includes(`${step} instructions`));},
+  async thenCachedPrefixPreserved(){
+   assert.equal(lastEvent.systemPromptOptions.sections.workflow,firstPrompt);
+   assert.equal(branch.at(-1).customType,'workflow-session');
+   const {createNativeDriver}=require('./native-driver.cjs');
+   const native=await createNativeDriver(t);
+   const sdk=process.env.PI_WORKFLOW_SDK_ENTRIES?.split(path.delimiter)[0] ?? path.resolve(__dirname,'../../../../../git/pi-chat/node_modules/@earendil-works/pi-coding-agent/dist/index.js');
+   await native.runNativeSession(sdk);
+   native.thenNativeWorkflowWorks();
+  },
+  async startNewSession(){branch=[];},
   async defineCustomStep(name, content){await write(path.join(agent,'workflow/prompts',name+'.md'),content);await write(path.join(agent,'workflow.json'),{steps:{[name]:{enabled:false,prompt:'workflow/prompts/'+name+'.md',skills:[]}}});},
   async setProject(value){await write(path.join(cwd,'.pi/workflow.json'),value);},
   async setGlobal(value){await write(path.join(agent,'workflow.json'),value);},
@@ -30,8 +43,8 @@ async function createWorkflowDriver(t) {
   async editPrompt(step,text){await write(path.join(agent,'workflow/prompts',step+'.md'),text);},
   setTrusted(value){trusted=value;},setUI(value){hasUI=value;},
   async discover(){discovered=await events.get('resources_discover')({cwd,reason:'startup'},ctx());return discovered;},
-  async run({supported=true,sections={other:'preserved'}}={}){lastEvent={systemPromptOptions:supported?{sections}:{}};await events.get('before_agent_start')(lastEvent,ctx());return lastEvent;},
-  async choose(actions=[],scope='local'){choices=[...actions];await commands.get('workflow').handler(scope,ctx());assert.equal(choices.length,0);},
+  async run({supported=true,sections={other:'preserved'}}={}){lastEvent={systemPromptOptions:supported?{sections}:{}};await events.get('before_agent_start')(lastEvent,ctx());if(firstPrompt===undefined)firstPrompt=sections.workflow;return lastEvent;},
+  async choose(actions=[],scope='project'){choices=[...actions];await commands.get('workflow').handler(scope,ctx());assert.equal(choices.length,0);},
   async invoke(args=''){await commands.get('workflow').handler(args,ctx());},
   async status(){await commands.get('workflow').handler('status',ctx());},
   async preview(){await commands.get('workflow').handler('preview',ctx());},
@@ -68,8 +81,8 @@ async function createWorkflowDriver(t) {
   async thenNoProjectConfig(){await assert.rejects(fs.stat(path.join(cwd,'.pi/workflow.json')),/ENOENT/);},
   thenPreviewOnlyPrompts(){const text=notifications.at(-1).text;assert.ok(text.includes('mock instructions'));assert.ok(!text.includes('SECRET'));},
   thenNoLegacyFallback(){assert.equal(lastEvent.systemPrompt,undefined);assert.equal(lastEvent.systemPromptOptions.appendSystemPrompt,undefined);},
-  async revokeTrustDuringSave(){choices=['mock',()=>{trusted=false;return 'Save';}];await commands.get('workflow').handler('local',ctx());},
-  async toggleConcurrently(step){choices=[step,async options=>{await write(path.join(cwd,'.pi/workflow.json'),{steps:{[step]:{enabled:false}}});return 'Save';}];await commands.get('workflow').handler('local',ctx());},
+  async revokeTrustDuringSave(){choices=['mock',()=>{trusted=false;return 'Save';}];await commands.get('workflow').handler('project',ctx());},
+  async toggleConcurrently(step){choices=[step,async options=>{await write(path.join(cwd,'.pi/workflow.json'),{steps:{[step]:{enabled:false}}});return 'Save';}];await commands.get('workflow').handler('project',ctx());},
  };
 }
 module.exports={createWorkflowDriver};

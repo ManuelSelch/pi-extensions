@@ -11,12 +11,12 @@ export async function selectWorkflow(ui: SelectionUI, editing: Editing): Promise
   const values = draft.values();
   const rows = Object.keys(values).map(s => ({ step: s, label: `[${values[s] ? "x" : " "}] ${s}` }));
   const options = rows.map(r => r.label);
-  if (snapshot.scope === "project") options.push("Restore");
+  if (snapshot.scope !== "global") options.push("Restore");
   options.push("Save", "Cancel");
-  const choice = await ui.select(`Workflow ${snapshot.scope}: ${displayPath(snapshot.file)}`, options);
+  const choice = await ui.select(snapshot.scope === "session" ? "Workflow session" : `Workflow ${snapshot.scope}: ${displayPath(snapshot.file)}`, options);
   if (choice === undefined || choice === "Cancel") return false;
   if (choice === "Save") return true;
-  if (choice === "Restore" && snapshot.scope === "project") draft.restore();
+  if (choice === "Restore" && snapshot.scope !== "global") draft.restore();
   else {
    const row = rows.find(r => r.label === choice);
    if (row) draft.toggle(row.step);

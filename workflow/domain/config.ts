@@ -84,9 +84,8 @@ export class WorkflowDraft {
 	}
 }
 
-export function parseCommand(args: string): "project" | "global" | "status" | "preview" {
+export function parseCommand(args: string): "project" | "global" | "session" | "status" | "preview" {
 	const command = args.trim();
-	if (command === "local") return "project";
-	if (command === "global" || command === "status" || command === "preview") return command;
-	throw new Error("Usage: /workflow [local|global|status|preview]");
+	if (command === "project" || command === "global" || command === "session" || command === "status" || command === "preview") return command;
+	throw new Error("Usage: /workflow [project|global|session|status|preview]");
 }
