@@ -28,7 +28,7 @@ The [Claude Code marketplace](.claude-plugin/marketplace.json) lists compatible 
 | [readonly-mode/index.ts](readonly-mode/index.ts) | `/readonly` — block write/edit tools and destructive bash. |
 | [todo/index.ts](todo/index.ts) | `todo`, `/todos` — session task tracking. |
 | [learning-plan/index.ts](learning-plan/index.ts) | `learning_plan`, `/learning-plan` — session learning milestones and assessment evidence. See [usage](docs/learning-plan/README.md). |
-| [workflow/index.ts](workflow/index.ts) | `/workflow local`, `/workflow global` — select enabled mock/plan/design/scenario/commit prompts and native skills. See [usage](docs/workflow/README.md). |
+| [workflow/index.ts](workflow/index.ts) | `/workflow local`, `/workflow global` — select built-in and custom workflow prompts and native skills. See [usage](docs/workflow/README.md). |
 
 ## Disabled extensions
 

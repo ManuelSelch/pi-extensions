@@ -1,5 +1,34 @@
 const {test}=require('node:test');
 const {createWorkflowDriver}=require('./support/workflow-driver.cjs');
+test('a configured custom workflow step can be enabled without changing extension code',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.defineCustomStep('custom-review','CUSTOM REVIEW instructions');
+ await app.choose(['custom-review','Save']);
+ await app.run();app.thenPromptContains('CUSTOM REVIEW instructions');
+});
+test('custom steps retain global and project override behavior',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.defineCustomStep('custom-review','CUSTOM REVIEW instructions');
+ await app.choose(['custom-review','Save'],'global');
+ await app.choose(['custom-review','Save'],'local');
+ await app.run();app.thenPromptExcludes('CUSTOM REVIEW instructions');
+ await app.choose(['Restore','Save'],'local');
+ await app.run();app.thenPromptContains('CUSTOM REVIEW instructions');
+});
+test('Agentation watch workflow is opt-in and injects setup and watch guidance when enabled',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.defineCustomStep('agentation-watch','AGENTATION WATCH instructions');
+ await app.run();app.thenPromptExcludes('AGENTATION WATCH instructions');
+ await app.choose(['agentation-watch','Save']);
+ await app.run();app.thenPromptContains('AGENTATION WATCH instructions');
+});
+test('Agentation watch workflow can be disabled without changing other workflow guidance',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.defineCustomStep('agentation-watch','AGENTATION WATCH instructions');
+ await app.choose(['agentation-watch','Save']);
+ await app.choose(['agentation-watch','Save']);
+ await app.run();app.thenPromptExcludes('AGENTATION WATCH instructions');app.thenPromptContains('mock instructions');
+});
 test('multiple popup toggles save a minimal patch; other sections survive',async t=>{
  const app=await createWorkflowDriver(t);await app.discover();app.thenDiscoveredCount(3);
  await app.setGlobal({note:'global unchanged',steps:{mock:{enabled:true}}});

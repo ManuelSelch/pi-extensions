@@ -1,4 +1,4 @@
-import { enablement, steps, WorkflowDraft } from "../domain/config.ts";
+import { enablement, WorkflowDraft } from "../domain/config.ts";
 import type { Snapshot, WorkflowStore } from "../infra/store.ts";
 import { displayPath } from "./display-path.ts";
 
@@ -35,7 +35,7 @@ export class WorkflowController {
  async status(cwd: string, trusted: boolean): Promise<string> {
   const snapshot = await this.store.load(cwd, trusted);
   const lines = [`Workflow project: ${displayPath(snapshot.file)}${trusted ? "" : " (untrusted; ignored)"}`];
-  for (const step of steps) {
+  for (const step of Object.keys(snapshot.resolved)) {
    const value = snapshot.resolved[step];
    lines.push(`${step}: ${value.enabled ? "on" : "off"}`,
     `  prompt: ${value.prompt === null ? "none" : displayPath(value.prompt)}`,

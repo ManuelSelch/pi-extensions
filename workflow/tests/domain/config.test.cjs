@@ -17,7 +17,7 @@ test('inherits fields independently, retaining false, null, empty lists and prov
 test('validates the unversioned current shape without mutating unknown fields', () => {
   const config = {note:1,steps:{mock:{enabled:false, extra:'keep'}}};
   assert.equal(validateConfig(config, 'config.json'), config);
-  for(const value of [null, [], {steps:[]}, {steps:{typo:{}}}, {steps:{mock:{enabled:'yes'}}}, {steps:{mock:{prompt:''}}}, {steps:{mock:{skills:[1]}}}]) {
+  for(const value of [null, [], {steps:[]}, {steps:{'Invalid Name':{}}}, {steps:{constructor:{}}}, {steps:{prototype:{}}}, {steps:{mock:{enabled:'yes'}}}, {steps:{mock:{prompt:''}}}, {steps:{mock:{skills:[1]}}}]) {
     assert.throws(() => validateConfig(value, 'config.json'), /config.json/);
   }
 });
@@ -32,8 +32,8 @@ test('shipped defaults require every field for every step, including disabled st
   config.steps.mock={enabled:false,prompt:null,skills:[]};
   assert.deepEqual(plain(validateDefaults(config, 'defaults.json').mock), config.steps.mock);
 });
-test('composes prompts once in fixed order, not input order', () => {
-  assert.equal(composePrompts({commit:'commit',mock:'mock',design:'design',scenario:'scenario'}), '## mock\nmock\n\n## design\ndesign\n\n## scenario\nscenario\n\n## commit\ncommit');
+test('composes prompts in configured order', () => {
+  assert.equal(composePrompts({commit:'commit',mock:'mock'}), '## commit\ncommit\n\n## mock\nmock');
 });
 test('draft patches only changed enablement and cancels toggle round trips', () => {
   const draft = new WorkflowDraft({steps:{mock:{enabled:false}}}, {mock:false,plan:true,design:true,scenario:true,commit:true}, {mock:true,plan:true,design:true,scenario:true,commit:true});

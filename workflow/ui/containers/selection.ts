@@ -1,4 +1,3 @@
-import { steps } from "../../domain/config.ts";
 import type { Editing } from "../../app/controller.ts";
 import { displayPath } from "../../app/display-path.ts";
 
@@ -10,7 +9,7 @@ export async function selectWorkflow(ui: SelectionUI, editing: Editing): Promise
  const { snapshot, draft } = editing;
  for (;;) {
   const values = draft.values();
-  const rows = steps.map(s => ({ step: s, label: `[${values[s] ? "x" : " "}] ${s}` }));
+  const rows = Object.keys(values).map(s => ({ step: s, label: `[${values[s] ? "x" : " "}] ${s}` }));
   const options = rows.map(r => r.label);
   if (snapshot.scope === "project") options.push("Restore");
   options.push("Save", "Cancel");

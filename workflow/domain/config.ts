@@ -1,5 +1,5 @@
 export const steps = ["mock", "plan", "design", "scenario", "commit"] as const;
-export type Step = typeof steps[number];
+export type Step = string;
 export interface StepConfig {
 	enabled?: boolean;
 	prompt?: string | null;
@@ -25,7 +25,7 @@ export function validateConfig(value: unknown, source: string): WorkflowConfig {
 	if (value.steps !== undefined) {
 		if (!object(value.steps)) return fail("steps");
 		for (const [name, entry] of Object.entries(value.steps)) {
-			if (!steps.includes(name as Step) || !object(entry)) return fail(`steps.${name}`);
+			if (!/^[a-z][a-z0-9-]*$/.test(name) || name === "constructor" || name === "prototype" || !object(entry)) return fail(`steps.${name}`);
 			if (entry.enabled !== undefined && typeof entry.enabled !== "boolean") return fail(`steps.${name}.enabled`);
 			if (entry.prompt !== undefined && entry.prompt !== null && !pathString(entry.prompt)) return fail(`steps.${name}.prompt`);
 			if (entry.skills !== undefined && (!Array.isArray(entry.skills) || !entry.skills.every(pathString))) return fail(`steps.${name}.skills`);
@@ -36,7 +36,8 @@ export function validateConfig(value: unknown, source: string): WorkflowConfig {
 
 export function validateDefaults(value: unknown, source: string): Defaults {
 	const config = validateConfig(value, source);
-	return Object.fromEntries(steps.map(step => {
+	if (!config.steps || !steps.every(step => config.steps?.[step])) throw new Error(`${source}: defaults require all built-in steps`);
+	return Object.fromEntries(Object.keys(config.steps).map(step => {
 		const entry = config.steps?.[step];
 		if (entry?.enabled === undefined || entry.prompt === undefined || entry.skills === undefined) {
 			throw new Error(`${source}: defaults require enabled, prompt and skills for ${step}`);
@@ -46,8 +47,10 @@ export function validateDefaults(value: unknown, source: string): Defaults {
 }
 
 export function resolveSteps(defaults: Defaults, global: WorkflowConfig = {}, project: WorkflowConfig = {}, globalSource = "global", projectSource = "project", defaultSource = "default"): Resolved {
-	return Object.fromEntries(steps.map(step => {
-		const value = { ...defaults[step], sources: { enabled: defaultSource, prompt: defaultSource, skills: defaultSource } };
+	const names = [...new Set([...Object.keys(defaults), ...Object.keys(global.steps ?? {}), ...Object.keys(project.steps ?? {})])];
+	return Object.fromEntries(names.map(step => {
+		const base = Object.hasOwn(defaults, step) ? defaults[step] : { enabled: false, prompt: null, skills: [] };
+		const value = { ...base, sources: { enabled: defaultSource, prompt: defaultSource, skills: defaultSource } };
 		for (const [config, source] of [[global, globalSource], [project, projectSource]] as const) {
 			const entry = config.steps?.[step];
 			if (!entry) continue;
@@ -60,24 +63,24 @@ export function resolveSteps(defaults: Defaults, global: WorkflowConfig = {}, pr
 }
 
 export function composePrompts(prompts: Partial<Record<Step, string>>): string {
-	return steps.filter(s => prompts[s]?.trim()).map(s => `## ${s}\n${prompts[s]!.trim()}`).join("\n\n");
+	return Object.keys(prompts).filter(s => prompts[s]?.trim()).map(s => `## ${s}\n${prompts[s]!.trim()}`).join("\n\n");
 }
-export const enablement = (resolved: Resolved): Enabled => Object.fromEntries(steps.map(s => [s, resolved[s].enabled])) as Enabled;
+export const enablement = (resolved: Resolved): Enabled => Object.fromEntries(Object.keys(resolved).map(s => [s, resolved[s].enabled])) as Enabled;
 
 export class WorkflowDraft {
 	private readonly original: Partial<Record<Step, boolean>> = {};
 	private readonly local: Partial<Record<Step, boolean>> = {};
 	constructor(config: WorkflowConfig, private readonly initial: Enabled, private readonly inherited: Enabled) {
-		for (const s of steps) this.original[s] = this.local[s] = config.steps?.[s]?.enabled;
+		for (const s of Object.keys(initial)) this.original[s] = this.local[s] = config.steps?.[s]?.enabled;
 	}
-	values(): Enabled { return Object.fromEntries(steps.map(s => [s, this.local[s] ?? this.inherited[s]])) as Enabled; }
+	values(): Enabled { return Object.fromEntries(Object.keys(this.initial).map(s => [s, this.local[s] ?? this.inherited[s] ?? false])) as Enabled; }
 	toggle(step: Step): void {
 		const next = !this.values()[step];
 		this.local[step] = next === this.initial[step] ? this.original[step] : next;
 	}
-	restore(): void { for (const s of steps) this.local[s] = undefined; }
+	restore(): void { for (const s of Object.keys(this.initial)) this.local[s] = undefined; }
 	patch(): Patch {
-		return Object.fromEntries(steps.filter(s => this.local[s] !== this.original[s]).map(s => [s, this.local[s] ?? null]));
+		return Object.fromEntries(Object.keys(this.initial).filter(s => this.local[s] !== this.original[s]).map(s => [s, this.local[s] ?? null]));
 	}
 }
 

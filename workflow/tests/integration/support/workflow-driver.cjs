@@ -23,6 +23,7 @@ async function createWorkflowDriver(t) {
    assert.ok(found,'Missing option '+choice);return found;
  }}});
  return {
+  async defineCustomStep(name, content){await write(path.join(agent,'workflow/prompts',name+'.md'),content);await write(path.join(agent,'workflow.json'),{steps:{[name]:{enabled:false,prompt:'workflow/prompts/'+name+'.md',skills:[]}}});},
   async setProject(value){await write(path.join(cwd,'.pi/workflow.json'),value);},
   async setGlobal(value){await write(path.join(agent,'workflow.json'),value);},
   async deletePrompt(step){await fs.rm(path.join(agent,'workflow/prompts',step+'.md'));},
@@ -35,6 +36,7 @@ async function createWorkflowDriver(t) {
   async status(){await commands.get('workflow').handler('status',ctx());},
   async preview(){await commands.get('workflow').handler('preview',ctx());},
   thenPromptContains(text){assert.ok(lastEvent.systemPromptOptions.sections.workflow.includes(text));},
+  thenPromptExcludes(text){assert.ok(!(lastEvent.systemPromptOptions.sections.workflow ?? '').includes(text));},
   thenNoPrompt(){assert.equal(lastEvent.systemPromptOptions.sections.workflow,undefined);},
   thenOtherSectionPreserved(){assert.equal(lastEvent.systemPromptOptions.sections.other,'preserved');},
   thenDiscoveredCount(count){assert.equal(discovered.skillPaths.length,count);},

@@ -2,7 +2,7 @@ import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { composePrompts, resolveSteps, steps, validateConfig, validateDefaults } from "../domain/config.ts";
+import { composePrompts, resolveSteps, validateConfig, validateDefaults } from "../domain/config.ts";
 import type { Patch, Resolved, Step, WorkflowConfig } from "../domain/config.ts";
 
 export interface Snapshot {
@@ -26,7 +26,7 @@ async function readConfig(file: string, required = false): Promise<{ config: Wor
 }
 function normalize(config: WorkflowConfig, file: string): WorkflowConfig {
 	const result: WorkflowConfig = { ...config, steps: {} };
-	for (const s of steps) {
+	for (const s of Object.keys(config.steps ?? {})) {
 		const entry = config.steps?.[s];
 		if (!entry) continue;
 		result.steps![s] = {
@@ -62,7 +62,7 @@ export class WorkflowStore {
 	async resources(resolved: Resolved): Promise<Resources> {
 		const prompts: Partial<Record<Step, string>> = {};
 		const seenPrompts = new Set<string>(), skillPaths = new Set<string>();
-		for (const s of steps) {
+		for (const s of Object.keys(resolved)) {
 			const entry = resolved[s];
 			if (!entry.enabled) continue;
 			if (entry.prompt !== null) {
@@ -90,7 +90,7 @@ export class WorkflowStore {
 		if (!snapshot.writable) throw new Error("Project workflow editing requires project trust.");
 		if (!Object.keys(patch).length) return false;
 		for (const [s, value] of Object.entries(patch)) {
-			if (!steps.includes(s as Step) || (value !== null && typeof value !== "boolean")) throw new Error("Invalid workflow patch");
+			if (!Object.hasOwn(snapshot.resolved, s) || (value !== null && typeof value !== "boolean")) throw new Error("Invalid workflow patch");
 		}
 		const file = snapshot.file, lock = `${file}.lock`;
 		await mkdir(dirname(file), { recursive: true });
@@ -103,7 +103,7 @@ export class WorkflowStore {
 		try {
 			const current = await readConfig(file);
 			const next: WorkflowConfig = { ...current.config, steps: { ...current.config.steps } };
-			for (const s of steps) {
+			for (const s of Object.keys(patch)) {
 				if (!(s in patch)) continue;
 				if (current.config.steps?.[s]?.enabled !== snapshot.config.steps?.[s]?.enabled) throw new Error(`${file}: ${s}.enabled changed while the popup was open. Reopen /workflow.`);
 				const entry = { ...next.steps![s] };
