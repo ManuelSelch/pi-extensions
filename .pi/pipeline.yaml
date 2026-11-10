@@ -1,9 +1,89 @@
 suites:
+  agent-defaults:
+    command: [npm, test, --, agent-defaults]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  agentic-flow:
+    command: [npm, test, --, agentic-flow]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  calendar:
+    command: [npm, test, --, calendar]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  claude-rules:
+    command: [npm, test, --, claude-rules]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  extension-manager:
+    command: [npm, test, --, extension-manager]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  git-status:
+    command: [npm, test, --, git-status]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  handoff:
+    command: [npm, test, --, handoff]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  learning-plan:
+    command: [npm, test, --, learning-plan]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  pi-open:
+    command: [npm, test, --, pi-open]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  pipeline:
+    command: [npm, test, --, pipeline]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  preview:
+    command: [npm, test, --, preview]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  projects:
+    command: [npm, test, --, projects]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  quiz:
+    command: [npm, test, --, quiz]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  scripts:
+    command: [npm, test, --, scripts]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  todo:
+    command: [npm, test, --, todo]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
+  workflow:
+    command: [npm, test, --, workflow]
+    cwd: .
+    timeoutSeconds: 120
+    auto: after-agent
   tests:
     command: [npm, test]
     cwd: .
     timeoutSeconds: 120
-    auto: after-agent
+    auto: manual
   typecheck:
     command: [npm, run, typecheck]
     cwd: .
