@@ -29,6 +29,26 @@ test('Agentation watch workflow can be disabled without changing other workflow 
  await app.choose(['agentation-watch','Save']);
  await app.run();app.thenPromptExcludes('AGENTATION WATCH instructions');app.thenPromptContains('mock instructions');
 });
+test('Kaneo workflow can be enabled to guide task maintenance through the MCP server',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.installKaneoWorkflow();
+ await app.choose(['kaneo','Save']);
+ await app.run();
+ app.thenKaneoTaskMaintenanceGuidance();
+});
+test('Kaneo workflow guides discovery capture without derailing the current task',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.installKaneoWorkflow();
+ await app.choose(['kaneo','Save']);
+ await app.run();
+ app.thenKaneoDiscoveryGuidance();
+});
+test('disabled Kaneo workflow does not inject task management guidance',async t=>{
+ const app=await createWorkflowDriver(t);
+ await app.installKaneoWorkflow();
+ await app.run();
+ app.thenKaneoGuidanceAbsent();
+});
 test('multiple popup toggles save a minimal patch; other sections survive',async t=>{
  const app=await createWorkflowDriver(t);await app.discover();app.thenDiscoveredCount(3);
  await app.setGlobal({note:'global unchanged',steps:{mock:{enabled:true}}});
