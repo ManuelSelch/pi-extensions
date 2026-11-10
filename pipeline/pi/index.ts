@@ -141,8 +141,10 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 				try { names = Object.keys((await completionPipeline.config())?.suites ?? {}); }
 				catch { /* Invalid or absent config must not break command completion. */ }
 			}
-			const values = ["status", "run all", ...names.filter(name => name !== "all").map(name => `run ${name}`), "cancel"].filter(value => value.startsWith(prefix));
-			return values.map(value => ({ value, label: value }));
+			const values = (prefix.startsWith("run ")
+				? ["run all", ...names.filter(name => name !== "all").map(name => `run ${name}`)]
+				: ["status", "run", "cancel"]).filter(value => value.startsWith(prefix));
+			return values.map(value => ({ value, label: prefix.startsWith("run ") ? value.slice(4) : value }));
 		},
 		async handler(args, ctx) {
 			try {

@@ -84,6 +84,7 @@ async function createDriver() {
     },
     async requestPipelineCompletions(prefix) { completions = await commands.pipeline.getArgumentCompletions(prefix); },
     async shouldSuggestCompletions(expected) { assert.deepEqual(Array.from(completions ?? [], item => item.value), expected); },
+    async shouldDisplayCompletionLabels(expected) { assert.deepEqual(Array.from(completions ?? [], item => item.label), expected); },
     setReader(value) { Reader = value; },
     async dispose() { if (this.disposed) return; this.disposed = true; this.finishSourceScan(); await events.session_shutdown({}, ctx); },
   };
@@ -155,6 +156,17 @@ test('GitHub failure does not hide local results', async () => {
   await app.shouldShowLocalAndGitHubError('web', 'timeout');
 });
 
+test('pipeline completion offers run before choosing a suite', async () => {
+  const app = await createDriver();
+  await app.configureNamedSuites(['web', 'server']);
+  await app.startSession();
+
+  await app.requestPipelineCompletions('r');
+  await app.shouldSuggestCompletions(['run']);
+  await app.requestPipelineCompletions('run ');
+  await app.shouldSuggestCompletions(['run all', 'run web', 'run server']);
+});
+
 test('pipeline run completion suggests configured suite names and all filtered by prefix', async () => {
   const app = await createDriver();
   await app.configureNamedSuites(['web', 'server']);
@@ -162,6 +174,7 @@ test('pipeline run completion suggests configured suite names and all filtered b
 
   await app.requestPipelineCompletions('run ');
   await app.shouldSuggestCompletions(['run all', 'run web', 'run server']);
+  await app.shouldDisplayCompletionLabels(['all', 'web', 'server']);
   await app.requestPipelineCompletions('run se');
   await app.shouldSuggestCompletions(['run server']);
 });
