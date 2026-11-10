@@ -24,6 +24,32 @@ suites:
     auto: manual
 ```
 
+Suites may also group named jobs. Shared settings apply to each job unless that job overrides them:
+
+```yaml
+suites:
+  frontend:
+    cwd: web
+    timeoutSeconds: 120
+    auto: after-agent
+    jobs:
+      lint:
+        command: [npm, run, lint]
+      tests:
+        command: [npm, test]
+        timeoutSeconds: 300
+        auto: manual
+  backend:
+    cwd: server
+    jobs:
+      tests:
+        command: [npm, test]
+```
+
+A suite uses either `command` or a non-empty `jobs` mapping, not both. Each job has one command and can override `cwd`, `timeoutSeconds`, and `auto`; absent suite settings use the normal defaults. Explicit job overrides are preserved even when equal to the suite default. Existing command-only suites, their approvals and results remain valid. Configuration review covers job commands, effective settings, inheritance changes and job order.
+
+`/pipeline run frontend` and `pipeline_run({suite: "frontend"})` run only that suite's jobs, serially in declaration order; `all` runs all suites and their jobs in order. Failures do not prevent later jobs from running; cancellation and preparation failure still stop execution. Automatic runs select individual jobs using their effective `auto` setting. Individual job selection is not supported.
+
 Suite declaration order controls serial execution and widget order; suites are not alphabetically sorted. Use descriptive suite names (JavaScript enumerates integer-only names numerically). Reorder suites via `pipeline_configure` to review and approve the new configuration.
 
 Configuration is stored in `.pi/pipeline.yaml` (no `version` key) at the git worktree root, or Pi's cwd outside git. Starting Pi in a git subdirectory still uses the worktree root. Commit the configuration if you want to share it; approvals and results are never stored in that file.
@@ -96,7 +122,7 @@ New approvals live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/approvals
 
 Full logs are retained; returned output is bounded. Logs can contain secrets printed by tests; retention/pruning is not implemented yet.
 
-Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Results retain their latest outcome regardless of subsequent source or configuration changes; fingerprints still determine automatic rerun eligibility. The legacy suite field `staleAfterMinutes` is accepted but ignored and omitted from normalized/saved configurations.
+Each command-only suite or grouped job result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Grouped suite status contains a `jobs` mapping and an aggregate outcome: running takes precedence, then a failed/cancelled/timed-out job, then never-run, then passed. Expanded status shows each job; the widget shows jobs needing attention. Run results identify grouped jobs with `suite` and `job`. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Results retain their latest outcome regardless of subsequent source or configuration changes; fingerprints still determine automatic rerun eligibility. The legacy suite field `staleAfterMinutes` is accepted but ignored and omitted from normalized/saved configurations.
 
 In git projects, source fingerprints use tracked and non-ignored untracked file contents, paths, symlink targets and file modes; deleted tracked files count. Outside git, source files are scanned recursively. Conventional generated directories (`node_modules`, `dist`, `build`, `coverage`, `.next`, `__pycache__`, `.venv`, `test-results`, `playwright-report`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.turbo`) plus git metadata, `.DS_Store` and the pipeline cache directory (even if placed inside the project) are excluded. Pipeline config is fingerprinted separately. Changes reverted between fingerprint samples cannot be detected; ignored source and files behind symlinks are not scanned.
 

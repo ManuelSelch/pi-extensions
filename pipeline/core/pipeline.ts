@@ -21,9 +21,26 @@ export interface Prepare {
 export interface Suite extends Prepare {
 	auto: "manual" | "after-agent";
 }
-export interface Config { suites: Record<string, Suite>; prepare?: Prepare }
+export interface JobDefinition {
+	command: string[];
+	cwd?: string;
+	timeoutSeconds?: number;
+	auto?: "manual" | "after-agent";
+}
+export interface JobSuite {
+	cwd: string;
+	timeoutSeconds: number;
+	auto: "manual" | "after-agent";
+	jobs: Record<string, JobDefinition>;
+}
+export function effectiveJob(suite: JobSuite, job: JobDefinition): Suite {
+	return { command: job.command, cwd: job.cwd ?? suite.cwd, timeoutSeconds: job.timeoutSeconds ?? suite.timeoutSeconds, auto: job.auto ?? suite.auto };
+}
+export type ConfigSuite = Suite | JobSuite;
+export interface Config { suites: Record<string, ConfigSuite>; prepare?: Prepare }
 export interface RunResult {
 	suite: string;
+	job?: string;
 	outcome: "running" | "passed" | "failed" | "cancelled" | "timed-out";
 	startedAt: string;
 	finishedAt?: string;
@@ -37,7 +54,8 @@ export interface RunResult {
 	changedDuringRun: boolean;
 	pid: number;
 }
-export type SuiteStatus = RunResult | { outcome: "never" };
+export type JobStatus = RunResult | { outcome: "never" };
+export type SuiteStatus = JobStatus | (JobStatus & { jobs: Record<string, JobStatus> });
 export interface PipelineStatus {
 	github?: GitHubStatus;
 	configured: boolean;
@@ -66,14 +84,19 @@ export function automaticSuites(status: PipelineStatus | undefined, now = Date.n
 		if (prepare.outcome === "running" || now - Date.parse(prepare.finishedAt ?? prepare.startedAt) < cooldownMs) return [];
 		if (!prepare.changedDuringRun && prepare.sourceFingerprint === status.sourceFingerprint && prepare.configFingerprint === status.configFingerprint) return [];
 	}
-	return Object.entries(status.config.suites).filter(([name, suite]) => {
+	const eligible = (suite: Suite, result: JobStatus | undefined) => {
 		if (suite.auto !== "after-agent") return false;
-		const result = status.suites[name];
 		if (!result || result.outcome === "never") return true;
 		if (result.outcome === "running") return false;
 		if (now - Date.parse(result.finishedAt ?? result.startedAt) < cooldownMs) return false;
 		return result.changedDuringRun || result.sourceFingerprint !== status.sourceFingerprint || result.configFingerprint !== status.configFingerprint;
-	}).map(([name]) => name);
+	};
+	return Object.entries(status.config.suites).flatMap(([name, suite]) => {
+		if (!("jobs" in suite)) return eligible(suite, status.suites[name]) ? [name] : [];
+		const result = status.suites[name];
+		const jobs = result && "jobs" in result ? result.jobs : {};
+		return Object.entries(suite.jobs).filter(([job, step]) => eligible(effectiveJob(suite, step), jobs[job])).map(([job]) => `${name}/${job}`);
+	});
 }
 const MAX_OUTPUT = 16384;
 const GENERATED = new Set([
@@ -96,12 +119,28 @@ function keys(value: Record<string, unknown>, allowed: string[]) {
 export function validateConfig(input: unknown): Config {
 	const value = object(input);
 	keys(value, ["suites", "prepare"]);
-	const suites: Record<string, Suite> = Object.create(null);
+	const suites: Record<string, ConfigSuite> = Object.create(null);
 	for (const [name, inputSuite] of Object.entries(object(value.suites))) {
 		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error(`Invalid suite name: ${name}`);
 		const suite = object(inputSuite);
 		// Accept but discard the removed age-expiry option in existing suite configs.
-		keys(suite, ["command", "cwd", "timeoutSeconds", "auto", "staleAfterMinutes"]);
+		keys(suite, ["command", "jobs", "cwd", "timeoutSeconds", "auto", "staleAfterMinutes"]);
+		if (suite.jobs !== undefined) {
+			if (suite.command !== undefined) throw new Error(`${name}: choose command or jobs`);
+			const jobs = object(suite.jobs);
+			if (!Object.keys(jobs).length) throw new Error(`${name}: jobs must not be empty`);
+			const defaults = validateConfig({ suites: { defaults: { command: ["placeholder"], cwd: suite.cwd, timeoutSeconds: suite.timeoutSeconds, auto: suite.auto } } }).suites.defaults as Suite;
+			const normalized: Record<string, JobDefinition> = Object.create(null);
+			for (const [jobName, value] of Object.entries(jobs)) {
+				if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(jobName)) throw new Error(`Invalid job name: ${jobName}`);
+				const job = object(value);
+				keys(job, ["command", "cwd", "timeoutSeconds", "auto"]);
+				const checked = validateConfig({ suites: { [jobName]: { cwd: defaults.cwd, timeoutSeconds: defaults.timeoutSeconds, auto: defaults.auto, ...job } } }).suites[jobName] as Suite;
+				normalized[jobName] = { command: checked.command, ...(job.cwd !== undefined ? { cwd: checked.cwd } : {}), ...(job.timeoutSeconds !== undefined ? { timeoutSeconds: checked.timeoutSeconds } : {}), ...(job.auto !== undefined ? { auto: checked.auto } : {}) };
+			}
+			suites[name] = { cwd: defaults.cwd, timeoutSeconds: defaults.timeoutSeconds, auto: defaults.auto, jobs: normalized };
+			continue;
+		}
 		if (!Array.isArray(suite.command) || !suite.command.length || suite.command.some(arg => typeof arg !== "string" || arg.includes("\0")) || !suite.command[0].trim()) {
 			throw new Error(`${name}: command must be a nonempty executable/argument array`);
 		}
@@ -116,7 +155,7 @@ export function validateConfig(input: unknown): Config {
 	if (value.prepare === undefined) return { suites };
 	const prepare = object(value.prepare);
 	keys(prepare, ["command", "cwd", "timeoutSeconds"]);
-	const normalized = validateConfig({ suites: { prepare } }).suites.prepare;
+	const normalized = validateConfig({ suites: { prepare } }).suites.prepare as Suite;
 	return { suites, prepare: { command: normalized.command, cwd: normalized.cwd, timeoutSeconds: normalized.timeoutSeconds } };
 }
 export async function projectRoot(cwd: string): Promise<string> {
@@ -242,7 +281,9 @@ export class Pipeline {
 	}
 	async configure(input: unknown, confirm?: Confirm): Promise<boolean> {
 		const proposal = validateConfig(input);
-		for (const suite of [...Object.values(proposal.suites), ...(proposal.prepare ? [proposal.prepare] : [])]) await this.suiteCwd(suite);
+		for (const suite of [...Object.values(proposal.suites), ...(proposal.prepare ? [proposal.prepare] : [])]) {
+			for (const step of "jobs" in suite ? Object.values(suite.jobs).map(job => effectiveJob(suite, job)) : [suite]) await this.suiteCwd(step);
+		}
 		if (!confirm) throw new Error("User approval required: no interactive confirmation channel");
 		const release = await this.acquire();
 		try {
@@ -271,9 +312,13 @@ export class Pipeline {
 		const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
 		const configFingerprint = digest(JSON.stringify(config));
 		const suites: Record<string, SuiteStatus> = Object.create(null);
-		for (const name of Object.keys(config.suites)) {
-			const result = results[name];
-			suites[name] = result ?? { outcome: "never" };
+		for (const [name, suite] of Object.entries(config.suites)) {
+			if (!("jobs" in suite)) { suites[name] = results[name] ?? { outcome: "never" }; continue; }
+			const jobs: Record<string, JobStatus> = Object.create(null);
+			for (const job of Object.keys(suite.jobs)) jobs[job] = results[`${name}/${job}`] ?? { outcome: "never" };
+			const values = Object.values(jobs);
+			const selected = values.find(result => result.outcome === "running") ?? values.find(result => ["failed", "timed-out", "cancelled"].includes(result.outcome)) ?? values.find(result => result.outcome === "never") ?? values[values.length - 1];
+			suites[name] = { ...selected, jobs };
 		}
 		const preparation = config.prepare ? await this.preparation() : undefined;
 		return { configured: true, root: this.root, config, suites, sourceFingerprint: fingerprint, configFingerprint,
@@ -306,23 +351,23 @@ export class Pipeline {
 			}
 			const names = options.automatic ? automaticSuites(automaticStatus, Date.now(), options.cooldownMs) : selection === "all" ? Object.keys(config.suites) : [selection];
 			if (options.automatic && !names.length) return [];
-			if (!names.length || names.some(name => !Object.hasOwn(config.suites, name))) throw new Error(`Unknown or empty suite selection: ${selection}`);
+			if (!names.length || (!options.automatic && names.some(name => !Object.hasOwn(config.suites, name)))) throw new Error(`Unknown or empty suite selection: ${selection}`);
 			if (!options.automatic) await this.ensureApproved(config, options.confirm ? async text => {
 				if (options.signal?.aborted) return false;
 				return await options.confirm!(text) && !options.signal?.aborted;
 			} : undefined);
 			const results = await this.results();
 			const completed: RunResult[] = [];
-			const runStep = async (name: string, step: Prepare, file: string, preparation = false): Promise<RunResult> => {
+			const runStep = async (name: string, step: Prepare, file: string, preparation = false, job?: string): Promise<RunResult> => {
 				if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
 				const cwd = await this.suiteCwd(step);
 				const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
 				const result: RunResult = {
-					suite: name, outcome: "running", startedAt: new Date().toISOString(), durationMs: 0, exitCode: null,
-					logPath: join(this.storage, `${name}-${randomUUID()}.log`), output: "", sourceFingerprint: fingerprint,
+					suite: name, ...(job ? { job } : {}), outcome: "running", startedAt: new Date().toISOString(), durationMs: 0, exitCode: null,
+					logPath: join(this.storage, `${name}${job ? `-${job}` : ""}-${randomUUID()}.log`), output: "", sourceFingerprint: fingerprint,
 					configFingerprint: digest(JSON.stringify(config)), changedDuringRun: false, pid: process.pid,
 				};
-				if (!preparation) results[name] = result;
+				if (!preparation) results[job ? `${name}/${job}` : name] = result;
 				const persist = () => atomicJSON(join(this.storage, file), preparation ? result : results);
 				await persist();
 				options.onChange?.();
@@ -355,14 +400,19 @@ export class Pipeline {
 				// Preparation may legitimately generate project inputs before the first test snapshot.
 				if (automaticStatus) automaticStatus.sourceFingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
 			}
-			for (const name of names) {
+			const steps = names.flatMap<{ name: string; step: Suite; job: string | undefined }>(selection => {
+				const [name, selectedJob] = selection.split("/");
+				const suite = config.suites[name];
+				if (!("jobs" in suite)) return [{ name, step: suite, job: undefined }];
+				return Object.entries(suite.jobs).filter(([job]) => !selectedJob || selectedJob === job).map(([job, step]) => ({ name, step: effectiveJob(suite, step), job }));
+			});
+			for (const { name, step, job } of steps) {
 				if (options.signal?.aborted) break;
 				if (JSON.stringify(await this.config()) !== JSON.stringify(config)) throw new Error("Configuration changed before execution; request fresh approval");
-				const suite = config.suites[name];
 				const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
-				if (options.automatic && fingerprint !== automaticStatus?.sourceFingerprint) break; // Edits resumed; wait for another quiet snapshot.
+				if (options.automatic && fingerprint !== automaticStatus?.sourceFingerprint) break;
 				if (options.signal?.aborted) break;
-				await runStep(name, suite, "results.json");
+				await runStep(name, step, "results.json", false, job);
 			}
 			if (options.signal?.aborted && !completed.some(result => result.outcome === "cancelled")) throw new Error("Pipeline cancelled before remaining suites could execute; completed results are available in pipeline_status");
 			return completed;

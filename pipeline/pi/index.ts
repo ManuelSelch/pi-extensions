@@ -18,7 +18,13 @@ const PrepareSchema = Type.Object({
 	cwd: Type.Optional(Type.String({ description: "Working directory relative to the project root." })),
 	timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400 })),
 }, { additionalProperties: false });
-const ConfigSchema = Type.Object({ suites: Type.Record(Type.String(), SuiteSchema), prepare: Type.Optional(PrepareSchema) }, { additionalProperties: false });
+const JobSuiteSchema = Type.Object({
+	cwd: Type.Optional(Type.String({ description: "Default working directory for jobs." })),
+	timeoutSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 86400 })),
+	auto: Type.Optional(Type.Union([Type.Literal("manual"), Type.Literal("after-agent")])),
+	jobs: Type.Record(Type.String(), SuiteSchema),
+}, { additionalProperties: false });
+const ConfigSchema = Type.Object({ suites: Type.Record(Type.String(), Type.Union([SuiteSchema, JobSuiteSchema])), prepare: Type.Optional(PrepareSchema) }, { additionalProperties: false });
 const selectionSchema = Type.Object({ suite: Type.Optional(Type.String({ description: "Suite name or all (default)." })) });
 const confirmation = (ctx: ExtensionContext, signal?: AbortSignal, title = "Approve pipeline execution?"): Confirm | undefined => ctx.hasUI
 	? text => ctx.ui.confirm(title, text, { signal })
@@ -28,7 +34,7 @@ const response = (data: unknown, isError = false) => {
 	return { content: [{ type: "text" as const, text: text.length > 24000 ? `${text.slice(0, 24000)}\n[Truncated; use pipeline_status for details. Full output is in the reported log files.]` : text }], details: data, isError };
 };
 const failed = (results: RunResult[]) => results.some(result => result.outcome !== "passed");
-const summary = (results: RunResult[]) => results.length ? results.map(r => `${r.suite}: ${r.outcome} (${r.durationMs}ms)`).join("\n") : "Pipeline cancelled before execution.";
+const summary = (results: RunResult[]) => results.length ? results.map(r => `${r.suite}${r.job ? `/${r.job}` : ""}: ${r.outcome} (${r.durationMs}ms)`).join("\n") : "Pipeline cancelled before execution.";
 
 export default function pipelineExtension(pi: ExtensionAPI): void {
 	const active = new Map<string, { controller: AbortController; done: Promise<RunResult[]>; automatic: boolean }>();

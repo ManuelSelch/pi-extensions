@@ -1,4 +1,6 @@
-import type { Config, Prepare, Suite } from "./pipeline.ts";
+import type { Config, Prepare, Suite, JobSuite, JobDefinition } from "./pipeline.ts";
+
+const effective = (suite: JobSuite, job: JobDefinition): Suite => ({ command: job.command, cwd: job.cwd ?? suite.cwd, timeoutSeconds: job.timeoutSeconds ?? suite.timeoutSeconds, auto: job.auto ?? suite.auto });
 
 // Preserve literal argument boundaries and escape control characters in plain-text dialogs.
 const literal = (value: string) => /^[a-zA-Z0-9_./:@%+=,-]+$/.test(value) ? value : JSON.stringify(value);
@@ -8,10 +10,13 @@ const label = (name: string, setup: boolean, collision: boolean) => name === "pr
 export function executionSummary(config: Config): string {
 	const collision = !!config.prepare && Object.hasOwn(config.suites, "prepare");
 	const rows = [
-		...(config.prepare ? [[label("prepare", true, collision), config.prepare] as const] : []),
-		...Object.entries(config.suites).map(([name, step]) => [label(name, false, collision), step] as const),
+		...(config.prepare ? [[label("prepare", true, collision), config.prepare, false] as const] : []),
+		...Object.entries(config.suites).flatMap<readonly [string, Prepare, boolean]>(([name, step]) => "jobs" in step
+			? Object.entries(step.jobs).map(([job, value]) => [`${label(name, false, collision)}/${job}`, effective(step, value), true] as const)
+			: [[label(name, false, collision), step, false] as const]),
 	];
-	return rows.map(([name, step]) => `${name} · timeout ${step.timeoutSeconds}s\n${command(step)}${step.cwd !== "." ? `\ncwd: ${literal(step.cwd)}` : ""}`).join("\n\n") || "No suites configured.";
+	const defaults = Object.entries(config.suites).filter(([, suite]) => "jobs" in suite).map(([name, suite]) => `${name} defaults\ncwd: ${literal(suite.cwd)}\ntimeout: ${suite.timeoutSeconds}s\nauto: ${suite.auto}`);
+	return [...defaults, ...rows.map(([name, step, grouped]) => `${name} · timeout ${step.timeoutSeconds}s\n${command(step)}${step.cwd !== "." ? `\ncwd: ${literal(step.cwd)}` : ""}${grouped && "auto" in step ? `\nauto: ${step.auto}` : ""}`)].join("\n\n") || "No suites configured.";
 }
 
 export function configurationReview(before: Config | undefined, after: Config): string {
@@ -39,7 +44,26 @@ export function configurationReview(before: Config | undefined, after: Config): 
 	};
 	section("prepare", before.prepare, after.prepare, true);
 	for (const name of new Set([...Object.keys(before.suites), ...Object.keys(after.suites)])) {
-		section(name, before.suites[name], after.suites[name]);
+		const oldSuite = before.suites[name], newSuite = after.suites[name];
+		if ((oldSuite && "jobs" in oldSuite) || (newSuite && "jobs" in newSuite)) {
+			const oldJobs = oldSuite && "jobs" in oldSuite ? oldSuite.jobs : {};
+			const newJobs = newSuite && "jobs" in newSuite ? newSuite.jobs : {};
+			if (oldSuite && !("jobs" in oldSuite)) section(name, oldSuite, undefined);
+			if (newSuite && !("jobs" in newSuite)) section(name, undefined, newSuite);
+			const oldGroup = oldSuite && "jobs" in oldSuite ? oldSuite : undefined;
+			const newGroup = newSuite && "jobs" in newSuite ? newSuite : undefined;
+			for (const job of new Set([...Object.keys(oldJobs), ...Object.keys(newJobs)])) {
+				section(`${name}/${job}`, oldGroup && oldJobs[job] ? effective(oldGroup, oldJobs[job]) : undefined, newGroup && newJobs[job] ? effective(newGroup, newJobs[job]) : undefined);
+				if (oldJobs[job] && newJobs[job]) {
+					const changes = (["cwd", "timeoutSeconds", "auto"] as const).filter(key => Object.hasOwn(oldJobs[job], key) !== Object.hasOwn(newJobs[job], key));
+					if (changes.length) sections.push(`${name}/${job} inheritance\n${changes.map(key => `${key}: ${Object.hasOwn(newJobs[job], key) ? "override" : "inherit"}`).join("\n")}`);
+				}
+			}
+			const defaultKeys = (["cwd", "timeoutSeconds", "auto"] as const).filter(key => oldGroup?.[key] !== newGroup?.[key]);
+			if (defaultKeys.length) sections.push(`${name} defaults${!oldGroup ? " (added)" : !newGroup ? " (removed)" : ""}\n${defaultKeys.flatMap(key => [ ...(oldGroup ? [`- ${key}: ${literal(String(oldGroup[key]))}`] : []), ...(newGroup ? [`+ ${key}: ${literal(String(newGroup[key]))}`] : []) ]).join("\n")}`);
+			const oldOrder = Object.keys(oldJobs), newOrder = Object.keys(newJobs);
+			if (JSON.stringify(oldOrder.filter(job => Object.hasOwn(newJobs, job))) !== JSON.stringify(newOrder.filter(job => Object.hasOwn(oldJobs, job)))) sections.push(`${name} job order\n- ${oldOrder.join(" → ")}\n+ ${newOrder.join(" → ")}`);
+		} else section(name, oldSuite as Suite | undefined, newSuite as Suite | undefined);
 	}
 	// Additions/removals already carry their names; show order only when shared suites move.
 	const oldOrder = Object.keys(before.suites), newOrder = Object.keys(after.suites);

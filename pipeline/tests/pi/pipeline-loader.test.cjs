@@ -14,6 +14,30 @@ test('Pi discovers the pipeline directory entry point', async t => {
   assert.ok(result.extensions[0].tools.has('pipeline_status'));
 });
 
+test('slash command runs all jobs of the selected suite only', async t => {
+  const f = await fixture(t);
+  const before = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = f.cache;
+  t.after(() => { if (before === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = before; });
+  const { loadExtensions } = await import('../../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js');
+  const result = await loadExtensions([path.resolve(__dirname, '../..', 'index.ts')], f.root);
+  assert.deepEqual(result.errors, []);
+  const ext = result.extensions[0], notices = [];
+  const ctx = { cwd: f.root, hasUI: true, ui: { confirm: async () => true, notify: text => notices.push(text) } };
+  const command = [process.execPath, '-e', 'console.log("ok")'];
+  await ext.tools.get('pipeline_configure').definition.execute('config', { config: { suites: {
+    web: { jobs: { lint: { command }, test: { command } } },
+    server: { jobs: { test: { command } } },
+  } } }, undefined, undefined, ctx);
+
+  await ext.commands.get('pipeline').handler('run web', ctx);
+  await waitFor(() => notices.some(text => text.includes('web/test: passed')));
+
+  const status = await ext.tools.get('pipeline_status').definition.execute('status', {}, undefined, undefined, ctx);
+  assert.equal(status.details.suites.web.jobs.lint.outcome, 'passed');
+  assert.equal(status.details.suites.web.jobs.test.outcome, 'passed');
+  assert.equal(status.details.suites.server.jobs.test.outcome, 'never');
+});
+
 test('real Pi loader integrates config approval, hidden/populated widgets and silent after-agent execution', async t => {
   const f = await fixture(t);
   const before = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = f.cache;

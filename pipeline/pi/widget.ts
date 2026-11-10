@@ -53,7 +53,7 @@ export function renderStatus(status: PipelineStatus | undefined, theme: Pick<The
 		...Object.entries(status.suites),
 	];
 	const lines = status.configured && Object.keys(status.suites).length
-		? entries.map(([name, result]) => suiteText(name, result, theme, now)) : [];
+		? entries.flatMap(([name, result]) => [suiteText(name, result, theme, now), ...("jobs" in result ? Object.entries(result.jobs).map(([job, value]) => `  ${suiteText(job, value, theme, now)}`) : [])]) : [];
 	const hasGitHubSection = status.github?.error || status.github?.workflows.length;
 	if (hasGitHubSection) {
 		if (lines.length) lines.unshift(theme.fg("muted", "Local"));
@@ -100,6 +100,9 @@ export function renderWidget(status: PipelineStatus | undefined, theme: Pick<The
 		lines.push(theme.fg(color, `${symbol} Local ${passed}/${suites.length}${elapsed}`));
 		for (const [name, result] of entries) {
 			if (result.outcome !== "passed") lines.push(`  ${suiteText(safeText(name), result, theme, now)}`);
+			if ("jobs" in result) for (const [job, value] of Object.entries(result.jobs)) {
+				if (value.outcome !== "passed") lines.push(`    ${suiteText(safeText(job), value, theme, now)}`);
+			}
 		}
 	}
 	const github = status.github;

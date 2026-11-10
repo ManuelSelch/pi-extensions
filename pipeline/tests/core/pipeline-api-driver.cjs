@@ -44,7 +44,51 @@ async function createApiDriver(t) {
     assert.match(text, outcome === 'passed' ? /✓ Local 1\/1/ : /✗ Local 0\/1/);
     assert.doesNotMatch(text, /stale/i);
   }
+  let jobResults = [], legacyResult;
+  const command = (failure = false) => [process.execPath, '-e', `console.log(process.cwd()); process.exit(${failure ? 1 : 0})`];
+  const configure = config => pipeline.configure(config, async () => true);
   return {
+    async configureSuitesWithJobs(suites) {
+      await configure({ suites: Object.fromEntries(Object.entries(suites).map(([name, jobs]) => [name, { jobs: Object.fromEntries(jobs.map(job => [job, { command: command() }])) }])) });
+    },
+    async configureJobsWithSettings({ suite, settings, jobs }) {
+      for (const dir of [settings.cwd, ...Object.values(jobs).map(job => job.cwd)].filter(Boolean)) await fs.mkdir(path.join(f.root, dir), { recursive: true });
+      await configure({ suites: { [suite]: { ...settings, jobs: Object.fromEntries(Object.entries(jobs).map(([name, job]) => [name, { ...job, command: command() }])) } } });
+    },
+    async runSuite(name) { jobResults = await pipeline.run(name); },
+    async runAutomatically() { jobResults = await pipeline.run('all', { automatic: true, cooldownMs: 0 }); },
+    async shouldHaveRunJobsInOrder(names) { assert.deepEqual(Array.from(jobResults, result => result.job ? `${result.suite}/${result.job}` : result.suite), names); },
+    async shouldNotHaveRunSuite(name) { assert.ok(jobResults.every(result => result.suite !== name)); },
+    async shouldNotHaveRunJob(name) { assert.ok(jobResults.every(result => `${result.suite}/${result.job}` !== name)); },
+    async shouldUseJobSettings(name, expected) {
+      const [suite, job] = name.split('/');
+      const config = await pipeline.config();
+      const actual = load().effectiveJob(config.suites[suite], config.suites[suite].jobs[job]);
+      for (const [key, value] of Object.entries(expected)) assert.equal(actual[key], value);
+      const result = jobResults.find(result => result.suite === suite && result.job === job);
+      assert.ok(result);
+      assert.equal(result.output.trim(), path.join(f.root, expected.cwd));
+    },
+    async prepareApprovedLegacySuiteWithResult(name) {
+      await configure({ suites: { [name]: { command: command() } } });
+      await pipeline.run(name);
+      legacyResult = (await pipeline.status()).suites[name];
+    },
+    async runSuiteWithoutPrompt(name) { jobResults = await pipeline.run(name); },
+    async shouldPreserveLegacySuiteBehavior(name) {
+      assert.equal(legacyResult.outcome, 'passed');
+      assert.equal(jobResults[0].suite, name);
+      assert.equal(jobResults[0].outcome, 'passed');
+      assert.equal((await pipeline.status()).suites[name].outcome, 'passed');
+    },
+    async configureSuiteWithJobOutcomes(name, jobs) {
+      await configure({ suites: { [name]: { jobs: Object.fromEntries(Object.entries(jobs).map(([job, outcome]) => [job, { command: command(outcome === 'failed') }])) } } });
+    },
+    async shouldShowJobOutcomes(name, outcomes) {
+      const suite = (await pipeline.status()).suites[name];
+      for (const [job, outcome] of Object.entries(outcomes)) assert.equal(suite.jobs[job].outcome, outcome);
+    },
+    async shouldShowSuiteOutcome(name, outcome) { assert.equal((await pipeline.status()).suites[name].outcome, outcome); },
     runPassingSuite: () => runSuite('console.log("passed")'),
     runFailingSuite: () => runSuite('process.exit(1)'),
     async changeSource() { await fs.writeFile(path.join(f.root, 'source.txt'), 'changed'); },

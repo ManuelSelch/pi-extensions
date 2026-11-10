@@ -11,7 +11,13 @@ const step = z.object({
   timeoutSeconds: z.number().positive().max(86400).optional(),
 }).strict();
 const suite = step.extend({ auto: z.enum(["manual", "after-agent"]).optional() });
-const config = z.object({ suites: z.record(z.string(), suite), prepare: step.optional() }).strict();
+const jobSuite = z.object({
+  cwd: z.string().optional(),
+  timeoutSeconds: z.number().positive().max(86400).optional(),
+  auto: z.enum(["manual", "after-agent"]).optional(),
+  jobs: z.record(z.string(), suite),
+}).strict();
+const config = z.object({ suites: z.record(z.string(), z.union([suite, jobSuite])), prepare: step.optional() }).strict();
 const result = (value: unknown, isError = false) => {
   const text = JSON.stringify(value, null, 2);
   return { content: [{ type: "text" as const, text: text.length > 24000 ? `${text.slice(0, 24000)}\n[Truncated; full output is in the reported log files.]` : text }], ...(isError ? { isError: true } : {}) };

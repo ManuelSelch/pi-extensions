@@ -37,6 +37,8 @@
   "claude/claude-stdio.test.cjs",
   "claude/marketplace.test.cjs",
   "core/no-stale-integration.test.cjs",
+  "core/suite-jobs-integration.test.cjs",
+  "core/suite-jobs.test.cjs",
   "core/pipeline-api-integration.test.cjs",
   "core/pipeline-api.test.cjs",
   "core/pipeline-approval.test.cjs",

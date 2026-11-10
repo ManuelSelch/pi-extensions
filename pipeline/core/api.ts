@@ -1,7 +1,7 @@
 import { Pipeline, projectRoot, type PipelineStatus } from "./pipeline.ts";
 import { GitHubActions } from "./github.ts";
 
-export type { PipelineStatus, SuiteStatus, RunResult, Config, Suite, Prepare } from "./pipeline.ts";
+export type { PipelineStatus, SuiteStatus, RunResult, Config, ConfigSuite, Suite, JobSuite, JobDefinition, Prepare } from "./pipeline.ts";
 export type { GitHubStatus, GitHubErrorKind, WorkflowStatus, JobStatus } from "./github.ts";
 
 /**
