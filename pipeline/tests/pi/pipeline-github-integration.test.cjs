@@ -1,9 +1,12 @@
 const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const { load, fixture, waitFor } = require('../pipeline-helpers.cjs');
 
 async function createDriver(t) {
-  let Reader;
+  let Reader = class { async read() { return undefined; } stop() {} };
+  let resolveRemote, completions;
   class Remote { constructor(root) { return new Reader(root); } }
   const f = await fixture(t);
   const tools = {}, events = {}, commands = {}, widgets = [], notices = [];
@@ -15,6 +18,32 @@ async function createDriver(t) {
   extension({ registerTool(tool) { tools[tool.name] = tool; }, registerCommand(name, command) { commands[name] = command; }, on(name, fn) { events[name] = fn; } });
   const ctx = { cwd: f.root, mode: 'rpc', hasUI: true, isIdle: () => true, ui: { theme: { fg: (_color, text) => text }, setWidget: (_key, value) => widgets.push(value), notify: text => notices.push(text) } };
   const d = { tools, events, commands, widgets, notices, ctx,
+    async configureNamedSuites(names) {
+      await fs.mkdir(path.dirname(f.configPath), { recursive: true });
+      await fs.writeFile(f.configPath, require('yaml').stringify({ suites: Object.fromEntries(names.map(name => [name, { command: ['node', '-e', ''] }])) }));
+    },
+    holdGitHubResponse() {
+      const response = new Promise(resolve => { resolveRemote = resolve; });
+      Reader = class { read() { return response; } stop() { resolveRemote(undefined); } };
+    },
+    startSession: () => events.session_start({}, ctx),
+    async refreshAfterFileChange() { await events.tool_execution_end({ toolName: 'write' }, ctx); },
+    async shouldShowLocalSuiteWhileGitHubPending(name) {
+      await waitFor(() => widgets.at(-1)?.some(line => line.includes(`${name} never`)));
+      assert.ok(!widgets.at(-1).some(line => line.includes('GitHub')));
+    },
+    respondWithGitHubWorkflow(name) { resolveRemote({ repository: 'owner/repo', branch: 'main', workflows: [{ name, status: 'completed', conclusion: 'success' }] }); },
+    async shouldShowLocalAndGitHub(suite, workflow) {
+      await waitFor(() => widgets.at(-1)?.some(line => line.includes(`GitHub ${workflow}`)));
+      assert.ok(widgets.at(-1).some(line => line.includes(`${suite} never`)));
+    },
+    failGitHubResponse(kind) { resolveRemote({ repository: 'owner/repo', branch: 'main', workflows: [], error: 'unavailable', errorKind: kind }); },
+    async shouldShowLocalAndGitHubError(suite, kind) {
+      await waitFor(() => widgets.at(-1)?.some(line => line.includes(`GitHub · unavailable · ${kind}`)));
+      assert.ok(widgets.at(-1).some(line => line.includes(`${suite} never`)));
+    },
+    async requestPipelineCompletions(prefix) { completions = await commands.pipeline.getArgumentCompletions(prefix); },
+    async shouldSuggestCompletions(expected) { assert.deepEqual(Array.from(completions ?? [], item => item.value), expected); },
     setReader(value) { Reader = value; },
     async dispose() { if (this.disposed) return; this.disposed = true; await events.session_shutdown({}, ctx); },
   };
@@ -25,6 +54,67 @@ beforeEach(async t => { t.context = { driver: await createDriver(t) }; });
 afterEach(async t => { await t.context?.driver?.dispose(); });
 
 const remote = { repository: 'owner/repo', branch: 'main', checkedAt: '2026-01-01T00:00:00Z', workflows: [{ name: 'Tests', status: 'in_progress', url: 'https://github.com/owner/repo/actions/runs/1', jobs: [{ name: 'e2e', status: 'completed', conclusion: 'failure', url: 'https://github.com/owner/repo/actions/runs/1/job/2' }, { name: 'unit', status: 'completed', conclusion: 'success' }] }] };
+
+test('local widget appears while GitHub is pending and gains remote results later', async t => {
+  const app = t.context.driver;
+  await app.configureNamedSuites(['web', 'server']);
+  app.holdGitHubResponse();
+
+  await app.startSession();
+
+  await app.shouldShowLocalSuiteWhileGitHubPending('web');
+  app.respondWithGitHubWorkflow('CI');
+  await app.shouldShowLocalAndGitHub('web', 'CI');
+});
+
+test('local updates continue while a GitHub request is pending', async t => {
+  const app = t.context.driver;
+  await app.configureNamedSuites(['web']);
+  app.holdGitHubResponse();
+  await app.startSession();
+  await app.shouldShowLocalSuiteWhileGitHubPending('web');
+
+  await app.configureNamedSuites(['server']);
+  await app.refreshAfterFileChange();
+
+  await app.shouldShowLocalSuiteWhileGitHubPending('server');
+});
+
+test('GitHub failure does not hide local results', async t => {
+  const app = t.context.driver;
+  await app.configureNamedSuites(['web']);
+  app.holdGitHubResponse();
+  await app.startSession();
+  await app.shouldShowLocalSuiteWhileGitHubPending('web');
+
+  app.failGitHubResponse('timeout');
+
+  await app.shouldShowLocalAndGitHubError('web', 'timeout');
+});
+
+test('pipeline run completion suggests configured suite names and all filtered by prefix', async t => {
+  const app = t.context.driver;
+  await app.configureNamedSuites(['web', 'server']);
+  await app.startSession();
+
+  await app.requestPipelineCompletions('run ');
+  await app.shouldSuggestCompletions(['run all', 'run web', 'run server']);
+  await app.requestPipelineCompletions('run se');
+  await app.shouldSuggestCompletions(['run server']);
+});
+
+test('pipeline run completion reflects configuration changes and retains all with no suites', async t => {
+  const app = t.context.driver;
+  await app.configureNamedSuites(['web']);
+  await app.startSession();
+  await app.configureNamedSuites(['server']);
+
+  await app.requestPipelineCompletions('run ');
+  await app.shouldSuggestCompletions(['run all', 'run server']);
+  await app.configureNamedSuites([]);
+  await app.requestPipelineCompletions('run ');
+  await app.shouldSuggestCompletions(['run all']);
+});
 
 test('remote-only project exposes status via tool, command and widget using a shared reader', async t => {
   let instances = 0, stopped = 0;

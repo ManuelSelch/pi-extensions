@@ -46,6 +46,17 @@ test('canonical paths reuse a remote reader while local state is reread; roots r
   assert.ok(f.readers.every(reader => reader.stopped === 1));
 });
 
+test('independent remote reads reuse the same lifecycle-owned reader as combined reads', async () => {
+  const f = fixture();
+  const remote = await f.reader.readRemote('/one/sub');
+  const combined = await f.reader.read('/one');
+  assert.equal(remote.repository, combined.github.repository);
+  assert.equal(f.readers.length, 1);
+  assert.deepEqual(f.localReads, ['/one']);
+  f.reader.stop();
+  await assert.rejects(f.reader.readRemote('/one'), /stopped/i);
+});
+
 test('force refresh is forwarded to the shared remote reader without changing local reads', async () => {
   const f = fixture();
   const options = [];

@@ -20,14 +20,29 @@ export class PipelineStatusReader {
     this.assertLive();
     const root = await projectRoot(cwd);
     this.assertLive(); // Disposal may happen while Git/realpath resolves the cwd.
+    const [local, github] = await Promise.all([new Pipeline(root, this.cacheRoot).status(), this.remoteForRoot(root, options)]);
+    this.assertLive(); // Never publish a cancelled lifecycle's late results.
+    return { ...local, ...(github ? { github } : {}) };
+  }
+
+  /** Read GitHub independently so local UI updates do not wait on the network. */
+  async readRemote(cwd: string, options: { force?: boolean } = {}): Promise<import('./github.ts').GitHubStatus | undefined> {
+    this.assertLive();
+    const root = await projectRoot(cwd);
+    this.assertLive();
+    return this.remoteForRoot(root, options);
+  }
+
+  private async remoteForRoot(root: string, options: { force?: boolean }): Promise<import('./github.ts').GitHubStatus | undefined> {
+    this.assertLive();
     let reader = this.github.get(root);
     if (!reader) {
       reader = new GitHubActions(root);
       this.github.set(root, reader);
     }
-    const [local, github] = await Promise.all([new Pipeline(root, this.cacheRoot).status(), reader.read(options)]);
-    this.assertLive(); // Never publish a cancelled lifecycle's late results.
-    return { ...local, ...(github ? { github } : {}) };
+    const status = await reader.read(options);
+    this.assertLive();
+    return status;
   }
 
   stop(): void {

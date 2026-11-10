@@ -59,7 +59,7 @@ Configuration is stored in `.pi/pipeline.yaml` (no `version` key) at the git wor
 - `pipeline_status({})`: inspect local configuration/outcomes and the latest GitHub Actions runs, including run URLs, without executing tests or showing a popup.
 - `pipeline_wait({})`: after an approved push, wait for GitHub Actions on the current commit; optional `ref` and `timeoutSeconds`. See [commit-pinned waiting](github.md#wait-for-github-actions).
 - `/pipeline` or `/pipeline status`: force-refresh GitHub Actions status and show a concise outcome line per local suite and outcome/age per GitHub workflow; no commands, fingerprints or log paths. Refreshes also update the widget. The agent's `pipeline_status` tool retains detailed data and uses the normal cache.
-- `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
+- `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable. Argument completion suggests `all` and configured suite names, filtered as you type; configuration changes are reflected on the next completion request.
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
 Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after-agent"` only on suites you explicitly want run in the background; integration/e2e are manual unless opted in. Use one-shot commands, never watch mode. Arguments are passed literally, without shell interpolation; put complex workflows in a project script. Working directories must exist and resolve inside the project, including through symlinks.

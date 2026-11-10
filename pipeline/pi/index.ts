@@ -53,6 +53,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	let generation = 0;
 	let monitor: PipelineMonitor | undefined;
 	let monitorRoot: string | undefined;
+	let completionPipeline: Pipeline | undefined;
 	async function pipeline(ctx: ExtensionContext) { return new Pipeline(await projectRoot(ctx.cwd)); }
 	function refreshWidget(root: string) { if (!shuttingDown && monitorRoot === root) void monitor?.refresh(); }
 	function showWidget(ctx: ExtensionContext, status: PipelineStatus | undefined) {
@@ -134,8 +135,13 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 	});
 	pi.registerCommand("pipeline", {
 		description: "Refresh local pipeline and GitHub Actions status; run [suite|all], cancel",
-		getArgumentCompletions(prefix) {
-			const values = ["status", "run all", "cancel"].filter(value => value.startsWith(prefix));
+		async getArgumentCompletions(prefix) {
+			let names: string[] = [];
+			if (completionPipeline && prefix.startsWith("run ")) {
+				try { names = Object.keys((await completionPipeline.config())?.suites ?? {}); }
+				catch { /* Invalid or absent config must not break command completion. */ }
+			}
+			const values = ["status", "run all", ...names.filter(name => name !== "all").map(name => `run ${name}`), "cancel"].filter(value => value.startsWith(prefix));
 			return values.map(value => ({ value, label: value }));
 		},
 		async handler(args, ctx) {
@@ -171,12 +177,36 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		statusReader = new PipelineStatusReader();
 		monitor = undefined;
 		monitorRoot = undefined;
+		completionPipeline = undefined;
 		shuttingDown = false;
 		if (!ctx.hasUI) return;
 		const p = await pipeline(ctx);
 		if (shuttingDown || currentGeneration !== generation) return;
+		completionPipeline = p;
 		monitorRoot = p.root;
-		monitor = new PipelineMonitor(() => status(p), status => showWidget(ctx, status), undefined, {
+		let local: PipelineStatus | undefined;
+		let github: PipelineStatus["github"];
+		let remotePending: Promise<void> | undefined;
+		let displayed = false;
+		const render = () => {
+			const combined = local && { ...local, ...(github ? { github } : {}) };
+			const visible = renderWidget(combined, { fg: (_color, text) => text }, Number.MAX_SAFE_INTEGER).length > 0;
+			if (visible || displayed) showWidget(ctx, combined);
+			displayed = visible;
+		};
+		const updateRemote = () => {
+			if (remotePending) return;
+			remotePending = statusReader.readRemote(p.root).then(result => {
+				if (shuttingDown || currentGeneration !== generation) return;
+				github = result;
+				render();
+			}).catch(() => { /* Explicit status exposes read failures. */ }).finally(() => { remotePending = undefined; });
+		};
+		monitor = new PipelineMonitor(() => p.status(), status => {
+			local = status;
+			render();
+			if (status && !shuttingDown && currentGeneration === generation) updateRemote();
+		}, undefined, {
 			idle: () => !shuttingDown && ctx.isIdle(),
 			run: status => start(p, ctx, "all", undefined, { automatic: true, expectedSourceFingerprint: status.sourceFingerprint, expectedConfigFingerprint: status.configFingerprint }),
 			cancel: () => { const job = active.get(p.root); if (job?.automatic) job.controller.abort(); },
@@ -200,6 +230,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 		await monitor?.stop();
 		monitor = undefined;
 		monitorRoot = undefined;
+		completionPipeline = undefined;
 		await Promise.allSettled(jobs.map(job => job.done));
 	});
 }
