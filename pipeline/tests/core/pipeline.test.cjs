@@ -130,11 +130,11 @@ test('formatting-only YAML changes preserve approval and freshness; semantic cha
   assert.equal(await p.isApproved(), true);
   assert.equal(formatted.configFingerprint, original.configFingerprint);
   assert.equal(formatted.sourceFingerprint, original.sourceFingerprint);
-  assert.equal(formatted.suites.unit.stale, false);
+  assert.equal(formatted.suites.unit.outcome, 'passed');
 
   await fs.writeFile(p.configPath, yaml.replace('timeoutSeconds: 300', 'timeoutSeconds: 120'));
   assert.equal(await p.isApproved(), false);
-  assert.equal((await p.status()).suites.unit.stale, true);
+  assert.equal((await p.status()).suites.unit.outcome, 'passed');
 });
 
 test('even formatting edits during review are refused and malformed YAML cannot be silently replaced', async t => {
@@ -178,7 +178,7 @@ test('runs suites serially, preserves full logs and bounded output, and persists
   assert.match(result.output, /project with spaces/);
   const status = await new Pipeline(f.root, f.cache).status();
   assert.equal(status.suites.unit.outcome, 'passed');
-  assert.equal(status.suites.unit.stale, false);
+  assert.equal(Object.hasOwn(status.suites.unit, 'stale'), false);
   assert.ok(status.suites.unit.durationMs >= 0);
 });
 
@@ -216,13 +216,15 @@ test('tracks never-run, source changes, generated artifacts, and changes during 
   await waitFor(async () => (await p.status()).suites.unit.outcome === 'running');
   await fs.writeFile(path.join(f.root, 'source.txt'), 'after');
   await run;
-  assert.equal((await p.status()).suites.unit.stale, true);
+  assert.equal((await p.status()).suites.unit.changedDuringRun, true);
   await p.run('unit');
+  const fingerprint = (await p.status()).sourceFingerprint;
   await fs.mkdir(path.join(f.root, 'coverage'));
   await fs.writeFile(path.join(f.root, 'coverage', 'generated.txt'), 'output');
-  assert.equal((await p.status()).suites.unit.stale, false);
+  assert.equal((await p.status()).sourceFingerprint, fingerprint);
   await fs.writeFile(path.join(f.root, 'source.txt'), 'later');
-  assert.equal((await p.status()).suites.unit.stale, true);
+  assert.notEqual((await p.status()).sourceFingerprint, fingerprint);
+  assert.equal((await p.status()).suites.unit.outcome, 'passed');
 });
 
 test('reports post-exit cleanup permission failures without failing a successful suite', { skip: process.platform === 'win32' }, async t => {
@@ -283,12 +285,15 @@ test('freshness includes git uncommitted/untracked files, but ignores generated 
   await fs.writeFile(path.join(f.root, 'tracked.txt'), 'original');
   execFileSync('git', ['add', '.'], { cwd: f.root });
   await p.configure(config(), approve); await p.run('unit');
+  const original = (await p.status()).sourceFingerprint;
   await fs.writeFile(path.join(f.root, 'ignored.txt'), 'ignored');
-  assert.equal((await p.status()).suites.unit.stale, false);
+  assert.equal((await p.status()).sourceFingerprint, original);
   await fs.writeFile(path.join(f.root, 'tracked.txt'), 'modified');
-  assert.equal((await p.status()).suites.unit.stale, true);
-  await p.run('unit'); await fs.writeFile(path.join(f.root, 'untracked.txt'), 'new');
-  assert.equal((await p.status()).suites.unit.stale, true);
+  assert.notEqual((await p.status()).sourceFingerprint, original);
+  await p.run('unit');
+  const updated = (await p.status()).sourceFingerprint;
+  await fs.writeFile(path.join(f.root, 'untracked.txt'), 'new');
+  assert.notEqual((await p.status()).sourceFingerprint, updated);
   await fs.mkdir(path.join(f.root, 'nested'));
   assert.equal(await projectRoot(path.join(f.root, 'nested')), f.root);
 });
@@ -327,7 +332,7 @@ test('honours suite cwd and log retrieval without expiring unchanged results', a
   await fs.writeFile(f.configPath, require('yaml').stringify(c));
   const status = await new Pipeline(f.root, f.cache).status();
 
-  assert.equal(status.suites.unit.stale, false);
+  assert.equal(status.suites.unit.outcome, 'passed');
   assert.equal(Object.hasOwn(status.config.suites.unit, 'staleAfterMinutes'), false);
   assert.equal(await p.isApproved(), true);
   await assert.rejects(p.logs('missing'), /No run/);

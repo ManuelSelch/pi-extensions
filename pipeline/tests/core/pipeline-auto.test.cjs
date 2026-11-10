@@ -59,7 +59,7 @@ test('results/logs stored inside the project never count as source changes or ca
   const before = (await p.status()).sourceFingerprint;
   await p.run('all', { automatic: true, cooldownMs: 0 });
   assert.equal((await p.status()).sourceFingerprint, before);
-  assert.equal((await p.status()).suites.unit.stale, false);
+  assert.equal((await p.status()).suites.unit.outcome, 'passed');
   assert.equal((await p.run('all', { automatic: true, cooldownMs: 0 })).length, 0);
 });
 
@@ -70,7 +70,7 @@ test('generated Playwright and Python test reports do not trigger stale results 
   for (const dir of ['test-results', 'playwright-report', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.turbo']) {
     await fs.mkdir(path.join(f.root, dir)); await fs.writeFile(path.join(f.root, dir, 'report.json'), '{}');
   }
-  assert.equal((await p.status()).suites.unit.stale, false);
+  assert.equal((await p.status()).suites.unit.outcome, 'passed');
   assert.equal((await p.run('all', { automatic: true, cooldownMs: 0 })).length, 0);
 });
 

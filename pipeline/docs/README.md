@@ -22,7 +22,7 @@ suites:
     auto: manual
 ```
 
-`prepare` is optional and runs once successfully per worktree before selected suites. Automatic runs are opt-in and currently Pi-only. See [configuration and safety](configuration.md) for defaults, approval scope, freshness and preparation limits.
+`prepare` is optional and runs once successfully per worktree before selected suites. Automatic runs are opt-in and currently Pi-only. See [configuration and safety](configuration.md) for defaults, approval scope, automatic scheduling and preparation limits.
 
 ## Tools and Pi commands
 
@@ -45,7 +45,7 @@ For an existing installation, run `claude plugin update pipeline@pi-extensions` 
 
 ## Further details
 
-- [Configuration, preparation, approvals and freshness](configuration.md)
+- [Configuration, preparation, approvals and scheduling](configuration.md)
 - [GitHub Actions status and commit-pinned waiting](github.md)
 - [Pi widget and automatic execution](automation.md)
 - [Claude Code integration](claude.md)

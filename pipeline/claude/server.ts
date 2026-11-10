@@ -51,7 +51,7 @@ export function createPipelineServer(options: Options): McpServer {
   };
 
   server.registerTool("pipeline_status", {
-    description: "Read local suite outcomes and freshness and latest GitHub Actions branch status. Does not run tests or request approval.",
+    description: "Read local suite outcomes and latest GitHub Actions branch status. Does not run tests or request approval.",
     inputSchema: z.object({}).strict(), annotations: { readOnlyHint: true },
   }, async () => result(await statusReader.read(options.cwd)));
 

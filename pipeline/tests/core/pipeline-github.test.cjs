@@ -107,7 +107,7 @@ test('cache throttles requests for 60 seconds; changing branches invalidates it'
   assert.equal(d.queries().length, 12);
 });
 
-test('forced reads bypass the TTL, update the shared cache and retain snapshots on failure', async t => {
+test('forced reads bypass the TTL, update the shared cache and report failures', async t => {
   const options = {};
   const d = t.context.driver.configure(options);
   const initial = await d.reader.read();
@@ -124,9 +124,9 @@ test('forced reads bypass the TTL, update the shared cache and retain snapshots 
   options.error = 'ETIMEDOUT';
   const failed = await d.reader.read({ force: true });
 
-  assert.equal(failed.stale, true);
-  assert.deepEqual(failed.workflows, refreshed.workflows);
-  assert.equal(failed.lastSuccessfulAt, refreshed.lastSuccessfulAt);
+  assert.ok(failed.error);
+  assert.equal(failed.workflows.length, 0);
+  assert.equal(Object.hasOwn(failed, 'stale'), false);
   delete options.error;
   assert.equal((await d.reader.read({ force: true })).error, undefined);
 });
@@ -205,31 +205,30 @@ test('concurrent refreshes share a request and shutdown aborts pending reads', a
   assert.equal(await d.reader.read(), undefined);
 });
 
-test('failed refreshes retain the last successful snapshot and timestamp until recovery', async t => {
+test('failed refreshes report unavailable without cached workflows until recovery', async t => {
   const options = { jobPages: [{ jobs: [{ name: 'unit', status: 'completed', conclusion: 'success' }] }] };
   const d = t.context.driver.configure(options);
   const success = await d.reader.read();
-  assert.equal(success.lastSuccessfulAt, new Date(0).toISOString());
+  assert.equal(success.workflows[0].conclusion, 'success');
   options.error = 'ETIMEDOUT'; d.advance(60000);
   const failed = await d.reader.read();
   assert.ok(failed.error);
-  assert.equal(failed.stale, true);
+  assert.equal(Object.hasOwn(failed, 'stale'), false);
   assert.equal(failed.errorKind, 'timeout');
-  assert.deepEqual(failed.workflows, success.workflows);
-  assert.equal(failed.lastSuccessfulAt, success.lastSuccessfulAt);
+  assert.equal(failed.workflows.length, 0);
   assert.equal(failed.checkedAt, new Date(60000).toISOString());
   const count = d.queries().length;
   assert.equal(await d.reader.read(), failed);
   assert.equal(d.queries().length, count);
   d.advance(60000);
-  assert.equal((await d.reader.read()).lastSuccessfulAt, success.lastSuccessfulAt);
+  assert.equal((await d.reader.read()).workflows.length, 0);
   delete options.error; d.advance(60000);
   const recovered = await d.reader.read();
   assert.equal(recovered.workflows[0].conclusion, 'success');
   assert.equal(recovered.error, undefined);
   assert.equal(recovered.stale, undefined);
   assert.equal(recovered.errorKind, undefined);
-  assert.equal(recovered.lastSuccessfulAt, new Date(180000).toISOString());
+  assert.equal(Object.hasOwn(recovered, 'lastSuccessfulAt'), false);
 });
 
 for (const [error, kind] of [

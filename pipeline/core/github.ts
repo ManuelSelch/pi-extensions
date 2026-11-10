@@ -20,8 +20,6 @@ export interface GitHubStatus {
 	workflows: WorkflowStatus[];
 	error?: string;
 	errorKind?: GitHubErrorKind;
-	stale?: boolean;
-	lastSuccessfulAt?: string;
 }
 interface WorkflowRun {
 	id: number;
@@ -109,12 +107,6 @@ export class GitHubActions {
 		deadline.unref();
 		const request = this.fetch(repo, branch, controller).then(status => {
 			if (this.stopped || this.key !== key) return undefined;
-			if (!status.error) status.lastSuccessfulAt = new Date(this.now()).toISOString();
-			else if (this.cached?.lastSuccessfulAt) {
-				status.stale = true;
-				status.lastSuccessfulAt = this.cached.lastSuccessfulAt;
-				status.workflows = this.cached.workflows;
-			}
 			this.cached = status;
 			this.expires = this.now() + 60000;
 			return status;

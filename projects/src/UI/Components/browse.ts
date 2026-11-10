@@ -9,20 +9,20 @@ export interface BrowseMenu {
 }
 const safe = (text: string) => text.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
 const icons: Record<string, string> = {
-  passed: "✓", failed: "✗", running: "›", never: "○", stale: "⚠",
+  passed: "✓", failed: "✗", running: "›", never: "○",
   cancelled: "■", "timed-out": "⌛", queued: "○",
 };
 const icon = (state: string) => Object.hasOwn(icons, state) ? icons[state] : "?";
 // A conservative compact signal; full mixed outcomes remain available in details.
 function representative(states: string[]): string {
-  return ["running", "failed", "timed-out", "stale", "never", "cancelled"].find(state => states.includes(state))
+  return ["running", "failed", "timed-out", "never", "cancelled"].find(state => states.includes(state))
     ?? states.find(state => state !== "passed") ?? "passed";
 }
 export function localSummary(status: PipelineStatus): string {
   if (!status.configured) return "—";
   const results = [...(status.prepare ? [status.prepare] : []), ...Object.values(status.suites)];
   if (!results.length) return "—";
-  return icon(representative(results.map(result => result.stale ? "stale" : result.outcome)));
+  return icon(representative(results.map(result => result.outcome)));
 }
 export function githubSummary(github?: GitHubStatus): string {
   if (!github) return "—";

@@ -20,7 +20,7 @@ test('renders status details without checkout paths or workflow/job URLs', () =>
       jobs: [{ name: 'unit', status: 'in_progress', url: 'https://example/job' }],
     }, { name: 'Deploy', status: 'never', jobsError: 'jobs unavailable' }] },
   });
-  for (const expected of ['✓ prepare', '⚠ test stale (✗)', '○ lint never', 'GitHub: owner/repo · main',
+  for (const expected of ['✓ prepare', '✗ test', '○ lint never', 'GitHub: owner/repo · main',
     '✗ Tests', '› unit running', '○ Deploy never', 'jobs unavailable']) assert.ok(text.includes(expected), text);
   assert.ok(!text.includes('/checkouts/repo'), text);
   assert.ok(!text.includes('https://'), text);
@@ -31,7 +31,7 @@ test('uses pipeline symbols for local outcomes and never treats unknown remote s
     ['cancelled', '■ test cancelled'], ['timed-out', '⌛ test timed out']]) {
     assert.ok(format('Repo', { configured: true, suites: { test: { outcome, stale: false } } }).includes(expected));
   }
-  assert.match(format('Repo', { configured: true, suites: { test: { outcome: 'passed', stale: true } } }), /⚠ test stale \(✓\)/);
+  assert.match(format('Repo', { configured: true, suites: { test: { outcome: 'passed', stale: true } } }), /✓ test/);
   const unknown = format('Repo', { configured: false, suites: {}, github: { repository: 'o/r', branch: 'main',
     workflows: [{ name: 'CI', status: 'completed', conclusion: 'action_required', jobs: [{ name: 'unit', status: 'completed', conclusion: 'failure' }] }] } });
   assert.match(unknown, /○ CI action required/); assert.match(unknown, /✗ unit/); assert.doesNotMatch(unknown, /✓/);

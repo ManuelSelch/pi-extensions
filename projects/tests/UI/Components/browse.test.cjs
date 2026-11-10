@@ -35,11 +35,11 @@ test('numbered repository labels disambiguate names while status lives in the ti
   assert.doesNotMatch(menu.title, /passed|failed|stale|unavailable/);
   assert.notEqual(menu.options[0].action.repositoryId,menu.options[1].action.repositoryId);
 });
-test('summaries preserve running, failed, stale, never, cancelled and unconfigured results', () => {
+test('summaries preserve running, failed, never, cancelled and unconfigured results', () => {
   const summary = load().localSummary;
   for (const [outcome, icon] of [['passed','✓'],['running','›'],['failed','✗'],['never','○'],['cancelled','■'],['timed-out','⌛']]) assert.equal(summary(status({test:result(outcome)})), icon);
-  assert.equal(summary(status({test:result('passed',true)})), '⚠');
-  assert.equal(summary(status({test:result('failed',true)})), '⚠');
+  assert.equal(summary(status({test:result('passed',true)})), '✓');
+  assert.equal(summary(status({test:result('failed',true)})), '✗');
   assert.equal(summary({configured:false,suites:{}}),'—');
   assert.equal(summary(status({})),'—');
   assert.equal(summary(status({test:result('never')},{prepare:result('passed')})), '○');

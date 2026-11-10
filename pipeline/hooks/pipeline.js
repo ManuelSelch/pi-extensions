@@ -55,25 +55,24 @@ function lines(value) {
     const all = [...(value.prepare && value.prepare.outcome !== 'passed' && value.prepare.outcome !== 'never' ? [['prepare', value.prepare]] : []), ...suites];
     const failed = all.some(([, item]) => ['failed', 'cancelled', 'timed-out'].includes(item.outcome));
     const running = all.some(([, item]) => item.outcome === 'running');
-    const stale = all.some(([, item]) => item.stale);
-    const passed = suites.filter(([, item]) => item.outcome === 'passed' && !item.stale).length;
-    const symbol = failed ? '✗' : running ? '◐' : stale ? '⚠' : passed === suites.length ? '✓' : '○';
-    result.push(`${symbol} Local ${passed}/${suites.length}${stale ? ' · stale' : ''}`);
+    const passed = suites.filter(([, item]) => item.outcome === 'passed').length;
+    const symbol = failed ? '✗' : running ? '◐' : passed === suites.length ? '✓' : '○';
+    result.push(`${symbol} Local ${passed}/${suites.length}`);
     for (const [name, item] of all) {
-      if (item.outcome === 'passed' && !item.stale) continue;
-      const mark = item.stale ? '⚠' : ({ never: '○', running: '›', failed: '✗', cancelled: '■', 'timed-out': '⌛' }[item.outcome] ?? '○');
-      result.push(`  ${mark} ${safe(name)} ${item.stale ? 'stale' : safe(item.outcome)}`);
+      if (item.outcome === 'passed') continue;
+      const mark = ({ never: '○', running: '›', failed: '✗', cancelled: '■', 'timed-out': '⌛' }[item.outcome] ?? '○');
+      result.push(`  ${mark} ${safe(name)} ${safe(item.outcome)}`);
     }
   }
   const github = value.github;
   if (!github) return result;
-  if (github.error && !github.stale) result.push('⚠ GitHub · unavailable');
+  if (github.error) result.push('⚠ GitHub · unavailable');
   else for (const workflow of github.workflows ?? []) {
     const active = workflow.status !== 'completed' && workflow.status !== 'never';
-    const symbol = github.stale || workflow.jobsError ? '⚠' : active ? '◐' : workflow.conclusion === 'success' ? '✓' : workflow.status === 'never' ? '○' : '✗';
+    const symbol = workflow.jobsError ? '⚠' : active ? '◐' : workflow.conclusion === 'success' ? '✓' : workflow.status === 'never' ? '○' : '✗';
     const jobs = workflow.jobs ?? [];
     const count = jobs.length ? `${jobs.filter(job => active ? job.status === 'completed' : job.status === 'completed' && job.conclusion === 'success').length}/${jobs.length}${active ? ' complete' : ''}` : safe(active ? workflow.status : workflow.conclusion ?? workflow.status);
-    result.push(`${symbol} GitHub ${safe(workflow.name)} · ${count}${github.stale ? ' · stale' : ''}`);
+    result.push(`${symbol} GitHub ${safe(workflow.name)} · ${count}`);
     if (workflow.jobsError) result.push('  └─ ⚠ jobs unavailable');
     else for (const job of jobs.filter(item => item.status !== 'completed' || item.conclusion !== 'success')) result.push(`  └─ ✗ ${safe(job.name)} ${safe(job.conclusion ?? job.status)}`);
   }

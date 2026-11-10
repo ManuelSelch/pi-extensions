@@ -30,9 +30,9 @@ Configuration is stored in `.pi/pipeline.yaml` (no `version` key) at the git wor
 
 - `pipeline_configure({config: ...})`: validate and save after approval.
 - `pipeline_run({suite: "unit"})`: wait for a suite's results; omit suite or use `all` to run all suites serially. Non-passing results are tool errors carrying outcome/output/log paths. Aborting the tool cancels execution.
-- `pipeline_status({})`: inspect local configuration/outcomes/freshness and the latest GitHub Actions runs, including run URLs, without executing tests or showing a popup.
+- `pipeline_status({})`: inspect local configuration/outcomes and the latest GitHub Actions runs, including run URLs, without executing tests or showing a popup.
 - `pipeline_wait({})`: after an approved push, wait for GitHub Actions on the current commit; optional `ref` and `timeoutSeconds`. See [commit-pinned waiting](github.md#wait-for-github-actions).
-- `/pipeline` or `/pipeline status`: force-refresh GitHub Actions status and show a concise outcome/freshness line per local suite and outcome/age per GitHub workflow; no commands, fingerprints or log paths. Refreshes also update the widget. The agent's `pipeline_status` tool retains detailed data and uses the normal cache.
+- `/pipeline` or `/pipeline status`: force-refresh GitHub Actions status and show a concise outcome line per local suite and outcome/age per GitHub workflow; no commands, fingerprints or log paths. Refreshes also update the widget. The agent's `pipeline_status` tool retains detailed data and uses the normal cache.
 - `/pipeline run unit` or `/pipeline run all`: start a background run, keeping commands usable.
 - `/pipeline cancel`: cancel this session's run and pause automation until the next settled agent turn.
 
@@ -46,7 +46,7 @@ Defaults: `cwd: "."`, `timeoutSeconds: 300`, `auto: "manual"`. Set `auto: "after
 - YAML duplicate keys, custom tags, aliases and multiple documents are rejected, alongside the existing strict field/command validation.
 - Update popups compare normalized configurations, so comments, whitespace and omitted defaults do not produce noise. Each changed suite/preparation section shows only changed fields as `-` old / `+` new rows, with readable commands and timeouts in seconds. Added/removed sections show their command, timeout, automation mode and non-root cwd. Shared-suite execution-order changes are shown separately; additions/removals do not create redundant order diffs. Unrelated suites and patch/YAML boilerplate are omitted. Unchanged proposals say “No configuration changes.”
 - Initial creation and manual execution of an unapproved config show aligned name/command/timeout rows, including preparation and any non-root cwd. Root cwd and automation footers are omitted. Commands preserve argv boundaries using quotes/escapes when needed; they are not shell scripts. Popups use separate “Approve pipeline changes?” / “Approve pipeline execution?” titles, a home-abbreviated project path and a short scope line, without duplicate questions or Git-common-directory internals. Edits during review are still refused; saving never immediately runs tests.
-- Removing `version` changes normalized fingerprints: old JSON approvals are **not** silently transferred. Approve the new config explicitly before execution/automation; old results become stale. Preparation's once-per-worktree success flag remains unchanged.
+- Removing `version` changes normalized fingerprints: old JSON approvals are **not** silently transferred. Approve the new config explicitly before execution/automation; prior results retain their outcome. Preparation's once-per-worktree success flag remains unchanged.
 
 ## Optional once-per-worktree preparation
 
@@ -87,7 +87,7 @@ Approval covers configuration, not the contents of every executable, script, dep
 
 A per-worktree filesystem lock prevents overlapping runs/configuration reviews across Pi sessions. A second request fails as busy rather than queuing. Cancellation from another Pi session is not supported.
 
-## Results and freshness
+## Results and automatic scheduling
 
 
 Results, per-run logs and transient locks with owner PID live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/<hash-of-canonical-worktree-path>/`, with private permissions. They remain isolated per worktree; a new worktree starts with never-run results and can execute independently of another worktree.
@@ -96,7 +96,7 @@ New approvals live under `${PI_CODING_AGENT_DIR:-~/.pi/agent}/pipeline/approvals
 
 Full logs are retained; returned output is bounded. Logs can contain secrets printed by tests; retention/pruning is not implemented yet.
 
-Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Any source change makes all completed suites stale. Results do not expire with age; only source/configuration changes or changes detected during a run make them stale. The legacy suite field `staleAfterMinutes` is accepted but ignored and omitted from normalized/saved configurations. It does not affect freshness or configuration fingerprints; other unknown fields are still rejected. Approvals created before age expiry was removed may still require explicit reapproval because the normalized configuration changed. Changes detected between the start and end of a run also keep it stale, even if another run is fresh.
+Each suite result records outcome, start/end time, duration, exit code/signal, configuration and source fingerprints, and log path. Status distinguishes never-run, running, passed, failed, cancelled and timed-out. Results retain their latest outcome regardless of subsequent source or configuration changes; fingerprints still determine automatic rerun eligibility. The legacy suite field `staleAfterMinutes` is accepted but ignored and omitted from normalized/saved configurations.
 
 In git projects, source fingerprints use tracked and non-ignored untracked file contents, paths, symlink targets and file modes; deleted tracked files count. Outside git, source files are scanned recursively. Conventional generated directories (`node_modules`, `dist`, `build`, `coverage`, `.next`, `__pycache__`, `.venv`, `test-results`, `playwright-report`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.turbo`) plus git metadata, `.DS_Store` and the pipeline cache directory (even if placed inside the project) are excluded. Pipeline config is fingerprinted separately. Changes reverted between fingerprint samples cannot be detected; ignored source and files behind symlinks are not scanned.
 

@@ -51,7 +51,7 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   await event('agent_start'); await event('agent_settled');
   await waitFor(() => widgets.some(lines => lines?.join('\n').includes('✓ Local 1/1')));
   const status = await ext.tools.get('pipeline_status').definition.execute('status', {}, undefined, undefined, ctx);
-  assert.equal(status.details.suites.unit.outcome, 'passed'); assert.equal(status.details.suites.unit.stale, false);
+  assert.equal(status.details.suites.unit.outcome, 'passed'); assert.equal(Object.hasOwn(status.details.suites.unit, 'stale'), false);
   assert.equal(status.details.prepare.outcome, 'passed');
   assert.ok(widgets.every(lines => !lines?.join('\n').includes('✓ prepare')), 'successful preparation stays hidden');
   const rerun = await ext.tools.get('pipeline_run').definition.execute('run', { suite: 'unit' }, undefined, undefined, ctx);

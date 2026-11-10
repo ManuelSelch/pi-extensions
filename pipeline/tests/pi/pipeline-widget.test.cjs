@@ -35,7 +35,7 @@ test('compact widget expands only attention-needed local results and hides idle 
   status.prepare = result('passed');
   status.suites.e2e = result('passed', 2, true);
   assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), [
-    '⚠ Local 1/2 · stale · 2m ago', '  ⚠ e2e stale (✓ 2m ago)',
+    '✓ Local 2/2 · 2m ago',
   ]);
 });
 
@@ -57,7 +57,7 @@ test('compact remote progress hides completed jobs and preserves non-success con
   ]);
 });
 
-test('compact warnings stay on workflow summaries and cached results are muted', () => {
+test('compact GitHub errors show unavailable rather than cached results', () => {
   const { renderWidget } = load('pipeline/pi/widget.ts');
   const styled = [], theme = { fg: (color, text) => { styled.push([color, text]); return text; } };
   const status = { configured: false, suites: {}, github: {
@@ -66,8 +66,8 @@ test('compact warnings stay on workflow summaries and cached results are muted',
       { name: 'unit', status: 'completed', conclusion: 'success' },
     ] }],
   } };
-  assert.deepEqual(Array.from(renderWidget(status, theme, 120, now)), ['⚠ GitHub Tests · 1/1 · stale 3m · timeout']);
-  assert.ok(styled.some(([color, text]) => color === 'muted' && text.includes('Tests')));
+  assert.deepEqual(Array.from(renderWidget(status, theme, 120, now)), ['⚠ GitHub · unavailable · timeout']);
+  assert.ok(styled.some(([color, text]) => color === 'warning' && text.includes('unavailable')));
   status.github.workflows = [];
   assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), ['⚠ GitHub · unavailable · timeout']);
 });
@@ -209,7 +209,7 @@ test('jobs render below their workflow with status, matrix names and no repeated
   }
 });
 
-test('stale GitHub heading uses successful-fetch age and dims cached workflows and jobs', () => {
+test('GitHub errors hide previously cached workflows and jobs', () => {
   const { renderStatus: renderWidget } = load('pipeline/pi/widget.ts');
   const styled = [];
   const theme = { fg: (color, text) => { styled.push([color, text]); return text; } };
@@ -220,10 +220,9 @@ test('stale GitHub heading uses successful-fetch age and dims cached workflows a
       jobs: [{ name: 'unit', status: 'completed', conclusion: 'failure' }] }],
   } };
   const lines = Array.from(renderWidget(status, theme, 120, now));
-  assert.deepEqual(lines, ['Local', '✓ unit 3m ago', '⚠ GitHub · stale 3m · timeout', '✓ Tests passed 1h ago', '  └─ ✗ unit failed']);
+  assert.deepEqual(lines, ['Local', '✓ unit 3m ago', '⚠ GitHub · unavailable · timeout']);
   assert.ok(styled.some(([color, text]) => color === 'warning' && text === lines[2]));
-  for (const line of lines.slice(3)) assert.ok(styled.some(([color, text]) => color === 'muted' && text === line));
-  assert.ok(renderWidget(status, plain, 120, now + 60000).includes('⚠ GitHub · stale 4m · timeout'));
+  assert.ok(renderWidget(status, plain, 120, now + 60000).includes('⚠ GitHub · unavailable · timeout'));
   for (const width of [1, 5, 20]) assert.ok(renderWidget(status, theme, width, now).every(line => require('@earendil-works/pi-tui').visibleWidth(line) <= width));
   delete status.github.error; delete status.github.stale; delete status.github.errorKind;
   assert.ok(renderWidget(status, plain, 120, now).includes('GitHub'));
@@ -244,7 +243,7 @@ test('job-fetch warning keeps workflow status and local rows visible', () => {
   assert.equal(renderWidget(status, plain, 120, now).join('\n'), 'Local\n✓ unit 3m ago\nGitHub\n✗ Tests failed\n  └─ ⚠ Jobs unavailable: check connection and repository access.');
 });
 
-test('each suite gets its own line with age, outcome and stale previous pass', () => {
+test('each suite gets its own line with age and outcome', () => {
   const { renderStatus: renderWidget } = load('pipeline/pi/widget.ts');
   const status = { configured: true, suites: { unit: result('passed'), integration: result('failed', 12), e2e: { outcome: 'never', stale: false } } };
   assert.equal(renderWidget(status, plain, 120, now).join('\n'), '✓ unit 3m ago\n✗ integration 12m ago\n○ e2e never');
@@ -252,19 +251,18 @@ test('each suite gets its own line with age, outcome and stale previous pass', (
   const colors = [];
   const theme = { fg: (color, text) => { colors.push([color, text]); return text; } };
   const text = renderWidget(status, theme, 120, now).join('\n');
-  assert.match(text, /⚠ unit stale \(✓ 3m ago\)/);
-  assert.equal(colors.some(([color, text]) => color === 'success' && text.includes('unit')), false);
+  assert.match(text, /✓ unit 3m ago/);
+  assert.equal(colors.some(([color, text]) => color === 'success' && text.includes('unit')), true);
   assert.doesNotMatch(text, /approval|configur/i);
 });
 
-test('completed runs show just now below a minute, then coarse ages, including stale results', () => {
+test('completed runs show just now below a minute, then coarse ages', () => {
   const { renderStatus: renderWidget } = load('pipeline/pi/widget.ts');
   for (const outcome of ['passed', 'failed', 'cancelled', 'timed-out']) {
     const status = { configured: true, suites: { unit: result(outcome, 52 / 60) } };
     assert.match(renderWidget(status, plain, 120, now).join('\n'), /just now/);
     assert.doesNotMatch(renderWidget(status, plain, 120, now).join('\n'), /52s|just now ago/);
-    status.suites.unit.stale = true;
-    assert.match(renderWidget(status, plain, 120, now).join('\n'), /stale .*just now/);
+    assert.doesNotMatch(renderWidget(status, plain, 120, now).join('\n'), /stale/);
   }
   for (const [seconds, expected] of [[0, 'just now'], [59, 'just now'], [60, '1m ago'], [120, '2m ago'], [3600, '1h ago']]) {
     const status = { configured: true, suites: { unit: result('passed', seconds / 60) } };
@@ -292,7 +290,7 @@ test('narrow widths and wide characters never overflow terminal columns', () => 
   }
 });
 
-test('extension restores persisted results, refreshes stale code and clears hidden widget at shutdown', async t => {
+test('extension restores persisted results, preserves outcomes after edits and clears widget at shutdown', async t => {
   const f = await fixture(t); const { Pipeline } = load();
   const before = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = f.cache;
   t.after(() => { if (before === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = before; });
@@ -309,7 +307,7 @@ test('extension restores persisted results, refreshes stale code and clears hidd
   assert.match(widgets.at(-1).join('\n'), /✓ Local 1\/1/);
   await fs.writeFile(path.join(f.root, 'source.txt'), 'changed');
   await events.tool_execution_end({ toolName: 'write' }, ctx);
-  assert.match(widgets.at(-1).join('\n'), /unit stale/);
+  assert.match(widgets.at(-1).join('\n'), /✓ Local 1\/1/);
   await fs.rm(f.configPath);
   await events.tool_execution_end({ toolName: 'bash' }, ctx);
   assert.equal(widgets.at(-1), undefined);

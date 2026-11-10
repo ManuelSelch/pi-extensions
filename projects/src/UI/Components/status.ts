@@ -17,7 +17,7 @@ function outcome(name: string, state: string): string {
   return `${symbol} ${name}${label ? ` ${label}` : ""}`;
 }
 function local(name: string, result: SuiteStatus): string {
-  return result.stale ? `⚠ ${name} stale (${statePresentation(result.outcome)[0]})` : outcome(name, result.outcome);
+  return outcome(name, result.outcome);
 }
 function remote(job: JobStatus): string {
   const state = job.status === "completed" ? job.conclusion ?? "unknown" : job.status;

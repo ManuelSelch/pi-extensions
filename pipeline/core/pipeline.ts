@@ -37,7 +37,7 @@ export interface RunResult {
 	changedDuringRun: boolean;
 	pid: number;
 }
-export type SuiteStatus = (RunResult | { outcome: "never" }) & { stale: boolean };
+export type SuiteStatus = RunResult | { outcome: "never" };
 export interface PipelineStatus {
 	github?: GitHubStatus;
 	configured: boolean;
@@ -273,11 +273,11 @@ export class Pipeline {
 		const suites: Record<string, SuiteStatus> = Object.create(null);
 		for (const name of Object.keys(config.suites)) {
 			const result = results[name];
-			suites[name] = result ? { ...result, stale: result.changedDuringRun || result.sourceFingerprint !== fingerprint || result.configFingerprint !== configFingerprint } : { outcome: "never", stale: false };
+			suites[name] = result ?? { outcome: "never" };
 		}
 		const preparation = config.prepare ? await this.preparation() : undefined;
 		return { configured: true, root: this.root, config, suites, sourceFingerprint: fingerprint, configFingerprint,
-			...(config.prepare ? { prepare: { ...(preparation ?? { outcome: "never" as const }), stale: false } } : {}) };
+			...(config.prepare ? { prepare: preparation ?? { outcome: "never" as const } } : {}) };
 	}
 	async logs(name: string): Promise<{ logPath: string; output: string }> {
 		const result = (await this.results())[name];
