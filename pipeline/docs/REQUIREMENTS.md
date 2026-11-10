@@ -1,5 +1,7 @@
 # Pipeline Widget — Requirements
 
+> Historical implementation contract: local freshness and stale indicators described below have since been removed. For current behavior, see [configuration](configuration.md) and the [status API](status-api.md).
+
 ## Goal
 Make local test outcomes and freshness visible in Pi, so tests are not forgotten while working across small projects.
 

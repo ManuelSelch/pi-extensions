@@ -1,5 +1,7 @@
 # GitHub Stale Status — Design
 
+> Superseded historical design: failed refreshes no longer retain or display stale snapshots. See the current [status API](status-api.md).
+
 ## Overview
 Retain the last successful GitHub snapshot when a refresh fails. Replace the normal GitHub heading with `⚠ GitHub · stale 3m · timeout`, preserving cached workflow/job rows below it. No changes to local suite freshness or request deadlines.
 

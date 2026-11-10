@@ -1,5 +1,7 @@
 # Projects Browse Native Menus — Requirements
 
+> Historical implementation contract: stale status indicators described below have since been removed. See the current [Projects documentation](../projects/README.md).
+
 ## Goal
 Browse registered projects, their member repositories and local/GitHub pipeline status in Pi terminal and Pi Chat using existing native select dialogs. The approved native-select mockup revision 2 supersedes the earlier custom-popup plan and removes the populated Projects menu subtitle.
 

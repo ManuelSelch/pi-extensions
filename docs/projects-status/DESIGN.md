@@ -1,5 +1,7 @@
 # Projects Browse Native Menus — Design
 
+> Historical design: stale status indicators described below have since been removed. See the current [Projects documentation](../projects/README.md).
+
 ## Proposed Design
 - Use the native `ctx.ui.select(title, options)` approach presented in chat and approved in `mockups/projects-select/DESIGN.md` revision 2. No `ui.custom()`, new Pi Chat component or server/SDK channel. The approved removal of the Projects subtitle applies to production.
 - `/projects browse` opens Projects → repositories → repository details. Menu options implement Back, Refresh and Close. Cancelling returns one level and closes at Projects. Existing bare/list/show/status commands remain unchanged.
