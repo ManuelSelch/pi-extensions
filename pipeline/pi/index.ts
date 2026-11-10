@@ -200,7 +200,11 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 				if (shuttingDown || currentGeneration !== generation) return;
 				github = result;
 				render();
-			}).catch(() => { /* Explicit status exposes read failures. */ }).finally(() => { remotePending = undefined; });
+			}).catch(() => {
+				if (shuttingDown || currentGeneration !== generation) return;
+				github = { repository: "", branch: "", checkedAt: new Date().toISOString(), workflows: [], error: "refresh failed", errorKind: "unknown" };
+				render();
+			}).finally(() => { remotePending = undefined; });
 		};
 		monitor = new PipelineMonitor(onSnapshot => p.status(onSnapshot), status => {
 			local = status;
@@ -211,6 +215,8 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 			run: status => start(p, ctx, "all", undefined, { automatic: true, expectedSourceFingerprint: status.sourceFingerprint, expectedConfigFingerprint: status.configFingerprint }),
 			cancel: () => { const job = active.get(p.root); if (job?.automatic) job.controller.abort(); },
 		});
+		// Start remote work independently of local reads and source scanning.
+		updateRemote();
 		// Status scans and GitHub requests must not hold up opening a session.
 		// The monitor owns its pending refresh; stop() still awaits/cancels cleanup.
 		void monitor.start().catch(() => { /* Background widget failures stay silent; explicit status exposes errors. */ });

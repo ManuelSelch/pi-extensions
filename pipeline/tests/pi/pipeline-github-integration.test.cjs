@@ -4,16 +4,25 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { load, fixture, waitFor } = require('../pipeline-helpers.cjs');
 
-async function createDriver(t) {
+let testFixture, driver, previousAgentDir;
+beforeEach(async t => {
+  testFixture = await fixture(t);
+  previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = testFixture.cache;
+});
+afterEach(async () => {
+  await driver?.dispose(); driver = undefined;
+  if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+});
+
+async function createDriver() {
   let Reader = class { async read() { return undefined; } stop() {} };
   let resolveRemote, completions, releaseScan, scanStarted = false, scanHeld = false, scanGate, settlePromise;
+  const sourcePath = path.join(testFixture.root, 'source.txt');
+  const marker = path.join(testFixture.root, 'automatic-ran');
   class Remote { constructor(root) { return new Reader(root); } }
-  const f = await fixture(t);
-  const sourcePath = path.join(f.root, 'source.txt');
-  const marker = path.join(f.root, 'automatic-ran');
-  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-  process.env.PI_CODING_AGENT_DIR = f.cache;
-  t.after(() => { if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDir; });
+  const f = testFixture;
   const tools = {}, events = {}, commands = {}, widgets = [], notices = [];
   const Type = (await import('typebox')).Type;
   const { default: extension } = load('pipeline/index.ts', {
@@ -78,16 +87,14 @@ async function createDriver(t) {
     setReader(value) { Reader = value; },
     async dispose() { if (this.disposed) return; this.disposed = true; this.finishSourceScan(); await events.session_shutdown({}, ctx); },
   };
-  t.after(() => d.dispose());
+  driver = d;
   return d;
 }
-beforeEach(async t => { t.context = { driver: await createDriver(t) }; });
-afterEach(async t => { await t.context?.driver?.dispose(); });
 
 const remote = { repository: 'owner/repo', branch: 'main', checkedAt: '2026-01-01T00:00:00Z', workflows: [{ name: 'Tests', status: 'in_progress', url: 'https://github.com/owner/repo/actions/runs/1', jobs: [{ name: 'e2e', status: 'completed', conclusion: 'failure', url: 'https://github.com/owner/repo/actions/runs/1/job/2' }, { name: 'unit', status: 'completed', conclusion: 'success' }] }] };
 
-test('local results appear before a slow source scan completes', async t => {
-  const app = t.context.driver;
+test('local results appear before a slow source scan completes', async () => {
+  const app = await createDriver();
   await app.configureNamedSuites(['web']);
   await app.holdSourceScan();
 
@@ -97,8 +104,8 @@ test('local results appear before a slow source scan completes', async t => {
   app.finishSourceScan();
 });
 
-test('automatic jobs wait for a completed source scan', async t => {
-  const app = t.context.driver;
+test('automatic jobs wait for a completed source scan', async () => {
+  const app = await createDriver();
   await app.configureNamedSuites(['web'], { auto: 'after-agent' });
   await app.holdSourceScan();
   await app.startSession();
@@ -111,8 +118,8 @@ test('automatic jobs wait for a completed source scan', async t => {
   await app.shouldEnableAutomaticRunAfterSourceScan();
 });
 
-test('local widget appears while GitHub is pending and gains remote results later', async t => {
-  const app = t.context.driver;
+test('local widget appears while GitHub is pending and gains remote results later', async () => {
+  const app = await createDriver();
   await app.configureNamedSuites(['web', 'server']);
   app.holdGitHubResponse();
 
@@ -123,8 +130,8 @@ test('local widget appears while GitHub is pending and gains remote results late
   await app.shouldShowLocalAndGitHub('web', 'CI');
 });
 
-test('local updates continue while a GitHub request is pending', async t => {
-  const app = t.context.driver;
+test('local updates continue while a GitHub request is pending', async () => {
+  const app = await createDriver();
   await app.configureNamedSuites(['web']);
   app.holdGitHubResponse();
   await app.startSession();
@@ -136,8 +143,8 @@ test('local updates continue while a GitHub request is pending', async t => {
   await app.shouldShowLocalSuiteWhileGitHubPending('server');
 });
 
-test('GitHub failure does not hide local results', async t => {
-  const app = t.context.driver;
+test('GitHub failure does not hide local results', async () => {
+  const app = await createDriver();
   await app.configureNamedSuites(['web']);
   app.holdGitHubResponse();
   await app.startSession();
@@ -148,8 +155,8 @@ test('GitHub failure does not hide local results', async t => {
   await app.shouldShowLocalAndGitHubError('web', 'timeout');
 });
 
-test('pipeline run completion suggests configured suite names and all filtered by prefix', async t => {
-  const app = t.context.driver;
+test('pipeline run completion suggests configured suite names and all filtered by prefix', async () => {
+  const app = await createDriver();
   await app.configureNamedSuites(['web', 'server']);
   await app.startSession();
 
@@ -159,8 +166,8 @@ test('pipeline run completion suggests configured suite names and all filtered b
   await app.shouldSuggestCompletions(['run server']);
 });
 
-test('pipeline run completion reflects configuration changes and retains all with no suites', async t => {
-  const app = t.context.driver;
+test('pipeline run completion reflects configuration changes and retains all with no suites', async () => {
+  const app = await createDriver();
   await app.configureNamedSuites(['web']);
   await app.startSession();
   await app.configureNamedSuites(['server']);
@@ -172,10 +179,10 @@ test('pipeline run completion reflects configuration changes and retains all wit
   await app.shouldSuggestCompletions(['run all']);
 });
 
-test('remote-only project exposes status via tool, command and widget using a shared reader', async t => {
+test('remote-only project exposes status via tool, command and widget using a shared reader', async () => {
   let instances = 0, stopped = 0;
   class Reader { constructor() { instances++; } async read() { return remote; } stop() { stopped++; } }
-  const d = t.context.driver;
+  const d = await createDriver();
   d.setReader(Reader);
   await d.events.session_start({}, d.ctx);
   await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('◐ GitHub Tests')));
@@ -195,7 +202,7 @@ test('remote-only project exposes status via tool, command and widget using a sh
   assert.equal(stopped, 1);
 });
 
-test('status command forces a remote refresh and updates the widget; tools and polling stay cached', async t => {
+test('status command forces a remote refresh and updates the widget; tools and polling stay cached', async () => {
   const reads = [];
   let current = remote;
   class Reader {
@@ -206,7 +213,7 @@ test('status command forces a remote refresh and updates the widget; tools and p
     }
     stop() {}
   }
-  const d = t.context.driver;
+  const d = await createDriver();
   d.setReader(Reader);
   await d.events.session_start({}, d.ctx);
   await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('◐ GitHub Tests')));
@@ -222,13 +229,13 @@ test('status command forces a remote refresh and updates the widget; tools and p
   assert.equal(reads.filter(options => options?.force).length, 2);
 });
 
-test('session startup completes while GitHub is pending and the widget appears afterward', async t => {
+test('session startup completes while GitHub is pending and the widget appears afterward', async () => {
   let resolveRead, started = false;
   class Reader {
     read() { return new Promise(resolve => { resolveRead = resolve; }); }
     stop() { resolveRead?.(undefined); }
   }
-  const d = t.context.driver;
+  const d = await createDriver();
   d.setReader(Reader);
   const starting = d.events.session_start({}, d.ctx).then(() => { started = true; });
   await waitFor(() => resolveRead);
@@ -242,10 +249,10 @@ test('session startup completes while GitHub is pending and the widget appears a
   assert.match(d.widgets.at(-1).join('\n'), /◐ GitHub Tests · 2\/2 complete/);
 });
 
-test('shutdown cancels an awaited remote refresh and cannot resurrect the widget', async t => {
+test('shutdown cancels an awaited remote refresh and cannot resurrect the widget', async () => {
   let resolveRead;
   class Reader { read() { return new Promise(resolve => { resolveRead = resolve; }); } stop() { resolveRead?.(remote); } }
-  const d = t.context.driver;
+  const d = await createDriver();
   d.setReader(Reader);
   const starting = d.events.session_start({}, d.ctx);
   for (let i = 0; i < 100 && !resolveRead; i++) await new Promise(resolve => setTimeout(resolve, 5));
@@ -255,20 +262,20 @@ test('shutdown cancels an awaited remote refresh and cannot resurrect the widget
   assert.ok(d.widgets.every(value => value === undefined));
 });
 
-test('status arriving after shutdown cannot start a new remote reader', async t => {
+test('status arriving after shutdown cannot start a new remote reader', async () => {
   let created = 0;
   class Reader { constructor() { created++; } async read() { return remote; } stop() {} }
-  const d = t.context.driver;
+  const d = await createDriver();
   d.setReader(Reader);
   await d.events.session_shutdown({}, d.ctx);
   await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(created, 0);
 });
 
-test('session replacement disposes the previous status reader and creates a fresh lifecycle', async t => {
+test('session replacement disposes the previous status reader and creates a fresh lifecycle', async () => {
   let created = 0, stopped = 0;
   class Reader { constructor() { created++; } async read() { return remote; } stop() { stopped++; } }
-  const d = t.context.driver;
+  const d = await createDriver();
   d.setReader(Reader);
   await d.events.session_start({}, d.ctx);
   await waitFor(() => created === 1);
@@ -282,9 +289,9 @@ test('session replacement disposes the previous status reader and creates a fres
   assert.equal(stopped, 2);
 });
 
-test('non-UI status still reads GitHub without starting monitor timers', async t => {
+test('non-UI status still reads GitHub without starting monitor timers', async () => {
   class Reader { async read() { return remote; } stop() {} }
-  const d = t.context.driver;
+  const d = await createDriver();
   d.setReader(Reader);
   const ctx = { ...d.ctx, hasUI: false };
   await d.events.session_start({}, ctx);
