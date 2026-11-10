@@ -31,7 +31,7 @@ export class PipelineMonitor {
 	private nextAttemptAt = 0;
 	private automatic?: Promise<void>;
 	constructor(
-		private readonly read: () => Promise<PipelineStatus>,
+		private readonly read: (onSnapshot: (status: PipelineStatus) => void) => Promise<PipelineStatus>,
 		private readonly render: (status: PipelineStatus | undefined) => void,
 		private readonly clock: Clock = realClock,
 		private readonly automation?: Automation,
@@ -62,7 +62,12 @@ export class PipelineMonitor {
 			do {
 				this.pending = false;
 				let status: PipelineStatus | undefined;
-				try { status = await this.read(); } catch { /* /pipeline status exposes configuration/read errors. */ }
+				try {
+					status = await this.read(snapshot => {
+						// Partial results are display-only; automatic runs need a full source fingerprint.
+						if (this.live) this.render(snapshot);
+					});
+				} catch { /* /pipeline status exposes configuration/read errors. */ }
 				if (!this.live) return;
 				const key = `${status?.configFingerprint ?? ""}:${status?.sourceFingerprint ?? ""}`;
 				if (key !== this.stableKey) { this.stableKey = key; this.stableSince = this.clock.now(); }

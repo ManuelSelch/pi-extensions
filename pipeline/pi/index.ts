@@ -202,7 +202,7 @@ export default function pipelineExtension(pi: ExtensionAPI): void {
 				render();
 			}).catch(() => { /* Explicit status exposes read failures. */ }).finally(() => { remotePending = undefined; });
 		};
-		monitor = new PipelineMonitor(() => p.status(), status => {
+		monitor = new PipelineMonitor(onSnapshot => p.status(onSnapshot), status => {
 			local = status;
 			render();
 			if (status && !shuttingDown && currentGeneration === generation) updateRemote();

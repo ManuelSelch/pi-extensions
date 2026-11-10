@@ -305,11 +305,10 @@ export class Pipeline {
 		const text = await optionalText(join(this.storage, "prepare.json"));
 		return text === undefined ? undefined : JSON.parse(text);
 	}
-	async status(): Promise<PipelineStatus> {
+	async status(onSnapshot?: (status: PipelineStatus) => void): Promise<PipelineStatus> {
 		const config = await this.config();
 		if (!config) return { configured: false, suites: {} };
 		const results = await this.results();
-		const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
 		const configFingerprint = digest(JSON.stringify(config));
 		const suites: Record<string, SuiteStatus> = Object.create(null);
 		for (const [name, suite] of Object.entries(config.suites)) {
@@ -321,8 +320,11 @@ export class Pipeline {
 			suites[name] = { ...selected, jobs };
 		}
 		const preparation = config.prepare ? await this.preparation() : undefined;
-		return { configured: true, root: this.root, config, suites, sourceFingerprint: fingerprint, configFingerprint,
+		const snapshot: PipelineStatus = { configured: true, root: this.root, config, suites, configFingerprint,
 			...(config.prepare ? { prepare: preparation ?? { outcome: "never" as const } } : {}) };
+		onSnapshot?.(snapshot);
+		const fingerprint = await sourceFingerprint(this.root, [this.cacheRoot]);
+		return { ...snapshot, sourceFingerprint: fingerprint };
 	}
 	async logs(name: string): Promise<{ logPath: string; output: string }> {
 		const result = (await this.results())[name];
