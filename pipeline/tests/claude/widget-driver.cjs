@@ -43,6 +43,7 @@ class ClaudeWidgetDriver {
   }
   async thenWidgetShowsLocalAndGitHubStatus() { const text = await this.text(); assert.match(text, /Local/); assert.match(text, /unit/); assert.match(text, /GitHub.*Tests/); }
   async thenWidgetIsHidden() { assert.equal(await this.text(), ''); }
+  async thenNoClassicHooksAreRegistered() { assert.deepEqual(Object.keys(this.events).filter(name => name.startsWith('classic.')), []); }
   async thenWidgetShowsChangedStatus() { const text = await this.text(); assert.match(text, /unit/); assert.match(text, /✗/); }
   async thenRefreshFailureIsNotShownAsCurrentSuccess() { const text = await this.text(); assert.match(text, /unavailable|stale/i); assert.doesNotMatch(text, /✓ Local/); }
   async thenNoTestsOrPromptsWereStarted() { assert.ok(this.calls.length); assert.ok(this.calls.every(call => call.tool === 'pipeline_status')); }

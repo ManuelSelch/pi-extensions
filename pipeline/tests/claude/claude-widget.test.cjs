@@ -16,6 +16,21 @@ test('Claude shows local suites and GitHub Actions status in the widget', async 
   await widget.thenNoTestsOrPromptsWereStarted();
 });
 
+test('the widget starts and refreshes without classic hooks that can generate skipped-hook notices', async t => {
+  const claude = t.context.claude;
+  const widget = claude.widget;
+  await widget.provideStatus('local-and-github');
+
+  await claude.startSession();
+  await widget.thenWidgetShowsLocalAndGitHubStatus();
+  await widget.provideStatus('changed');
+  await widget.advanceRefresh();
+
+  await widget.thenWidgetShowsChangedStatus();
+  await widget.thenNoClassicHooksAreRegistered();
+  await widget.thenNoTestsOrPromptsWereStarted();
+});
+
 test('Claude hides the widget when there is no pipeline or GitHub status', async t => {
   const claude = t.context.claude;
   const widget = claude.widget;

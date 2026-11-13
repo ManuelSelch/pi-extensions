@@ -105,10 +105,6 @@ export function register(on) {
     $.ui.invalidate('ui.render');
     return next(e);
   });
-  on('classic.SessionStart', async ($, e, next) => {
-    if (['clear', 'resume', 'fork'].includes(e.source)) start($);
-    return next(e);
-  });
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
     const rows = unavailable ? [`⚠ Pipeline · unavailable · ${unavailable}`] : status ? lines(status) : [];
