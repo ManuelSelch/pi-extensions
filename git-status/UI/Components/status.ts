@@ -40,10 +40,13 @@ export interface StatusRow {
 }
 
 export function renderStatusRows(rows: StatusRow[], width: number, theme: { fg(color: StatusRow["color"], text: string): string }): string[] {
+	const countWidth = Math.max(0, ...rows.map(row => /  ●(\d+)$/.exec(row.text)?.[1].length ?? 0));
 	return rows.map(row => {
 		const separator = row.text.indexOf("  ");
 		let name = separator < 0 ? row.text : row.text.slice(0, separator);
-		const detail = separator < 0 ? "" : row.text.slice(separator);
+		let detail = separator < 0 ? "" : row.text.slice(separator);
+		const count = /^  ●(\d+)$/.exec(detail);
+		if (count) detail = `  ●${count[1].padStart(countWidth)}`;
 		const checkoutPrefix = row.label && name.startsWith(`${row.label} · `) ? `${row.label} · ` : "";
 		const branch = checkoutPrefix ? name.slice(checkoutPrefix.length) : row.label === name ? name : "";
 		const ticket = /^(\w+-\d+)-(.+)$/.exec(branch);
@@ -56,6 +59,7 @@ export function renderStatusRows(rows: StatusRow[], width: number, theme: { fg(c
 			if (name.endsWith("…") && boundary > descriptionStart && boundary >= name.length - 8) name = `${name.slice(0, boundary)}…`;
 			else if (name.endsWith("…")) name = name.replace(/[-/\s]+…$/, "…");
 		}
+		if (count) detail = `${" ".repeat(Math.max(0, width - visibleWidth(name) - visibleWidth(detail)))}${detail}`;
 		const suffix = stripTerminalSequences(truncateToWidth(detail, Math.max(0, width - visibleWidth(name)), ""));
 		const accentLength = row.label === row.text.slice(0, separator < 0 ? undefined : separator)
 			? name.length : row.label && name.startsWith(row.label) ? row.label.length : 0;

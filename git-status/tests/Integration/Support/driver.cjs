@@ -97,7 +97,10 @@ class GitStatusDriver {
     assert.equal(this.widgets.length, count);
     assert.equal(this.statusReads, reads, 'no unnecessary snapshot reads while metadata is unchanged');
   }
-  thenRows(expected) { assert.deepEqual(this.widgets.at(-1).slice(1), expected); }
+  thenRows(expected) {
+    const rows = this.widgets.at(-1).slice(1).map(row => row.replace(/ +● +(\d+)$/, '  ●$1').replace(/ +●(\d+)$/, '  ●$1'));
+    assert.deepEqual(rows, expected);
+  }
   thenCheckoutVisible() { assert.match(this.widgets.at(-1)[0], /✓/); }
   thenCleared() { assert.equal(this.widgets.at(-1), undefined); }
   async startOutside() { this.paths.set('outside', this.root); await this.start('outside'); }

@@ -5,10 +5,24 @@ const { loader } = require('../../load.cjs');
 const { formatRepositoryStatus, renderStatusRows } = loader()(join(__dirname, '../../../UI/Components/status.ts'));
 const theme = { fg: (_color, text) => text };
 
+test('aligns unmerged counts at the right edge while keeping markers aligned', () => {
+  const rows = [
+    { text: 'csmm-341-remove-tooltips  ●9', label: 'csmm-341-remove-tooltips', color: 'warning' },
+    { text: 'csmm-328-mock-settings-add-role  ●13', label: 'csmm-328-mock-settings-add-role', color: 'warning' },
+    { text: 'main  ✓', label: 'main', color: 'success' },
+  ];
+
+  assert.deepEqual(renderStatusRows(rows, 36, theme), [
+    'csmm-341  remove-tooltips        ● 9',
+    'csmm-328  mock-settings-add…     ●13',
+    'main  ✓',
+  ]);
+});
+
 test('fits branch names to the available width while preserving ticket and count', () => {
   const rows = [{ text: 'csmm-236-declare-every-agreed-endpoint-in-fastapi  ●7', label: 'csmm-236-declare-every-agreed-endpoint-in-fastapi', color: 'warning' }];
-  assert.deepEqual(renderStatusRows(rows, 30, theme), ['csmm-236  declare-every…  ●7']);
-  assert.deepEqual(renderStatusRows(rows, 80, theme), ['csmm-236  declare-every-agreed-endpoint-in-fastapi  ●7']);
+  assert.deepEqual(renderStatusRows(rows, 30, theme), ['csmm-236  declare-every…    ●7']);
+  assert.deepEqual(renderStatusRows(rows, 80, theme), [`${'csmm-236  declare-every-agreed-endpoint-in-fastapi'.padEnd(78)}●7`]);
 });
 
 test('separates ticket identifiers consistently in short branches and checkout lines', () => {
@@ -17,7 +31,7 @@ test('separates ticket identifiers consistently in short branches and checkout l
 
   assert.deepEqual(renderStatusRows(formatRepositoryStatus(snapshot), 80, theme), [
     'bluebird · csmm-341  remove-tooltips  ✓',
-    'csmm-341  remove-tooltips  ●9',
+    `${'csmm-341  remove-tooltips'.padEnd(78)}●9`,
   ]);
   assert.equal(snapshot.status.branch, branch);
 });
@@ -25,7 +39,7 @@ test('separates ticket identifiers consistently in short branches and checkout l
 test('does not treat other branch names as ticket identifiers', () => {
   for (const branch of ['csmm-341', 'csmm-abc-description', 'team/csmm-341-description']) {
     const rows = [{ text: `${branch}  ●1`, label: branch, color: 'warning' }];
-    assert.deepEqual(renderStatusRows(rows, 80, theme), [`${branch}  ●1`]);
+    assert.deepEqual(renderStatusRows(rows, 80, theme), [`${branch.padEnd(78)}●1`]);
   }
 });
 
