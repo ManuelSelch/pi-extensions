@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { readGitDirectories, readGitStatus } from "./Infra/git.ts";
 import { watchGitMetadata } from "./Infra/watch.ts";
 import { createRefreshQueue } from "./App/refresh.ts";
-import { formatRepositoryStatus } from "./UI/Components/status.ts";
+import { formatRepositoryStatus, renderStatusRows } from "./UI/Components/status.ts";
 
 export { parseGitStatus } from "./Domain/status.ts";
 export type { GitStatus } from "./Domain/status.ts";
@@ -35,13 +35,16 @@ export default function gitStatusExtension(pi: ExtensionAPI): void {
 			} else watcher?.reconcile();
 			const result = await readGitStatus(ctx.cwd);
 			if (closed) return;
-			const rows = result ? formatRepositoryStatus(result).map(row => row.label
-				? ctx.ui.theme.fg("accent", row.label) + ctx.ui.theme.fg(row.color, row.text.slice(row.label.length))
-				: ctx.ui.theme.fg(row.color, row.text)) : undefined;
+			const rows = result ? formatRepositoryStatus(result) : undefined;
 			const content = JSON.stringify(rows) ?? "null";
 			if (content !== published) {
 				published = content;
-				ctx.ui.setWidget("git-status", rows);
+				if (!rows) ctx.ui.setWidget("git-status", undefined);
+				else if (ctx.mode === "tui") ctx.ui.setWidget("git-status", (_tui, theme) => ({
+					render: width => renderStatusRows(rows, width, theme),
+					invalidate() {},
+				}));
+				else ctx.ui.setWidget("git-status", renderStatusRows(rows, 36, ctx.ui.theme));
 			}
 		}, warn);
 		return {

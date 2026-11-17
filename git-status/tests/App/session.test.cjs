@@ -4,7 +4,7 @@ const { join } = require('node:path');
 const { loader } = require('../load.cjs');
 
 function fixture() {
-  const handlers = new Map(), watchers = [], reads = [], publications = [], warnings = [];
+  const handlers = new Map(), watchers = [], reads = [], publications = [], warnings = [], widths = [];
   const extension = loader({
     './Infra/git.ts': {
       readGitDirectories: async () => ['/git'],
@@ -17,14 +17,17 @@ function fixture() {
         return watcher;
       },
     },
-    './UI/Components/status.ts': { formatRepositoryStatus: result => [{ text: result, color: 'muted' }] },
+    './UI/Components/status.ts': {
+      formatRepositoryStatus: result => [{ text: result, color: 'muted' }],
+      renderStatusRows: (rows, width) => { widths.push(width); return rows.map(row => row.text); },
+    },
   })(join(__dirname, '../../index.ts')).default;
   extension({ on: (name, handler) => handlers.set(name, handler) });
   const ctx = cwd => ({ cwd, ui: {
     notify: text => warnings.push(text), theme: { fg: (_color, text) => text },
     setWidget: (_key, rows) => publications.push({ cwd, rows }),
   } });
-  return { handlers, watchers, reads, publications, warnings, ctx };
+  return { handlers, watchers, reads, publications, warnings, widths, ctx };
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
@@ -41,6 +44,32 @@ test('replacing a session closes watchers and suppresses the old read completion
   assert.deepEqual(f.publications, [{ cwd: 'new', rows: ['new status'] }]);
   await f.handlers.get('session_shutdown')();
   assert.equal(f.watchers[1].closed, true);
+});
+
+test('terminal widget renders again at the supplied width after resizing', async () => {
+  const f = fixture(), ctx = { ...f.ctx('repo'), mode: 'tui' };
+  const initial = f.handlers.get('session_start')({}, ctx);
+  await settle();
+  f.reads[0].resolve('status');
+  await initial;
+
+  const widget = f.publications[0].rows({}, ctx.ui.theme);
+  assert.deepEqual(widget.render(24), ['status']);
+  assert.deepEqual(widget.render(60), ['status']);
+  assert.deepEqual(f.widths, [24, 60]);
+  await f.handlers.get('session_shutdown')();
+});
+
+test('serialized widgets use a bounded width', async () => {
+  const f = fixture(), ctx = { ...f.ctx('repo'), mode: 'rpc' };
+  const initial = f.handlers.get('session_start')({}, ctx);
+  await settle();
+  f.reads[0].resolve('status');
+  await initial;
+
+  assert.deepEqual(f.publications[0].rows, ['status']);
+  assert.deepEqual(f.widths, [36]);
+  await f.handlers.get('session_shutdown')();
 });
 
 test('unchanged snapshots are not republished and watcher failures warn once', async () => {

@@ -1,3 +1,4 @@
+import { stripTerminalSequences, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { GitStatus, RepositoryStatus, BranchStatus } from "../../Domain/status.ts";
 
 // Match Pi Chat's display-only worktree label; keep branch identities intact.
@@ -36,6 +37,28 @@ export interface StatusRow {
 	text: string;
 	label?: string;
 	color: "accent" | "success" | "warning" | "muted";
+}
+
+export function renderStatusRows(rows: StatusRow[], width: number, theme: { fg(color: StatusRow["color"], text: string): string }): string[] {
+	return rows.map(row => {
+		const separator = row.text.indexOf("  ");
+		let name = separator < 0 ? row.text : row.text.slice(0, separator);
+		const detail = separator < 0 ? "" : row.text.slice(separator);
+		const available = Math.max(0, width - visibleWidth(detail));
+		if (visibleWidth(name) > available) {
+			const ticket = /^(\w+-\d+)-(.+)$/.exec(name);
+			if (ticket && available > visibleWidth(ticket[1]) + 3) name = `${ticket[1]}  ${ticket[2]}`;
+			name = stripTerminalSequences(truncateToWidth(name, available, "…"));
+			const boundary = name.lastIndexOf("-");
+			const descriptionStart = ticket ? name.indexOf("  ") + 2 : 0;
+			if (name.endsWith("…") && boundary > descriptionStart && boundary >= name.length - 8) name = `${name.slice(0, boundary)}…`;
+			else if (name.endsWith("…")) name = name.replace(/[-/\s]+…$/, "…");
+		}
+		const suffix = stripTerminalSequences(truncateToWidth(detail, Math.max(0, width - visibleWidth(name)), ""));
+		const accentLength = row.label === row.text.slice(0, separator < 0 ? undefined : separator)
+			? name.length : row.label && name.startsWith(row.label) ? row.label.length : 0;
+		return theme.fg("accent", name.slice(0, accentLength)) + theme.fg(row.color, name.slice(accentLength) + suffix);
+	});
 }
 
 function formatBranch(status: BranchStatus): StatusRow {

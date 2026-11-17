@@ -2,7 +2,24 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { join } = require('node:path');
 const { loader } = require('../../load.cjs');
-const { formatRepositoryStatus } = loader()(join(__dirname, '../../../UI/Components/status.ts'));
+const { formatRepositoryStatus, renderStatusRows } = loader()(join(__dirname, '../../../UI/Components/status.ts'));
+const theme = { fg: (_color, text) => text };
+
+test('fits branch names to the available width while preserving ticket and count', () => {
+  const rows = [{ text: 'csmm-236-declare-every-agreed-endpoint-in-fastapi  ●7', label: 'csmm-236-declare-every-agreed-endpoint-in-fastapi', color: 'warning' }];
+  assert.deepEqual(renderStatusRows(rows, 30, theme), ['csmm-236  declare-every…  ●7']);
+  assert.deepEqual(renderStatusRows(rows, 80, theme), [rows[0].text]);
+});
+
+test('fits wide unicode, checkout counters, and very narrow widths', () => {
+  const rows = [{ text: 'repo · feature/界界界界界  +2  ~3', label: 'repo', color: 'warning' }];
+  const { visibleWidth } = require('@earendil-works/pi-tui');
+  for (const width of [0, 1, 5, 12, 20, 30]) {
+    const [line] = renderStatusRows(rows, width, theme);
+    assert.ok(visibleWidth(line) <= width);
+    if (width >= 12) assert.ok(line.endsWith('  +2  ~3'));
+  }
+});
 test('shortens conventional branch prefixes only in display labels', () => {
   for (const prefix of ['feature', 'feat', 'fix', 'bugfix']) {
     const branch = `${prefix}/topic/nested`;
