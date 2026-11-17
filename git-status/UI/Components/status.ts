@@ -1,7 +1,12 @@
 import type { GitStatus, RepositoryStatus, BranchStatus } from "../../Domain/status.ts";
 
+// Match Pi Chat's display-only worktree label; keep branch identities intact.
+function worktreeLabel(branch: string): string {
+	return branch.replace(/^(?:feature|feat|fix|bugfix)\/(?=.)/, "");
+}
+
 export function formatGitStatus(status: GitStatus, includeDivergence = true): string {
-	const parts = [status.branch];
+	const parts = [worktreeLabel(status.branch)];
 	if (status.changed === 0) {
 		parts.push("✓");
 	} else {
@@ -37,7 +42,8 @@ function formatBranch(status: BranchStatus): StatusRow {
 	if (status.kind === "feature") {
 		const text = status.unmerged === undefined ? "merge unknown"
 			: status.unmerged === 0 ? "✓" : `●${status.unmerged}`;
-		return { text: `${status.branch}  ${text}`, label: status.branch, color: status.unmerged === 0 ? "muted" : "warning" };
+		const label = worktreeLabel(status.branch);
+		return { text: `${label}  ${text}`, label, color: status.unmerged === 0 ? "muted" : "warning" };
 	}
 	let detail: string;
 	let color: StatusRow["color"] = "warning";
@@ -50,7 +56,8 @@ function formatBranch(status: BranchStatus): StatusRow {
 		detail = parts.join("  ") || "✓";
 		if (!parts.length) color = "success";
 	}
-	return { text: `${status.branch}  ${detail}`, label: status.branch, color };
+	const label = worktreeLabel(status.branch);
+	return { text: `${label}  ${detail}`, label, color };
 }
 
 export function formatRepositoryStatus(snapshot: RepositoryStatus): StatusRow[] {

@@ -8,9 +8,9 @@ test('external merge and push update a linked session without tool callbacks', a
   app.commit('feat/search');
   await app.start('feat/search');
   app.merge('feat/search');
-  await app.eventuallyRows(['main  ↑1', 'feat/search  ✓']);
+  await app.eventuallyRows(['main  ↑1', 'search  ✓']);
   app.push('main');
-  await app.eventuallyRows(['main  ✓', 'feat/search  ✓']);
+  await app.eventuallyRows(['main  ✓', 'search  ✓']);
 });
 
 test('new nested refs, worktree addition/removal, packed refs and primary HEAD changes are observed', async t => {
@@ -19,14 +19,14 @@ test('new nested refs, worktree addition/removal, packed refs and primary HEAD c
   await app.start('feat/search');
   app.addBranch('fix/deep/new');
   app.commit('fix/deep/new');
-  await app.eventuallyRows(['main  no upstream', 'feat/search  ✓', 'fix/deep/new  ●1']);
+  await app.eventuallyRows(['main  no upstream', 'search  ✓', 'deep/new  ●1']);
   app.packRefs();
   app.commit('fix/deep/new');
-  await app.eventuallyRows(['main  no upstream', 'feat/search  ✓', 'fix/deep/new  ●2']);
+  await app.eventuallyRows(['main  no upstream', 'search  ✓', 'deep/new  ●2']);
   app.removeBranch('fix/deep/new');
-  await app.eventuallyRows(['main  no upstream', 'feat/search  ✓']);
+  await app.eventuallyRows(['main  no upstream', 'search  ✓']);
   app.switchPrimary('develop');
-  await app.eventuallyRows(['develop  no upstream', 'feat/search  ✓']);
+  await app.eventuallyRows(['develop  no upstream', 'search  ✓']);
 });
 
 test('external staging and committing refresh file status, but unstaged edits alone do not', async t => {
