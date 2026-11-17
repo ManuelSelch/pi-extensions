@@ -44,13 +44,15 @@ export function renderStatusRows(rows: StatusRow[], width: number, theme: { fg(c
 		const separator = row.text.indexOf("  ");
 		let name = separator < 0 ? row.text : row.text.slice(0, separator);
 		const detail = separator < 0 ? "" : row.text.slice(separator);
+		const checkoutPrefix = row.label && name.startsWith(`${row.label} · `) ? `${row.label} · ` : "";
+		const branch = checkoutPrefix ? name.slice(checkoutPrefix.length) : row.label === name ? name : "";
+		const ticket = /^(\w+-\d+)-(.+)$/.exec(branch);
+		if (ticket) name = `${checkoutPrefix}${ticket[1]}  ${ticket[2]}`;
 		const available = Math.max(0, width - visibleWidth(detail));
 		if (visibleWidth(name) > available) {
-			const ticket = /^(\w+-\d+)-(.+)$/.exec(name);
-			if (ticket && available > visibleWidth(ticket[1]) + 3) name = `${ticket[1]}  ${ticket[2]}`;
 			name = stripTerminalSequences(truncateToWidth(name, available, "…"));
 			const boundary = name.lastIndexOf("-");
-			const descriptionStart = ticket ? name.indexOf("  ") + 2 : 0;
+			const descriptionStart = ticket ? checkoutPrefix.length + ticket[1].length + 2 : 0;
 			if (name.endsWith("…") && boundary > descriptionStart && boundary >= name.length - 8) name = `${name.slice(0, boundary)}…`;
 			else if (name.endsWith("…")) name = name.replace(/[-/\s]+…$/, "…");
 		}

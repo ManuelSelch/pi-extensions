@@ -10,7 +10,7 @@ Below it, branch rows appear in this order:
 
 The current branch always remains individually visible, even when merged; it is excluded from the collapsed count. Each visible branch appears once in the summary. Feature rows display `●N`, a muted `✓`, or `merge unknown`. No primary/worktree/current labels or merge-target suffixes are displayed.
 
-Branch labels omit `feature/`, `feat/`, `fix/`, and `bugfix/` prefixes. Long labels are truncated while retaining status counts; ticket identifiers such as `csmm-236` stay at the front. Terminal widgets adapt to the available width. Pi Chat and other serialized widget hosts do not report panel width, so they use a 36-column budget.
+Branch labels omit `feature/`, `feat/`, `fix/`, and `bugfix/` prefixes. A leading ticket pattern such as `csmm-236-description` displays as `csmm-236  description`. Long labels are truncated while retaining status counts; ticket identifiers stay at the front when space permits. Terminal widgets adapt to the available width. Pi Chat and other serialized widget hosts do not report panel width, so they use a 36-column budget.
 
 The primary branch is discovered from the first entry of Git's worktree list, not hardcoded to `main`. Switching the primary checkout to another branch changes the comparison target. In a repository with no linked worktrees, the checked-out branch itself is primary.
 

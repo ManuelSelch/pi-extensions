@@ -8,7 +8,25 @@ const theme = { fg: (_color, text) => text };
 test('fits branch names to the available width while preserving ticket and count', () => {
   const rows = [{ text: 'csmm-236-declare-every-agreed-endpoint-in-fastapi  ●7', label: 'csmm-236-declare-every-agreed-endpoint-in-fastapi', color: 'warning' }];
   assert.deepEqual(renderStatusRows(rows, 30, theme), ['csmm-236  declare-every…  ●7']);
-  assert.deepEqual(renderStatusRows(rows, 80, theme), [rows[0].text]);
+  assert.deepEqual(renderStatusRows(rows, 80, theme), ['csmm-236  declare-every-agreed-endpoint-in-fastapi  ●7']);
+});
+
+test('separates ticket identifiers consistently in short branches and checkout lines', () => {
+  const branch = 'csmm-341-remove-tooltips';
+  const snapshot = { ...base, status: { ...base.status, branch }, branches: [{ branch, kind: 'feature', unmerged: 9 }] };
+
+  assert.deepEqual(renderStatusRows(formatRepositoryStatus(snapshot), 80, theme), [
+    'bluebird · csmm-341  remove-tooltips  ✓',
+    'csmm-341  remove-tooltips  ●9',
+  ]);
+  assert.equal(snapshot.status.branch, branch);
+});
+
+test('does not treat other branch names as ticket identifiers', () => {
+  for (const branch of ['csmm-341', 'csmm-abc-description', 'team/csmm-341-description']) {
+    const rows = [{ text: `${branch}  ●1`, label: branch, color: 'warning' }];
+    assert.deepEqual(renderStatusRows(rows, 80, theme), [`${branch}  ●1`]);
+  }
 });
 
 test('fits wide unicode, checkout counters, and very narrow widths', () => {
