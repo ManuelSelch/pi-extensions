@@ -23,12 +23,12 @@ After the user approves a merge/push and the push finishes, call `pipeline_wait(
 No setup or pipeline configuration is needed. In a checkout with a `github.com` Git remote, the extension uses the installed `gh` CLI and its existing authentication (`gh auth login`). Prefer `origin` when multiple GitHub remotes exist; HTTPS, SCP-style SSH and `ssh://git@github.com/` URLs are supported. GitHub Enterprise hosts are not supported. Branch-status display does not support detached HEAD checkouts (commit-pinned waiting does).
 
 ```text
-✓ Local 1/1 · 3m ago
-✓ GitHub Server package · 2/2 · 32m ago
-✗ GitHub Tests · 2/4 · 29m ago
+✓ Local                  1/1      3m ago
+✓ GitHub Server package  2/2      32m ago
+✗ GitHub Tests           2/4      29m ago
   ├─ ✗ e2e failed
   └─ ○ sonar skipped
-◐ GitHub Deploy · running · 1m ago
+◐ GitHub Deploy          running  1m ago
 ```
 
 - Show the latest run **per workflow on the current branch**, selecting the highest `run_number` across paginated run results rather than trusting timestamps or API ordering. Rerunning an older run does not supersede a newer run number; jobs still use the selected run's current attempt. Never compare remote runs to HEAD or local source freshness. Workflows with no runs on the branch show `never`.

@@ -41,7 +41,7 @@ async function createApiDriver(t) {
     assert.equal(Object.hasOwn(result.suites.unit, 'stale'), false);
     const { renderWidget } = load('pipeline/pi/widget.ts');
     const text = renderWidget(result, { fg: (_color, value) => value }, 120).join('\n');
-    assert.match(text, outcome === 'passed' ? /✓ Local 1\/1/ : /✗ Local 0\/1/);
+    assert.match(text, outcome === 'passed' ? /✓ Local +1\/1/ : /✗ Local +0\/1/);
     assert.doesNotMatch(text, /stale/i);
   }
   let jobResults = [], legacyResult;

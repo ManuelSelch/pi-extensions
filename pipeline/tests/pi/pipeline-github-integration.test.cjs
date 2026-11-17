@@ -199,7 +199,7 @@ test('remote-only project exposes status via tool, command and widget using a sh
   d.setReader(Reader);
   await d.events.session_start({}, d.ctx);
   await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('◐ GitHub Tests')));
-  assert.match(d.widgets.at(-1).join('\n'), /◐ GitHub Tests · 2\/2 complete/);
+  assert.match(d.widgets.at(-1).join('\n'), /◐ GitHub Tests +2\/2 complete/);
   assert.doesNotMatch(d.widgets.at(-1).join('\n'), /unit passed/);
   const result = await d.tools.pipeline_status.execute('id', {}, undefined, undefined, d.ctx);
   assert.equal(result.details.configured, false);
@@ -259,7 +259,7 @@ test('session startup completes while GitHub is pending and the widget appears a
   resolveRead(remote);
   await starting;
   await waitFor(() => d.widgets.at(-1)?.some(line => line.includes('◐ GitHub Tests')));
-  assert.match(d.widgets.at(-1).join('\n'), /◐ GitHub Tests · 2\/2 complete/);
+  assert.match(d.widgets.at(-1).join('\n'), /◐ GitHub Tests +2\/2 complete/);
 });
 
 test('shutdown cancels an awaited remote refresh and cannot resurrect the widget', async () => {

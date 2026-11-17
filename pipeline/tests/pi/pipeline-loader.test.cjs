@@ -73,7 +73,7 @@ test('real Pi loader integrates config approval, hidden/populated widgets and si
   assert.match(reviews[1], /- timeout: 300s\n\+ timeout: 120s/);
   assert.doesNotMatch(reviews[1], /command:|Before:|After:/);
   await event('agent_start'); await event('agent_settled');
-  await waitFor(() => widgets.some(lines => lines?.join('\n').includes('✓ Local 1/1')));
+  await waitFor(() => widgets.some(lines => /✓ Local +1\/1/.test(lines?.join('\n') ?? '')));
   const status = await ext.tools.get('pipeline_status').definition.execute('status', {}, undefined, undefined, ctx);
   assert.equal(status.details.suites.unit.outcome, 'passed'); assert.equal(Object.hasOwn(status.details.suites.unit, 'stale'), false);
   assert.equal(status.details.prepare.outcome, 'passed');

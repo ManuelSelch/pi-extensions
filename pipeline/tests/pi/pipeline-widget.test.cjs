@@ -4,8 +4,25 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { load, fixture, config, approve, waitFor } = require('../pipeline-helpers.cjs');
 const plain = { fg: (_color, text) => text };
+const compact = lines => Array.from(lines, line => line.startsWith('  ') ? line : line.replace(/ {2,}/g, ' ').trimEnd());
 const now = Date.parse('2026-10-14T12:00:00Z');
 const result = (outcome, minutes = 3, stale = false) => ({ outcome, stale, startedAt: new Date(now - minutes * 60000).toISOString(), finishedAt: new Date(now - minutes * 60000).toISOString() });
+
+test('summary columns align across local and GitHub rows at available widths', () => {
+  const { renderWidget } = load('pipeline/pi/widget.ts');
+  const { visibleWidth } = require('@earendil-works/pi-tui');
+  const status = { configured: true, suites: { unit: result('passed') }, github: { workflows: [
+    { name: '漢字-long-workflow-name', status: 'completed', conclusion: 'success', updatedAt: new Date(now - 60000).toISOString(), jobs: Array.from({ length: 11 }, () => ({ status: 'completed', conclusion: 'success' })) },
+    { name: 'short', status: 'completed', conclusion: 'success', updatedAt: new Date(now - 3600000).toISOString(), jobs: [{ status: 'completed', conclusion: 'success' }] },
+  ] } };
+  for (const width of [36, 60]) {
+    const lines = Array.from(renderWidget(status, plain, width, now));
+    const columns = lines.map(line => [visibleWidth(line.slice(0, line.search(/\d+\/\d+/))), visibleWidth(line.slice(0, line.search(/\d+[mhd] ago/)))]);
+    assert.deepEqual(columns[0], columns[1]);
+    assert.deepEqual(columns[1], columns[2]);
+    assert.ok(lines.every(line => visibleWidth(line) <= width));
+  }
+});
 
 test('compact widget collapses healthy suites, preparation and jobs into two lines', () => {
   const { renderWidget } = load('pipeline/pi/widget.ts');
@@ -15,8 +32,8 @@ test('compact widget collapses healthy suites, preparation and jobs into two lin
     updatedAt: new Date(now - 86400000).toISOString(),
     jobs: ['build', 'unit', 'e2e', 'sonar'].map(name => ({ name, status: 'completed', conclusion: 'success' })),
   }] } };
-  assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), [
-    '✓ Local 4/4 · 2m ago', '✓ GitHub Tests · 4/4 · 1d ago',
+  assert.deepEqual(compact(renderWidget(status, plain, 120, now)), [
+    '✓ Local 4/4 2m ago', '✓ GitHub Tests 4/4 1d ago',
   ]);
 });
 
@@ -25,8 +42,8 @@ test('compact widget expands only attention-needed local results and hides idle 
   const status = { configured: true, prepare: { outcome: 'never', stale: false }, suites: {
     unit: result('passed'), e2e: result('failed', 2),
   } };
-  assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), [
-    '✗ Local 1/2 · 2m ago', '  ✗ e2e 2m ago',
+  assert.deepEqual(compact(renderWidget(status, plain, 120, now)), [
+    '✗ Local 1/2 2m ago', '  ✗ e2e 2m ago',
   ]);
   status.prepare = result('failed');
   assert.match(renderWidget(status, plain, 120, now).join('\n'), /  ✗ prepare/);
@@ -34,8 +51,8 @@ test('compact widget expands only attention-needed local results and hides idle 
   assert.match(renderWidget(status, plain, 120, now).join('\n'), /  › prepare running/);
   status.prepare = result('passed');
   status.suites.e2e = result('passed', 2, true);
-  assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), [
-    '✓ Local 2/2 · 2m ago',
+  assert.deepEqual(compact(renderWidget(status, plain, 120, now)), [
+    '✓ Local 2/2 2m ago',
   ]);
 });
 
@@ -47,13 +64,13 @@ test('compact remote progress hides completed jobs and preserves non-success con
     { name: 'sonar', status: 'in_progress' },
   ] };
   const status = { configured: false, suites: {}, github: { workflows: [workflow] } };
-  assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), [
-    '◐ GitHub Tests · 2/3 complete', '  ├─ ○ build skipped', '  └─ › sonar running',
+  assert.deepEqual(compact(renderWidget(status, plain, 120, now)), [
+    '◐ GitHub Tests 2/3 complete', '  ├─ ○ build skipped', '  └─ › sonar running',
   ]);
   workflow.status = 'completed'; workflow.conclusion = 'failure';
   workflow.jobs[2] = { name: 'sonar', status: 'completed', conclusion: 'failure' };
-  assert.deepEqual(Array.from(renderWidget(status, plain, 120, now)), [
-    '✗ GitHub Tests · 1/3', '  ├─ ○ build skipped', '  └─ ✗ sonar failed',
+  assert.deepEqual(compact(renderWidget(status, plain, 120, now)), [
+    '✗ GitHub Tests 1/3', '  ├─ ○ build skipped', '  └─ ✗ sonar failed',
   ]);
 });
 
@@ -303,11 +320,11 @@ test('extension restores persisted results, preserves outcomes after edits and c
   const ctx = { cwd: f.root, mode: 'rpc', hasUI: true, isIdle: () => true, ui: { theme: plain, setWidget: (_key, content) => widgets.push(content) } };
   t.after(() => events.session_shutdown({}, ctx));
   await events.session_start({}, ctx);
-  await waitFor(() => widgets.at(-1)?.some(line => line.includes('✓ Local 1/1')));
-  assert.match(widgets.at(-1).join('\n'), /✓ Local 1\/1/);
+  await waitFor(() => widgets.at(-1)?.some(line => /✓ Local +1\/1/.test(line)));
+  assert.match(widgets.at(-1).join('\n'), /✓ Local +1\/1/);
   await fs.writeFile(path.join(f.root, 'source.txt'), 'changed');
   await events.tool_execution_end({ toolName: 'write' }, ctx);
-  assert.match(widgets.at(-1).join('\n'), /✓ Local 1\/1/);
+  assert.match(widgets.at(-1).join('\n'), /✓ Local +1\/1/);
   await fs.rm(f.configPath);
   await events.tool_execution_end({ toolName: 'bash' }, ctx);
   assert.equal(widgets.at(-1), undefined);

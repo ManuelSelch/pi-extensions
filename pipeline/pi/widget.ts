@@ -1,4 +1,4 @@
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { PipelineStatus, SuiteStatus } from "../core/pipeline.ts";
 
@@ -22,7 +22,11 @@ function suiteText(name: string, result: SuiteStatus, theme: Pick<Theme, "fg">, 
 }
 // Workflow names come from remote content; never emit terminal control sequences.
 const safeText = (value: string) => value.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
-function githubText(workflow: import("../core/github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, branch?: "├─" | "└─", compact = false): string {
+type SummaryRow = { name: string; detail: string; elapsed: string; color: Parameters<Theme["fg"]>[0] };
+
+function githubText(workflow: import("../core/github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, branch: undefined, compact: true): SummaryRow;
+function githubText(workflow: import("../core/github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, branch?: "├─" | "└─"): string;
+function githubText(workflow: import("../core/github.ts").WorkflowStatus, theme: Pick<Theme, "fg">, now: number, branch?: "├─" | "└─", compact = false): string | SummaryRow {
 	const state = workflow.status === "completed" ? workflow.conclusion ?? "unknown" : workflow.status;
 	const states: Record<string, [string, Parameters<Theme["fg"]>[0], string]> = {
 		success: ["✓", "success", "passed"], failure: ["✗", "error", "failed"],
@@ -38,8 +42,8 @@ function githubText(workflow: import("../core/github.ts").WorkflowStatus, theme:
 		const active = workflow.status !== "completed" && workflow.status !== "never";
 		const count = jobs.length ? `${jobs.filter(job => active ? job.status === "completed" : job.status === "completed" && job.conclusion === "success").length}/${jobs.length}${active ? " complete" : ""}` : label;
 		const needsWarning = workflow.jobsError;
-		return theme.fg(needsWarning ? "warning" : color,
-			`${needsWarning ? "⚠" : active ? "◐" : symbol} GitHub ${safeText(workflow.name)} · ${safeText(count)}${elapsed ? ` ·${elapsed}` : ""}`);
+		return { name: `${needsWarning ? "⚠" : active ? "◐" : symbol} GitHub ${safeText(workflow.name)}`,
+			detail: safeText(count), elapsed: elapsed.trim(), color: needsWarning ? "warning" : color };
 	}
 	return theme.fg(color, branch
 		? `  ${branch} ${symbol} ${safeText(workflow.name)} ${safeText(label)}`
@@ -80,7 +84,7 @@ export function renderStatus(status: PipelineStatus | undefined, theme: Pick<The
 /** Compact summaries with detail rows only for results needing attention. */
 export function renderWidget(status: PipelineStatus | undefined, theme: Pick<Theme, "fg">, width: number, now = Date.now()): string[] {
 	if (!status || width <= 0) return [];
-	const lines: string[] = [];
+	const lines: (string | SummaryRow)[] = [];
 	const suites = Object.entries(status.suites);
 	if (status.configured && suites.length) {
 		const entries: [string, SuiteStatus][] = [
@@ -96,8 +100,8 @@ export function renderWidget(status: PipelineStatus | undefined, theme: Pick<The
 		// Preparation may be days old; summary age reflects the most recent suite result.
 		const timestamps = suites.flatMap(([, result]) => result.outcome === "never" ? [] : [Date.parse(result.finishedAt ?? result.startedAt)]).filter(Number.isFinite);
 		const latest = timestamps.length ? Math.max(...timestamps) : undefined;
-		const elapsed = latest === undefined ? "" : now - latest < 60000 ? " · just now" : ` · ${age(new Date(latest).toISOString(), now)} ago`;
-		lines.push(theme.fg(color, `${symbol} Local ${passed}/${suites.length}${elapsed}`));
+		const elapsed = latest === undefined ? "" : now - latest < 60000 ? "just now" : `${age(new Date(latest).toISOString(), now)} ago`;
+		lines.push({ name: `${symbol} Local`, detail: `${passed}/${suites.length}`, elapsed, color });
 		for (const [name, result] of entries) {
 			if (result.outcome !== "passed") lines.push(`  ${suiteText(safeText(name), result, theme, now)}`);
 			if ("jobs" in result) for (const [job, value] of Object.entries(result.jobs)) {
@@ -119,5 +123,18 @@ export function renderWidget(status: PipelineStatus | undefined, theme: Pick<The
 			}
 		}
 	}
-	return lines.map(line => truncateToWidth(line, width));
+	const summaries = lines.filter((line): line is SummaryRow => typeof line !== "string");
+	const detailWidth = Math.max(0, ...summaries.map(row => visibleWidth(row.detail)));
+	const elapsedWidth = Math.max(0, ...summaries.map(row => visibleWidth(row.elapsed)));
+	const availableWidth = width === Number.MAX_SAFE_INTEGER
+		? Math.max(0, ...summaries.map(row => visibleWidth(row.name))) + detailWidth + (elapsedWidth ? elapsedWidth + 2 : 0) + 2
+		: width;
+	const nameWidth = Math.max(0, availableWidth - detailWidth - (elapsedWidth ? elapsedWidth + 2 : 0) - 2);
+	return lines.map(line => {
+		if (typeof line === "string") return truncateToWidth(line, width);
+		const name = truncateToWidth(line.name, nameWidth, "…");
+		const padding = " ".repeat(Math.max(0, nameWidth - visibleWidth(name)));
+		const detail = line.detail + " ".repeat(Math.max(0, detailWidth - visibleWidth(line.detail)));
+		return truncateToWidth(theme.fg(line.color, `${name}${padding}  ${detail}${line.elapsed ? `  ${line.elapsed}` : ""}`), width);
+	});
 }
