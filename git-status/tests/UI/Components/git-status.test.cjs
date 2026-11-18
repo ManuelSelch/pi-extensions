@@ -16,15 +16,24 @@ test('aligns unmerged counts at the right edge while keeping markers aligned', (
 
   assert.deepEqual(renderStatusRows(rows, 36, theme), [
     'csmm-341  remove-tooltips        ● 9',
-    'csmm-328  mock-settings-add…     ●13',
+    'csmm-328  mock-settings-add-ro…  ●13',
     'main  ✓',
   ]);
 });
 
 test('fits branch names to the available width while preserving ticket and count', () => {
   const rows = [countRow('csmm-236-declare-every-agreed-endpoint-in-fastapi', 7)];
-  assert.deepEqual(renderStatusRows(rows, 30, theme), ['csmm-236  declare-every…    ●7']);
+  assert.deepEqual(renderStatusRows(rows, 30, theme), ['csmm-236  declare-every-a…  ●7']);
   assert.deepEqual(renderStatusRows(rows, 80, theme), [`${'csmm-236  declare-every-agreed-endpoint-in-fastapi'.padEnd(78)}●7`]);
+});
+
+test('uses available space before truncating at a hyphenated branch name', () => {
+  const rows = [countRow('csmm-344-msw-for-example-long-description', 6), countRow('csmm-328-mock-settings-add-more', 16)];
+
+  const lines = renderStatusRows(rows, 30, theme);
+
+  assert.equal(lines[0], 'csmm-344  msw-for-exampl…  ● 6');
+  assert.equal(lines[1], 'csmm-328  mock-settings-…  ●16');
 });
 
 test('separates ticket identifiers in branch rows without repeating the branch in the checkout line', () => {

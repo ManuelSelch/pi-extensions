@@ -41,36 +41,28 @@ export interface StatusRow {
 	current?: boolean;
 }
 
-function ticketLabel(name: string): { text: string; descriptionStart: number } {
+function ticketLabel(name: string): string {
 	const first = name.indexOf("-");
 	const second = name.indexOf("-", first + 1);
-	if (first <= 0 || second <= first + 1 || second === name.length - 1) return { text: name, descriptionStart: 0 };
+	if (first <= 0 || second <= first + 1 || second === name.length - 1) return name;
 	const project = name.slice(0, first);
 	const number = name.slice(first + 1, second);
 	const isWord = (char: string) => (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || (char >= "0" && char <= "9") || char === "_";
-	if (![...project].every(isWord) || ![...number].every(char => char >= "0" && char <= "9")) return { text: name, descriptionStart: 0 };
+	if (![...project].every(isWord) || ![...number].every(char => char >= "0" && char <= "9")) return name;
 	const ticket = name.slice(0, second);
-	return { text: `${ticket}  ${name.slice(second + 1)}`, descriptionStart: ticket.length + 2 };
+	return `${ticket}  ${name.slice(second + 1)}`;
 }
 
-function fitName(name: string, width: number, descriptionStart: number): string {
+function fitName(name: string, width: number): string {
 	if (visibleWidth(name) <= width) return name;
-	let fitted = stripTerminalSequences(truncateToWidth(name, width, "…"));
-	const boundary = fitted.lastIndexOf("-");
-	if (fitted.endsWith("…") && boundary > descriptionStart && boundary >= fitted.length - 8) return `${fitted.slice(0, boundary)}…`;
-	if (fitted.endsWith("…")) {
-		let end = fitted.length - 1;
-		while (end > 0 && "-/ \t".includes(fitted[end - 1])) end--;
-		fitted = `${fitted.slice(0, end)}…`;
-	}
-	return fitted;
+	return stripTerminalSequences(truncateToWidth(name, width, "…"));
 }
 
 function renderRow(row: StatusRow, width: number, countWidth: number, theme: { fg(color: Color, text: string): string }): string {
-	const formatted = row.branch ? ticketLabel(row.name) : { text: row.name, descriptionStart: 0 };
+	const formatted = row.branch ? ticketLabel(row.name) : row.name;
 	const detail = row.detail?.kind === "count" ? `  ●${String(row.detail.value).padStart(countWidth)}`
 		: row.detail ? `  ${row.detail.value}` : "";
-	const name = fitName(formatted.text, Math.max(0, width - visibleWidth(detail)), formatted.descriptionStart);
+	const name = fitName(formatted, Math.max(0, width - visibleWidth(detail)));
 	const padding = row.detail?.kind === "count" ? " ".repeat(Math.max(0, width - visibleWidth(name) - visibleWidth(detail))) : "";
 	const suffix = stripTerminalSequences(truncateToWidth(padding + detail, Math.max(0, width - visibleWidth(name)), ""));
 	const visibleName = stripTerminalSequences(truncateToWidth(name, width, ""));
