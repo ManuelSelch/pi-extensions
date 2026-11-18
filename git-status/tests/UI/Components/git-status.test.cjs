@@ -25,15 +25,24 @@ test('fits branch names to the available width while preserving ticket and count
   assert.deepEqual(renderStatusRows(rows, 80, theme), [`${'csmm-236  declare-every-agreed-endpoint-in-fastapi'.padEnd(78)}●7`]);
 });
 
-test('separates ticket identifiers consistently in short branches and checkout lines', () => {
+test('separates ticket identifiers in branch rows without repeating the branch in the checkout line', () => {
   const branch = 'csmm-341-remove-tooltips';
   const snapshot = { ...base, status: { ...base.status, branch }, branches: [{ branch, kind: 'feature', unmerged: 9 }] };
 
   assert.deepEqual(renderStatusRows(formatRepositoryStatus(snapshot), 80, theme), [
-    'bluebird · csmm-341  remove-tooltips  ✓',
+    'bluebird  ✓',
     `${'csmm-341  remove-tooltips'.padEnd(78)}●9`,
   ]);
   assert.equal(snapshot.status.branch, branch);
+});
+
+test('keeps a long repository name and file status visible at serialized width', () => {
+  const snapshot = { ...base, repoName: 'CSMM-Studiopilot-WS26' };
+
+  const lines = renderStatusRows(formatRepositoryStatus(snapshot), 28, theme);
+
+  assert.equal(lines[0], 'CSMM-Studiopilot-WS26  ✓');
+  assert.ok(lines.some(line => line.includes('search') && line.endsWith('●3')));
 });
 
 test('does not treat other branch names as ticket identifiers', () => {
@@ -57,7 +66,7 @@ test('shortens conventional branch prefixes only in display labels', () => {
     const branch = `${prefix}/topic/nested`;
     const snapshot = { ...base, status: { ...base.status, branch }, branches: [{ branch, kind: 'feature', unmerged: 1 }] };
     const rows = formatRepositoryStatus(snapshot);
-    assert.equal(rows[0].text, 'bluebird · topic/nested  ✓');
+    assert.equal(rows[0].text, 'bluebird  ✓');
     assert.equal(rows[1].text, 'topic/nested  ●1');
     assert.equal(rows[1].label, 'topic/nested');
     assert.equal(snapshot.status.branch, branch);
@@ -79,7 +88,7 @@ const base = {
 };
 test('keeps file status and unmerged status separate with no classifications or merge targets', () => {
   assert.deepEqual(formatRepositoryStatus(base).map(row => row.text), [
-    'bluebird · search  ✓', 'main  ↑2',
+    'bluebird  ✓', 'main  ↑2',
     'search  ●3', 'login  ●1', '✓ 1 branch',
   ]);
   assert.equal(formatRepositoryStatus(base)[2].color, 'warning');
@@ -87,14 +96,14 @@ test('keeps file status and unmerged status separate with no classifications or 
 test('does not duplicate push counts on the checkout line', () => {
   const snapshot = { ...base, status: { ...base.status, branch: 'main', ahead: 2, behind: 1 } };
   assert.deepEqual(formatRepositoryStatus(snapshot).map(row => row.text), [
-    'bluebird · main  ✓', 'main  ↑2',
+    'bluebird  ✓', 'main  ↑2',
     'search  ●3', 'login  ●1', '✓ 1 branch',
   ]);
 });
 test('dirty feature checkout keeps all file counts but no upstream arrows', () => {
   const snapshot = { ...base, status: { ...base.status, changed: 3, staged: 1, modified: 1, untracked: 1, ahead: 2, behind: 1 } };
   assert.equal(formatRepositoryStatus(snapshot)[0].text,
-    'bluebird · search  +1  ~1  ?1');
+    'bluebird  +1  ~1  ?1');
   assert.equal(formatRepositoryStatus(snapshot)[0].color, 'warning');
 });
 test('keeps the current merged branch visible and collapses only other merged branches', () => {
@@ -105,14 +114,14 @@ test('keeps the current merged branch visible and collapses only other merged br
     { branch: 'feat/c', kind: 'feature' },
   ] };
   assert.deepEqual(formatRepositoryStatus(snapshot).map(row => row.text), [
-    'bluebird · search  ✓', 'main  ↑2', 'search  ✓',
+    'bluebird  ✓', 'main  ↑2', 'search  ✓',
     'c  merge unknown', '✓ 2 branches',
   ]);
   assert.equal(formatRepositoryStatus(snapshot).at(-1).color, 'muted');
 });
 test('does not show a zero merged count', () => {
   assert.deepEqual(formatRepositoryStatus({ ...base, branches: base.branches.slice(0, 2) }).map(row => row.text), [
-    'bluebird · search  ✓', 'main  ↑2', 'search  ●3',
+    'bluebird  ✓', 'main  ↑2', 'search  ●3',
   ]);
 });
 test('does not claim unknown ancestry is merged', () => {
@@ -140,7 +149,7 @@ test('matches the approved compact preview without redundant changed counts', ()
     ],
   });
   assert.deepEqual(rows.map(row => row.text), [
-    'pi-chat · theme  ~1',
+    'pi-chat  ~1',
     'main  ↑2',
     'theme  ●3',
     'minimal-widgets  ●1',
@@ -156,7 +165,7 @@ test('preserves long branch names with two spaces before counters and no column 
   });
   const label = branch.slice('feat/'.length);
   assert.deepEqual(rows.map(row => row.text), [
-    `bluebird · ${label}  ?1`, 'main  ↑2', `${label}  ●12`,
+    `bluebird  ?1`, 'main  ↑2', `${label}  ●12`,
   ]);
   assert.equal(rows[0].label, 'bluebird');
   assert.equal(rows[2].label, label);

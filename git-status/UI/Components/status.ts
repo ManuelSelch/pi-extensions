@@ -6,8 +6,8 @@ function worktreeLabel(branch: string): string {
 	return branch.replace(/^(?:feature|feat|fix|bugfix)\/(?=.)/, "");
 }
 
-export function formatGitStatus(status: GitStatus, includeDivergence = true): string {
-	const parts = [worktreeLabel(status.branch)];
+function formatFileStatus(status: GitStatus): string[] {
+	const parts: string[] = [];
 	if (status.changed === 0) {
 		parts.push("✓");
 	} else {
@@ -15,6 +15,11 @@ export function formatGitStatus(status: GitStatus, includeDivergence = true): st
 		if (status.modified > 0) parts.push(`~${status.modified}`);
 		if (status.untracked > 0) parts.push(`?${status.untracked}`);
 	}
+	return parts;
+}
+
+export function formatGitStatus(status: GitStatus, includeDivergence = true): string {
+	const parts = [worktreeLabel(status.branch), ...formatFileStatus(status)];
 	if (includeDivergence && status.ahead > 0) parts.push(`↑${status.ahead}`);
 	if (includeDivergence && status.behind > 0) parts.push(`↓${status.behind}`);
 	return parts.join("  ");
@@ -47,15 +52,14 @@ export function renderStatusRows(rows: StatusRow[], width: number, theme: { fg(c
 		let detail = separator < 0 ? "" : row.text.slice(separator);
 		const count = /^  ●(\d+)$/.exec(detail);
 		if (count) detail = `  ●${count[1].padStart(countWidth)}`;
-		const checkoutPrefix = row.label && name.startsWith(`${row.label} · `) ? `${row.label} · ` : "";
-		const branch = checkoutPrefix ? name.slice(checkoutPrefix.length) : row.label === name ? name : "";
+		const branch = row.label === name ? name : "";
 		const ticket = /^(\w+-\d+)-(.+)$/.exec(branch);
-		if (ticket) name = `${checkoutPrefix}${ticket[1]}  ${ticket[2]}`;
+		if (ticket) name = `${ticket[1]}  ${ticket[2]}`;
 		const available = Math.max(0, width - visibleWidth(detail));
 		if (visibleWidth(name) > available) {
 			name = stripTerminalSequences(truncateToWidth(name, available, "…"));
 			const boundary = name.lastIndexOf("-");
-			const descriptionStart = ticket ? checkoutPrefix.length + ticket[1].length + 2 : 0;
+			const descriptionStart = ticket ? ticket[1].length + 2 : 0;
 			if (name.endsWith("…") && boundary > descriptionStart && boundary >= name.length - 8) name = `${name.slice(0, boundary)}…`;
 			else if (name.endsWith("…")) name = name.replace(/[-/\s]+…$/, "…");
 		}
@@ -92,7 +96,7 @@ function formatBranch(status: BranchStatus): StatusRow {
 export function formatRepositoryStatus(snapshot: RepositoryStatus): StatusRow[] {
 	const label = formatRepositoryLabel(snapshot.repoName, snapshot.status.branch, snapshot.worktreeName);
 	const rows: StatusRow[] = [{
-		text: `${label} · ${formatGitStatus(snapshot.status, false)}`,
+		text: `${label}  ${formatFileStatus(snapshot.status).join("  ")}`,
 		label,
 		color: snapshot.status.changed === 0 ? "success" : "warning",
 	}];

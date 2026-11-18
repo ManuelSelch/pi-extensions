@@ -1,6 +1,6 @@
 # Git status widget
 
-The checkout line shows only the repository, active branch and uncommitted files—not upstream arrows. `clean` refers only to files, not merge status.
+The checkout line shows the repository and uncommitted files—not the active branch or upstream arrows. `clean` refers only to files, not merge status.
 
 Below it, branch rows appear in this order:
 1. Primary checkout's branch, with its upstream push/behind status.
