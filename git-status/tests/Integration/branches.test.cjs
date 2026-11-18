@@ -23,24 +23,24 @@ test('merging updates the widget and shows primary commits to push', async t => 
   app.addBranch('feat/search');
   app.commit('feat/search');
   await app.start('feat/search');
-  app.thenRows(['main  ✓', 'search  ●1']);
+  app.thenRows(['main  ✓', '* search  ●1']);
   app.merge('feat/search');
   await app.refresh();
-  app.thenRows(['main  ↑1', 'search  ✓']);
+  app.thenRows(['main  ↑1', '* search  ✓']);
 });
 
 test('primary without upstream is explicit and current=primary is not duplicated', async t => {
   const app = new GitStatusDriver(t);
   app.addBranch('feat/search');
   await app.start('main');
-  app.thenRows(['main  no upstream', '✓ 1 branch']);
+  app.thenRows(['* main  no upstream', '✓ 1 branch']);
 });
 
 test('ordinary checkout uses its primary checked-out branch and preserves file status', async t => {
   const app = new GitStatusDriver(t);
   app.switchPrimary('feature');
   await app.start('feature');
-  app.thenRows(['feature  no upstream']);
+  app.thenRows(['* feature  no upstream']);
   app.thenCheckoutVisible();
 });
 
@@ -58,7 +58,7 @@ test('supplementary read failure keeps checkout status and unknown merge state',
   app.addBranch('feat/search');
   await app.startWithFailure('feat/search', 'rev-list');
   app.thenCheckoutVisible();
-  app.thenRows(['main  no upstream', 'search  merge unknown']);
+  app.thenRows(['main  no upstream', '* search  merge unknown']);
 });
 
 test('non-repository clears the widget', async t => {
@@ -72,7 +72,7 @@ test('unborn primary preserves file status without claiming a merge', async t =>
   app.makeUnborn();
   await app.start('main');
   app.thenCheckoutVisible();
-  app.thenRows(['primary branch unavailable', 'new-history  merge unknown']);
+  app.thenRows(['primary branch unavailable', '* new-history  merge unknown']);
 });
 
 test('detached linked checkout has no fictitious detached branch row', async t => {
@@ -81,14 +81,14 @@ test('detached linked checkout has no fictitious detached branch row', async t =
   app.detach('feat/search');
   await app.start('feat/search');
   app.thenCheckoutVisible();
-  app.thenRows(['main  no upstream']);
+  app.thenRows(['* detached HEAD', 'main  no upstream']);
 });
 
 test('failed worktree listing preserves checkout status with explicit unknown state', async t => {
   const app = new GitStatusDriver(t);
   await app.startWithFailure('main', 'worktree');
   app.thenCheckoutVisible();
-  app.thenRows(['primary branch unavailable', 'main  merge unknown']);
+  app.thenRows(['primary branch unavailable', '* main  merge unknown']);
 });
 
 test('primary branch name is discovered, not hardcoded to main', async t => {
@@ -97,5 +97,5 @@ test('primary branch name is discovered, not hardcoded to main', async t => {
   app.addBranch('feat/search');
   app.commit('feat/search');
   await app.start('feat/search');
-  app.thenRows(['develop  no upstream', 'search  ●1']);
+  app.thenRows(['develop  no upstream', '* search  ●1']);
 });
