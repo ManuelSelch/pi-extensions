@@ -44,7 +44,7 @@ export default function gitStatusExtension(pi: ExtensionAPI): void {
 					render: width => renderStatusRows(rows, width, theme),
 					invalidate() {},
 				}));
-				else ctx.ui.setWidget("git-status", renderStatusRows(rows, 36, ctx.ui.theme));
+				else ctx.ui.setWidget("git-status", renderStatusRows(rows, 28, ctx.ui.theme));
 			}
 		}, warn);
 		return {
