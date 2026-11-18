@@ -39,7 +39,7 @@ test('separates ticket identifiers in branch rows without repeating the branch i
 test('keeps a long repository name and file status visible at serialized width', () => {
   const snapshot = { ...base, repoName: 'CSMM-Studiopilot-WS26' };
 
-  const lines = renderStatusRows(formatRepositoryStatus(snapshot), 28, theme);
+  const lines = renderStatusRows(formatRepositoryStatus(snapshot), 30, theme);
 
   assert.equal(lines[0], 'CSMM-Studiopilot-WS26  ✓');
   assert.ok(lines.some(line => line.includes('search') && line.endsWith('●3')));

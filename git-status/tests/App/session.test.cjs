@@ -60,7 +60,7 @@ test('terminal widget renders again at the supplied width after resizing', async
   await f.handlers.get('session_shutdown')();
 });
 
-test('serialized widgets use a compact 28-column width', async () => {
+test('serialized widgets use a compact 30-column width', async () => {
   const f = fixture(), ctx = { ...f.ctx('repo'), mode: 'rpc' };
   const initial = f.handlers.get('session_start')({}, ctx);
   await settle();
@@ -68,7 +68,7 @@ test('serialized widgets use a compact 28-column width', async () => {
   await initial;
 
   assert.deepEqual(f.publications[0].rows, ['status']);
-  assert.deepEqual(f.widths, [28]);
+  assert.deepEqual(f.widths, [30]);
   await f.handlers.get('session_shutdown')();
 });
 
