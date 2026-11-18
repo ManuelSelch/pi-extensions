@@ -68,14 +68,14 @@ function fitName(name: string, width: number, descriptionStart: number): string 
 
 function renderRow(row: StatusRow, width: number, countWidth: number, theme: { fg(color: Color, text: string): string }): string {
 	const formatted = row.branch ? ticketLabel(row.name) : { text: row.name, descriptionStart: 0 };
-	const prefix = row.current ? "* " : "";
 	const detail = row.detail?.kind === "count" ? `  ●${String(row.detail.value).padStart(countWidth)}`
 		: row.detail ? `  ${row.detail.value}` : "";
-	const name = prefix + fitName(formatted.text, Math.max(0, width - visibleWidth(detail) - visibleWidth(prefix)), formatted.descriptionStart);
+	const name = fitName(formatted.text, Math.max(0, width - visibleWidth(detail)), formatted.descriptionStart);
 	const padding = row.detail?.kind === "count" ? " ".repeat(Math.max(0, width - visibleWidth(name) - visibleWidth(detail))) : "";
 	const suffix = stripTerminalSequences(truncateToWidth(padding + detail, Math.max(0, width - visibleWidth(name)), ""));
 	const visibleName = stripTerminalSequences(truncateToWidth(name, width, ""));
-	return theme.fg(row.accent ? "accent" : row.color, visibleName) + theme.fg(row.color, suffix);
+	const nameColor = row.current ? "accent" : row.branch ? "muted" : row.accent ? "accent" : row.color;
+	return theme.fg(nameColor, visibleName) + theme.fg(row.color, suffix);
 }
 
 export function renderStatusRows(rows: StatusRow[], width: number, theme: { fg(color: Color, text: string): string }): string[] {

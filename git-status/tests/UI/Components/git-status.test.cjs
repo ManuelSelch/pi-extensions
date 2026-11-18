@@ -33,9 +33,20 @@ test('separates ticket identifiers in branch rows without repeating the branch i
 
   assert.deepEqual(renderStatusRows(formatRepositoryStatus(snapshot), 80, theme), [
     'bluebird  ✓',
-    `${'* csmm-341  remove-tooltips'.padEnd(78)}●9`,
+    `${'csmm-341  remove-tooltips'.padEnd(78)}●9`,
   ]);
   assert.equal(snapshot.status.branch, branch);
+});
+
+test('distinguishes the current branch by color without changing status colors', () => {
+  const colored = { fg: (color, text) => `[${color}]${text}` };
+  const rows = formatRepositoryStatus(base);
+
+  const lines = renderStatusRows(rows, 30, colored);
+
+  assert.match(lines[1], /^\[muted\]main\[warning\]  ↑2$/);
+  assert.match(lines[2], /^\[accent\]search\[warning\] +●3$/);
+  assert.match(lines[3], /^\[muted\]login\[warning\] +●1$/);
 });
 
 test('keeps a long repository name and file status visible at serialized width', () => {
